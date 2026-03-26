@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}Faculty Dashboard{% endblock %}
+
+{% block content %}
+
+
+<div class="container">
+    <!-- Dashboard Header -->
+    <div style="margin-bottom: 2rem;">
+        <div class="flex-between mb-4">
+            <div class="faculty-section">
+                <a class="facultyheader">📊 Faculty Dashboard</a>
+                <a class="facultydasdescription">Manage your exams and monitor student performance</a>
+            </div>
+
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                <a href="{{ url_for('create_exam') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Create New Exam
+                </a>
+
+                <a href="{{ url_for('faculty_student_list') }}" class="btn btn-primary">
+                    <i class="bi bi-people"></i> Manage Students
+                </a>
+
+                <a href="{{ url_for('faculty_student_report') }}" class="btn btn-primary">
+                    <i class="bi bi-graph-up"></i> Student Report
+                </a>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-grid mb-4">
+        <div class="stat-card">
+            <div class="stat-value">{{ exams|length }}</div>
+            <div class="stat-label">Total Exams</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ exams|selectattr('is_active')|list|length }}</div>
+            <div class="stat-label">Active Exams</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ exams|map(attribute='questions')|map('length')|sum }}</div>
+            <div class="stat-label">Total Questions</div>
+        </div>
+    </div>
+    <!-- Global Settings Card -->
+    <div class="card" style="margin-bottom: 1.25rem; border: 1px solid var(--border);">
+        <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+            <h2 class="card-title" style="margin:0;">⚙️ Global Settings</h2>
+            <span style="font-size:0.78rem; color:var(--text-secondary);">Applies to all your exams</span>
+        </div>
+        <div style="padding: 1rem 1.25rem; display:flex; flex-wrap:wrap; gap:1.25rem; align-items:center;">
+
+            <!-- Leaderboard Toggle -->
+            <div style="display:flex; align-items:center; gap:0.85rem; padding:0.65rem 1rem;
+                        background:var(--surface-2, rgba(255,255,255,0.04));
+                        border:1px solid var(--border); border-radius:10px; flex:1; min-width:240px;">
+                <div style="font-size:1.4rem;">🏆</div>
+                <div style="flex:1;">
+                    <div style="font-weight:600; font-size:0.9rem;">Show Leaderboard</div>
+                    <div style="font-size:0.78rem; color:var(--text-secondary);">Students see rankings after submitting
+                    </div>
+                </div>
+                <label style="position:relative; display:inline-block; width:42px; height:22px; flex-shrink:0;">
+                    <input type="checkbox" id="globalLbToggle" {% if exams and
+                        exams|selectattr('show_leaderboard')|list|length>= (exams|length / 2) %}checked{% endif %}
+                    onchange="setGlobalLeaderboard(this.checked)"
+                    style="opacity:0; width:0; height:0;">
+                    <span id="globalLbTrack" style="
+                        position:absolute; cursor:pointer; inset:0; border-radius:22px;
+                        background: {% if exams and exams|selectattr('show_leaderboard')|list|length >= (exams|length / 2) %}#6366f1{% else %}rgba(255,255,255,0.15){% endif %};
+                        transition:background 0.2s;
+                    ">
+                        <span style="
+                            position:absolute; height:16px; width:16px; left:{% if exams and exams|selectattr('show_leaderboard')|list|length >= (exams|length / 2) %}22px{% else %}3px{% endif %};
+                            bottom:3px; border-radius:50%; background:#fff;
+                            transition:left 0.2s; display:block;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.25);
+                        " id="globalLbThumb"></span>
+                    </span>
+                </label>
+            </div>
+
+            <!-- Leaderboard link -->
+            <a href="{{ url_for('global_leaderboard') }}" class="btn btn-primary"
+                style="white-space:nowrap; height:fit-content;">
+                <i class="bi bi-trophy"></i> View Leaderboard
+            </a>
+        </div>
+        <div id="lbStatus"
+            style="padding:0 1.25rem 0.75rem; font-size:0.8rem; color:var(--text-secondary); display:none;"></div>
+    </div>
+
+    <!-- Exam Search Bar -->
+    <div style="margin-bottom: 1rem; display:flex; justify-content:flex-end;">
+        <input type="text" id="examSearch" class="form-control" placeholder="🔍 Search exams..."
+            style="max-width: 250px;">
+    </div>
+
+
+    <!-- Exams Table -->
+    {% if exams %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Your Exams</h2>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table exam-table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Qs</th>
+                        <th>Duration</th>
+                        <th>Pass %</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exam in exams %}
+                    <tr>
+                        <td><strong>{{ exam.title }}</strong></td>
+                        <td>{{ exam.questions|length }}</td>
+                        <td>{{ exam.duration_minutes }}m</td>
+                        <td>{{ exam.passing_score }}%</td>
+                        <td>
+                            {% if exam.is_active %}
+                            <span class="status-badge status-active">Active</span>
+                            {% else %}
+                            <span class="status-badge status-inactive">Off</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-secondary" style="font-size: 0.8rem;">{{
+                            exam.created_at.strftime('%m-%d') }}
+                        </td>
+                        <td>
+                            <div class="action-btn-group">
+                                <a href="{{ url_for('view_exam', exam_id=exam.id) }}" class="action-btn action-btn-view"
+                                    title="View Exam">
+                                    <i class="bi bi-eye" style="color: white;"></i>
+                                </a>
+                                <a href="{{ url_for('exam_analytics', exam_id=exam.id) }}"
+                                    class="action-btn action-btn-analytics" title="Analytics">
+                                    <i class="bi bi-bar-chart" style="color: white;"></i>
+                                </a>
+                                <form method="POST" action="{{ url_for('delete_exam', exam_id=exam.id) }}"
+                                    onsubmit="return confirm('Are you sure you want to delete this exam? This action cannot be undone.')"
+                                    style="display:inline;">
+                                    <button type="submit" class="action-btn action-btn-delete" title="Delete Exam">
+                                        <i class="bi bi-trash" style="color: white;"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="card text-center">
+        <div style="padding: 3rem 0;">
+            <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">📭 No exams yet</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">Create your first exam to get started!</p>
+            <a href="{{ url_for('create_exam') }}" class="btn btn-primary btn-lg">Create Exam</a>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const toggleBtn = document.getElementById("toggleConsoleBtn");
+        const consoleBody = document.getElementById("sqlConsoleBody");
+        const runBtn = document.getElementById("runSqlBtn");
+        const clearBtn = document.getElementById("clearSqlBtn");
+        const output = document.getElementById("sqlOutput");
+        const queryInput = document.getElementById("sqlQuery");
+
+        if (!toggleBtn) return;
+
+        // Toggle visibility
+        toggleBtn.addEventListener("click", () => {
+            consoleBody.style.display = (consoleBody.style.display === "none") ? "block" : "none";
+        });
+
+        // Clear query
+        clearBtn.addEventListener("click", () => {
+            queryInput.value = "";
+            output.innerHTML = "";
+        });
+
+        // Execute SQL query
+        runBtn.addEventListener("click", async () => {
+            const sql = queryInput.value.trim();
+            if (!sql) {
+                output.innerHTML = "<div style='color:red;'>⚠️ Please enter a SQL query.</div>";
+                return;
+            }
+
+            output.innerHTML = "⏳ Running query...";
+            try {
+                const response = await fetch("/admin/sql_console/run", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sql }),
+                });
+                const data = await response.json();
+
+                if (!data.success) {
+                    output.innerHTML = `<div style='color:red;'>❌ Error: ${data.error}</div>`;
+                    return;
+                }
+
+                if (data.type === "select") {
+                    // Render table
+                    let html = `<div style='margin-bottom:0.5rem;'>✅ Query OK - ${data.rowcount} row(s) returned</div>`;
+                    html += `<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;width:100%;font-size:0.9rem;'>`;
+                    html += "<tr style='background:#f3f4f6;'>";
+                    data.columns.forEach(col => html += `<th>${col}</th>`);
+                    html += "</tr>";
+                    data.rows.forEach(row => {
+                        html += "<tr>";
+                        data.columns.forEach(col => html += `<td>${row[col]}</td>`);
+                        html += "</tr>";
+                    });
+                    html += "</table>";
+                    output.innerHTML = html;
+                } else {
+                    output.innerHTML = `<div style='color:green;'>${data.message}</div>`;
+                }
+            } catch (err) {
+                output.innerHTML = `<div style='color:red;'>❌ ${err.message}</div>`;
+            }
+        });
+    });
+
+    // -----------------------------
+    // Leaderboard Global Toggle
+    // -----------------------------
+    window.setGlobalLeaderboard = async function (enabled) {
+        const track = document.getElementById('globalLbTrack');
+        const thumb = document.getElementById('globalLbThumb');
+        const status = document.getElementById('lbStatus');
+        // Animate toggle
+        track.style.background = enabled ? '#6366f1' : 'rgba(255,255,255,0.15)';
+        thumb.style.left = enabled ? '22px' : '3px';
+        status.style.display = 'block';
+        status.textContent = 'Saving…';
+        try {
+            const r = await fetch('{{ url_for("faculty_set_leaderboard") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ show_leaderboard: enabled })
+            });
+            const d = await r.json();
+            if (d.success) {
+                status.textContent = enabled
+                    ? '✅ Leaderboard enabled for all your exams'
+                    : '🚫 Leaderboard hidden for all your exams';
+            } else {
+                status.textContent = '❌ ' + (d.error || 'Failed to save');
+            }
+        } catch (e) {
+            status.textContent = '❌ Network error';
+        }
+        setTimeout(() => status.style.display = 'none', 3000);
+    };
+
+    const examSearchInput = document.getElementById("examSearch");
+
+    if (examSearchInput) {
+        examSearchInput.addEventListener("keyup", function () {
+            const filter = examSearchInput.value.toLowerCase();
+            const rows = document.querySelectorAll("table.table tbody tr");
+
+            rows.forEach(row => {
+                const titleCell = row.querySelector("td strong");
+                const title = titleCell ? titleCell.textContent.toLowerCase() : "";
+
+                if (title.includes(filter)) {
+                    row.style.display = "";
+                } else {
+                    row.style.display = "none";
+                }
+            });
+        });
+    }
+
+</script>
+{% endblock %}

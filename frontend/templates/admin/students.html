@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}All Students - Admin Panel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1.5rem 1rem;
+    }
+
+    .admin-nav {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        padding: 0.75rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+    }
+
+    .admin-nav a {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 1rem;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+
+    .admin-nav a:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .admin-nav a.active {
+        background: var(--primary-color);
+        color: #fff;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .page-header h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .filters-bar {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .filters-bar input,
+    .filters-bar select {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--text-primary);
+        font-size: 0.85rem;
+    }
+
+    .filters-bar input {
+        min-width: 250px;
+    }
+
+    .btn-filter {
+        background: var(--primary-color);
+        color: #fff;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .section-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .admin-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .admin-table th {
+        background: var(--bg-secondary);
+        padding: 0.65rem 1rem;
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+    }
+
+    .admin-table td {
+        padding: 0.7rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.88rem;
+        color: var(--text-primary);
+    }
+
+    .admin-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .admin-table tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .name-cell {
+        font-weight: 600;
+    }
+
+    .sub-text {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+    }
+
+    .badge-sm {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .badge-green {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-blue {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .total-badge {
+        background: var(--primary-color);
+        color: #fff;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .empty-row {
+        text-align: center;
+        padding: 2.5rem;
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+    <div class="admin-nav">
+        <a href="{{ url_for('admin_dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="{{ url_for('admin_manage_faculty') }}"><i class="bi bi-person-badge"></i> Manage Faculty</a>
+        <a href="{{ url_for('admin_student_list') }}" class="active"><i class="bi bi-people"></i> All Students</a>
+        <a href="{{ url_for('admin_all_exams') }}"><i class="bi bi-journal-text"></i> All Exams</a>
+        <a href="{{ url_for('global_leaderboard') }}"><i class="bi bi-trophy"></i> Leaderboard</a>
+        <a href="{{ url_for('admin_sql_console') }}"><i class="bi bi-terminal"></i> SQL Console</a>
+    </div>
+
+    <div class="page-header">
+        <h1><i class="bi bi-people"></i> All Students</h1>
+        <span class="total-badge">{{ student_data | length }} students</span>
+    </div>
+
+    <!-- Filters -->
+    <form class="filters-bar" method="GET">
+        <input type="text" name="q" placeholder="Search name, email, PRN, batch..." value="{{ q or '' }}">
+        <select name="batch">
+            <option value="">All Batches</option>
+            {% for b in batches %}
+            <option value="{{ b }}" {% if selected_batch==b %}selected{% endif %}>{{ b }}</option>
+            {% endfor %}
+        </select>
+        <select name="department">
+            <option value="">All Departments</option>
+            {% for d in departments %}
+            <option value="{{ d }}" {% if selected_department==d %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn-filter"><i class="bi bi-search"></i> Filter</button>
+    </form>
+
+    <!-- Students Table -->
+    <div class="section-card">
+        {% if student_data %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>PRN</th>
+                    <th>Batch</th>
+                    <th>Course</th>
+                    <th>Department</th>
+                    <th>Exams Taken</th>
+                    <th>Avg Score</th>
+                    <th>Profile</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in student_data %}
+                <tr>
+                    <td>
+                        <div class="name-cell">{{ item.user.full_name or item.user.username }}</div>
+                        <div class="sub-text">{{ item.user.email }}</div>
+                    </td>
+                    <td>{{ item.user.prn_number or '—' }}</td>
+                    <td><span class="badge-sm badge-blue">{{ item.user.batch or '—' }}</span></td>
+                    <td>{{ item.user.course or '—' }}</td>
+                    <td>{{ item.user.department or '—' }}</td>
+                    <td>{{ item.exam_count }}</td>
+                    <td>
+                        {% if item.exam_count > 0 %}
+                        <span class="badge-sm badge-green">{{ item.avg_score }}%</span>
+                        {% else %}
+                        <span class="sub-text">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('faculty_student_profile', student_id=item.user.id) }}"
+                            style="color: var(--primary-color); text-decoration: none; font-size: 0.85rem;">
+                            View →
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-row">
+            <i class="bi bi-people" style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>
+            No students found
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

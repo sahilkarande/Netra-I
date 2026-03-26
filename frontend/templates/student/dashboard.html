@@ -1,0 +1,667 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<style>
+  /* ── Not-Assigned Exam Card ── */
+  .exam-card.not-assigned {
+    opacity: 0.45;
+    filter: grayscale(0.6);
+    position: relative;
+    pointer-events: none;
+    /* block all interaction */
+  }
+
+  /* Re-enable pointer-events on the preview btn so tooltips still work */
+  .exam-card.not-assigned .btn-preview {
+    pointer-events: auto;
+    opacity: 0.6;
+  }
+
+  .btn-not-assigned {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 0.7rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #8899aa;
+    background: rgba(136, 153, 170, 0.10);
+    border: 1.5px solid rgba(136, 153, 170, 0.25);
+    letter-spacing: 0.03em;
+    cursor: not-allowed;
+  }
+</style>
+
+<div class="container">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="welcome-section">
+      <div>
+        <div class="welcome-text">
+          <h1>Welcome back, {{ current_user.full_name or current_user.username }}!</h1>
+          <a href="{{ url_for('global_leaderboard') }}" class="btn-outline">
+            <i class="bi bi-trophy"></i> Check out Class Status
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-card" role="region" aria-label="student info">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-icon"><i class="bi bi-person-badge"></i></div>
+          <div>
+            <div class="info-label">PRN Number</div>
+            <div class="info-value">{{ current_user.prn_number or 'N/A' }}</div>
+          </div>
+        </div>
+
+        <div class="info-item">
+          <div class="info-icon"><i class="bi bi-calendar-event"></i></div>
+          <div>
+            <div class="info-label">Batch</div>
+            <div class="info-value">{{ current_user.batch or 'N/A' }}</div>
+          </div>
+        </div>
+
+        <div class="info-item">
+          <div class="info-icon"><i class="bi bi-envelope"></i></div>
+          <div>
+            <div class="info-label">Email</div>
+            <div class="info-value">{{ current_user.email }}</div>
+          </div>
+        </div>
+
+        <div class="info-item">
+          <div class="info-icon"><i class="bi bi-shield-check"></i></div>
+          <div>
+            <div class="info-label">Status</div>
+            <div class="info-value">
+              {% if current_user.is_verified %}
+              <span style="color:#10b981; font-weight:700;">✓ Verified</span>
+              {% else %}
+              <span style="color:#f59e0b; font-weight:700;">⏳ Pending</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" role="region" aria-label="student stats">
+    <div class="stat-card">
+      <div class="stat-icon"><i class="bi bi-journal-text"></i></div>
+      <div class="stat-value">{{ total_exams_taken or 0 }}</div>
+      <div class="stat-label">Total Exams</div>
+      <div class="stat-change"><i class="bi bi-arrow-up"></i> Active</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon"><i class="bi bi-trophy"></i></div>
+      <div class="stat-value">{{ "%.1f"|format(avg_score or 0) }}%</div>
+      <div class="stat-label">Average Score</div>
+      <div class="stat-change"><i class="bi bi-arrow-up"></i> {{ "%.1f"|format((avg_score or 0) * 0.1) }}%</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon"><i class="bi bi-percent"></i></div>
+      <div class="stat-value">{{ passed_count or 0 }}/{{ total_exams_taken or 0 }}</div>
+      <div class="stat-label">Pass Rate</div>
+      <div class="stat-change"><i class="bi bi-check-circle"></i> {{ "%.0f"|format((passed_count or 0) /
+        (total_exams_taken or 1) * 100) }}%</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon"><i class="bi bi-star-fill"></i></div>
+      <div class="stat-value">{{ "%.1f"|format(best_score or 0) }}%</div>
+      <div class="stat-label">Best Score</div>
+      <div class="stat-change"><i class="bi bi-award"></i> Personal Best</div>
+    </div>
+  </div>
+
+  <!-- Exam Alerts -->
+  {% if in_progress %}
+  <div class="exam-alert">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <div style="flex:1;">
+      <strong>Exam in Progress!</strong>
+      <div class="muted">You have an unfinished exam. Continue where you left off.</div>
+    </div>
+    <a href="{{ url_for('take_exam', exam_id=in_progress.exam_id) }}" class="btn-start-exam" style="flex: 0 0 auto;">
+      <i class="bi bi-play-circle"></i> Continue
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- Controls: Search / Filters / Sort -->
+  <div class="controls" role="toolbar" aria-label="search and filters">
+    <div class="search-box" role="search" aria-label="search exams">
+      <i class="bi bi-search muted"></i>
+      <input id="examSearchInput" type="search" placeholder="Search exams by title, description..."
+        aria-label="Search exams" />
+      <button id="clearSearch" title="Clear search" class="muted"
+        style="background:transparent; border:none; cursor:pointer; display:none; color:#8899aa;">✕</button>
+    </div>
+
+    <select id="filterCategory">
+      <option value="">All Categories</option>
+      {% set categories = available_exams|map(attribute='category')|reject('equalto', None)|unique|list %}
+      {% for c in categories %}
+      <option value="{{ c }}">{{ c }}</option>
+      {% endfor %}
+    </select>
+
+    <select id="sortBy" aria-label="Sort exams">
+      <option value="newest">Sort: Newest</option>
+      <option value="duration">Sort: Duration (asc)</option>
+      <option value="passing">Sort: Passing % (desc)</option>
+      <option value="questions">Sort: Questions (desc)</option>
+    </select>
+
+    <button id="toggleGridView" class="btn" title="Toggle compact view"><i class="bi bi-grid-3x3-gap"></i> Grid</button>
+
+    <div style="flex:1"></div>
+
+    <div class="modal-trigger-container">
+      {% if completed_exams %}
+      <button class="modal-trigger" data-modal="performanceModal"><i class="bi bi-graph-up"></i> Performance</button>
+      {% endif %}
+      <button class="modal-trigger" data-modal="availableExamsModal"><i class="bi bi-clipboard-check"></i> All
+        Exams</button>
+      {% if completed_exams %}
+      <button class="modal-trigger" data-modal="historyModal"><i class="bi bi-clock-history"></i> History</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Exam Grid -->
+  <section class="exam-section" aria-live="polite">
+    {% if available_exams %}
+    <div id="examGrid" class="exam-grid" aria-label="available exams list">
+      {% for exam in available_exams %}
+      {# Add attempted class if student has attempted this exam #}
+      <article
+        class="exam-card {% if exam.attempted_by_current_user %}attempted{% endif %}{% if not exam.is_assigned %} not-assigned{% endif %}"
+        data-title="{{ exam.title | lower }}" data-desc="{{ exam.description | default('') | lower }}"
+        data-category="{{ exam.category | default('') }}" data-difficulty="{{ exam.difficulty | default('') }}"
+        data-duration="{{ exam.duration_minutes or 0 }}" data-passing="{{ exam.passing_score or 0 }}"
+        data-questions="{{ exam.questions|length }}"
+        data-created="{{ exam.created_at.isoformat() if exam.created_at is defined else '' }}"
+        data-assigned="{{ 'true' if exam.is_assigned else 'false' }}">
+        <div class="exam-header">
+          <div>
+            <div class="exam-title">{{ exam.title }}</div>
+            <div class="exam-desc">{{ exam.description or 'No description available' }}</div>
+          </div>
+          <div class="exam-tags" aria-hidden="true">
+            {% if exam.is_new %}<div class="tag new">New</div>{% endif %}
+            {% if exam.attempted_by_current_user %}<div class="tag attempted">Attempted</div>{% endif %}
+            {% if exam.is_retake %}<div class="tag retake">Retake</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="exam-meta" aria-hidden="true">
+          <div class="meta-item"><i class="bi bi-clock"></i> {{ exam.duration_minutes }} mins</div>
+          <div class="meta-item"><i class="bi bi-question-circle"></i> {{ exam.questions|length }} Qs</div>
+          <div class="meta-item"><i class="bi bi-trophy"></i> {{ exam.passing_score }}% pass</div>
+          {% if exam.category %}<div class="meta-item"><i class="bi bi-tags"></i> {{ exam.category }}</div>{% endif %}
+          {% if exam.difficulty %}<div class="meta-item"><i class="bi bi-speedometer2"></i> {{ exam.difficulty }}</div>
+          {% endif %}
+        </div>
+
+        <div class="exam-actions">
+          {% if exam.is_assigned %}
+          <form method="POST" action="{{ url_for('start_exam', exam_id=exam.id) }}" style="flex:1;">
+            <button type="submit" class="btn-start-exam" aria-label="Start {{ exam.title }}">
+              <i class="bi bi-play-circle-fill"></i>
+              {% if exam.attempted_by_current_user %}Retake{% else %}Start{% endif %}
+            </button>
+          </form>
+          {% else %}
+          <div style="flex:1;">
+            <div class="btn-not-assigned" aria-label="Not assigned to {{ exam.title }}">
+              <i class="bi bi-lock-fill"></i> Not Assigned
+            </div>
+          </div>
+          {% endif %}
+          <button class="btn-preview" data-exam-id="{{ exam.id }}" data-exam-title="{{ exam.title }}"
+            aria-label="Preview {{ exam.title }}">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">📝</div>
+      <h4>No Exams Available</h4>
+      <p>Check back later for new exams.</p>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Performance Modal -->
+  <div id="performanceModal" class="custom-modal" role="dialog" aria-modal="true" aria-hidden="true"
+    aria-labelledby="performanceTitle">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+        <h2 id="performanceTitle"><i class="bi bi-graph-up"></i> Performance Trend</h2>
+        <button class="close-modal" data-close>&times;</button>
+      </div>
+      <p class="muted">Track your score progress and performance distribution</p>
+
+      <div style="display:grid; grid-template-columns: 1fr 380px; gap:1rem; margin-top:1rem;">
+        <div style="background:transparent; border-radius:10px; padding:0.6rem;">
+          <canvas id="performanceChart" style="height:320px;"></canvas>
+        </div>
+        <div style="background:transparent; border-radius:10px; padding:0.6rem;">
+          <canvas id="scoreDistributionChart" style="height:320px;"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Available Exams Modal -->
+  <div id="availableExamsModal" class="custom-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+        <h2><i class="bi bi-clipboard-check"></i> Available Exams</h2>
+        <button class="close-modal" data-close>&times;</button>
+      </div>
+      <p class="muted">Choose an active exam to start</p>
+
+      <div style="margin-top:1rem;">
+        <div id="modalExamList" class="exam-grid">
+          {% for exam in available_exams %}
+          <div class="exam-card {% if exam.attempted_by_current_user %}attempted{% endif %}">
+            <div class="exam-header">
+              <div>
+                <div class="exam-title">{{ exam.title }}</div>
+                <div class="exam-desc">{{ exam.description or 'No description' }}</div>
+              </div>
+              <div class="exam-tags">
+                {% if exam.is_new %}<div class="tag new">New</div>{% endif %}
+                {% if exam.attempted_by_current_user %}<div class="tag attempted">Attempted</div>{% endif %}
+              </div>
+            </div>
+            <div class="exam-meta">
+              <div class="meta-item"><i class="bi bi-clock"></i> {{ exam.duration_minutes }} mins</div>
+              <div class="meta-item"><i class="bi bi-question-circle"></i> {{ exam.questions|length }} Qs</div>
+              <div class="meta-item"><i class="bi bi-trophy"></i> {{ exam.passing_score }}% pass</div>
+            </div>
+
+            <form method="POST" action="{{ url_for('start_exam', exam_id=exam.id) }}" style="margin-top:0.6rem;">
+              <button class="btn-start-exam full-width" type="submit">
+                <i class="bi bi-play-circle-fill"></i>
+                {% if exam.attempted_by_current_user %}Retake Exam{% else %}Start Exam{% endif %}
+              </button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Modal -->
+  <div id="historyModal" class="custom-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-content" style="max-width:1100px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+        <h2><i class="bi bi-clock-history"></i> Performance History</h2>
+        <button class="close-modal" data-close>&times;</button>
+      </div>
+      <p class="muted">Your past exam results and scores</p>
+
+      {% if completed_exams %}
+      <div class="table-container" style="margin-top:1rem;">
+        <table class="performance-table enhanced" role="table" aria-label="performance history">
+          <thead>
+            <tr>
+              <th>Exam</th>
+              <th>Score</th>
+              <th>Percentage</th>
+              <th>Status</th>
+              <th>Time Taken</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for student_exam in completed_exams %}
+            <tr>
+              <td>{{ student_exam.exam.title }}</td>
+              <td><strong>{{ student_exam.score }}/{{ student_exam.total_points }}</strong></td>
+              <td>
+                <div class="progress-wrapper">
+                  <div class="progress-container">
+                    <div class="progress-bar {{ 'pass' if student_exam.passed else 'fail' }}"
+                      style="width: {{ student_exam.percentage or 0 }}%;"></div>
+                  </div>
+                  <span class="muted" style="margin-left:0.6rem; color:#8899aa;">{{
+                    "%.1f"|format(student_exam.percentage or 0) }}%</span>
+                </div>
+              </td>
+              <td>
+                {% if student_exam.passed %}
+                <span class="status-badge pass">Passed</span>
+                {% else %}
+                <span class="status-badge fail">Failed</span>
+                {% endif %}
+              </td>
+              <td>{{ student_exam.time_taken_minutes or 'N/A' }} min</td>
+              <td>{{ student_exam.submitted_at.strftime('%d %b, %Y %H:%M') if student_exam.submitted_at else 'N/A' }}
+              </td>
+              <td>
+                <div style="display:flex; gap:0.5rem;">
+                  <a href="{{ url_for('exam_result', student_exam_id=student_exam.id) }}" class="btn-preview"
+                    title="View Result"><i class="bi bi-eye"></i></a>
+                  <a href="{{ url_for('download_result_pdf', student_exam_id=student_exam.id) }}" class="btn-preview"
+                    title="Download PDF"><i class="bi bi-download"></i></a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state" style="margin-top:1rem;">
+        <h4>No history found</h4>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+  /* ---------------------------------------------------------------------
+     Enhanced Client-side interactions with production-ready features
+     --------------------------------------------------------------------- */
+
+  (function () {
+    /* ---------- Helpers ---------- */
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    const debounce = (fn, ms = 250) => {
+      let t;
+      return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    };
+
+    /* ---------- Elements ---------- */
+    const searchInput = $('#examSearchInput');
+    const clearSearchBtn = $('#clearSearch');
+    const categorySelect = $('#filterCategory');
+    const sortSelect = $('#sortBy');
+    const examGrid = $('#examGrid');
+    const gridToggle = $('#toggleGridView');
+
+    /* track all exam cards */
+    let examCards = examGrid ? Array.from(examGrid.children) : [];
+
+    /* ---------- Search / Filter / Sort Logic ---------- */
+    function normalize(str) { return (str || '').toString().trim().toLowerCase(); }
+
+    function applyFilters() {
+      const q = normalize(searchInput.value);
+      const cat = normalize(categorySelect.value);
+      const sortBy = sortSelect.value;
+
+      let cards = examCards.slice();
+
+      // Filter by search
+      if (q) {
+        cards = cards.filter(card => {
+          return card.dataset.title.includes(q) || card.dataset.desc.includes(q) || card.dataset.category.includes(q);
+        });
+        clearSearchBtn.style.display = 'inline';
+      } else {
+        clearSearchBtn.style.display = 'none';
+      }
+
+      // Filter by category
+      if (cat) cards = cards.filter(c => normalize(c.dataset.category) === cat);
+
+      // Sort
+      cards.sort((a, b) => {
+        if (sortBy === 'duration') return parseInt(a.dataset.duration) - parseInt(b.dataset.duration);
+        if (sortBy === 'passing') return parseInt(b.dataset.passing) - parseInt(a.dataset.passing);
+        if (sortBy === 'questions') return parseInt(b.dataset.questions) - parseInt(a.dataset.questions);
+        // newest: fallback to created (ISO)
+        let da = a.dataset.created || '';
+        let db = b.dataset.created || '';
+        return new Date(db) - new Date(da);
+      });
+
+      // Re-render
+      if (examGrid) {
+        examGrid.innerHTML = '';
+        cards.forEach(c => examGrid.appendChild(c));
+      }
+    }
+
+    const debouncedApply = debounce(applyFilters, 180);
+
+    if (searchInput) {
+      searchInput.addEventListener('input', debouncedApply);
+      clearSearchBtn.addEventListener('click', () => { searchInput.value = ''; searchInput.focus(); applyFilters(); });
+    }
+    if (categorySelect) categorySelect.addEventListener('change', applyFilters);
+    if (sortSelect) sortSelect.addEventListener('change', applyFilters);
+
+    // Grid toggle
+    if (gridToggle) {
+      let compact = false;
+      gridToggle.addEventListener('click', () => {
+        compact = !compact;
+        examGrid.style.gridTemplateColumns = compact ? 'repeat(auto-fit, minmax(280px,1fr))' : '';
+        gridToggle.innerHTML = compact ? '<i class="bi bi-list-ul"></i> List' : '<i class="bi bi-grid-3x3-gap"></i> Grid';
+      });
+    }
+
+    /* ---------- Modal Management ---------- */
+    const modalTriggers = $$('.modal-trigger');
+    const modals = $$('.custom-modal');
+
+    function openModal(modal) {
+      modal.style.display = 'flex';
+      modal.setAttribute('aria-hidden', 'false');
+      const focusTarget = modal.querySelector('[data-close]') || modal.querySelector('button, a, input');
+      if (focusTarget) focusTarget.focus();
+      document.body.style.overflow = 'hidden';
+      if (modal.id === 'performanceModal') initCharts();
+    }
+
+    function closeModal(modal) {
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = 'auto';
+    }
+
+    modalTriggers.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.modal;
+        const modal = document.getElementById(id);
+        if (modal) openModal(modal);
+      });
+    });
+
+    // close buttons
+    $$('[data-close]').forEach(b => b.addEventListener('click', e => {
+      const m = e.target.closest('.custom-modal');
+      if (m) closeModal(m);
+    }));
+
+    // click outside to close
+    window.addEventListener('click', (e) => {
+      if (e.target.classList && e.target.classList.contains('custom-modal')) {
+        closeModal(e.target);
+      }
+    });
+
+    // Esc key closes any open modal
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        modals.forEach(m => { if (m.style.display === 'flex') closeModal(m); });
+      }
+    });
+
+    /* ---------- Chart.js Setup ---------- */
+    let perfChart = null;
+    let distChart = null;
+
+    function initCharts() {
+      const examLabels = window.__perf_labels || [];
+      const examScores = window.__perf_scores || [];
+      const passed = window.__perf_passed || 0;
+      const total = window.__perf_total || 0;
+      const failed = Math.max(total - passed, 0);
+
+      // Performance line chart
+      const perfCtx = document.getElementById('performanceChart');
+      if (perfCtx) {
+        if (perfChart) perfChart.destroy();
+        perfChart = new Chart(perfCtx, {
+          type: 'line',
+          data: {
+            labels: examLabels,
+            datasets: [{
+              label: 'Score (%)',
+              data: examScores,
+              tension: 0.4,
+              fill: true,
+              borderWidth: 3,
+              borderColor: '#6366f1',
+              backgroundColor: 'rgba(99,102,241,0.1)',
+              pointRadius: 6,
+              pointBackgroundColor: '#fff',
+              pointBorderColor: '#6366f1',
+              pointBorderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                  callback: v => v + '%',
+                  color: '#8899aa'
+                },
+                grid: {
+                  color: 'rgba(45, 52, 72, 0.5)'
+                }
+              },
+              x: {
+                ticks: {
+                  color: '#8899aa'
+                },
+                grid: {
+                  color: 'rgba(45, 52, 72, 0.5)'
+                }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(30, 40, 57, 0.95)',
+                titleColor: '#e8eaf0',
+                bodyColor: '#a8b3cf',
+                borderColor: '#2d3448',
+                borderWidth: 1,
+                padding: 12,
+                displayColors: false
+              }
+            }
+          }
+        });
+      }
+
+      // Distribution donut chart
+      const distCtx = document.getElementById('scoreDistributionChart');
+      if (distCtx) {
+        if (distChart) distChart.destroy();
+        distChart = new Chart(distCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Passed', 'Failed'],
+            datasets: [{
+              data: [passed, failed],
+              backgroundColor: ['#10b981', '#ef4444'],
+              borderWidth: 3,
+              borderColor: '#1e2839'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: '#a8b3cf',
+                  padding: 15,
+                  font: {
+                    size: 13,
+                    weight: 600
+                  }
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(30, 40, 57, 0.95)',
+                titleColor: '#e8eaf0',
+                bodyColor: '#a8b3cf',
+                borderColor: '#2d3448',
+                borderWidth: 1,
+                padding: 12
+              }
+            }
+          }
+        });
+      }
+    }
+
+    /* ---------- Initialize on load ---------- */
+    window.addEventListener('load', () => {
+      applyFilters();
+      // Animate progress bars
+      $$('.progress-bar').forEach(pb => {
+        const w = pb.style.width || '0%';
+        pb.style.width = '0%';
+        requestAnimationFrame(() => {
+          setTimeout(() => pb.style.width = w, 100);
+        });
+      });
+    });
+
+  })();
+</script>
+
+<!-- Server-side data injection for charts -->
+<script>
+  window.__perf_labels = {{
+    completed_exams
+    | selectattr('exam', 'defined')
+    | rejectattr('exam', 'equalto', None)
+    | map(attribute = 'exam.title')
+    | reject('equalto', None)
+    | list
+    | tojson
+  }};
+  window.__perf_scores = {{ completed_exams | map(attribute = 'percentage') | reject('equalto', None) | list | tojson }};
+  window.__perf_passed = {{ passed_count or 0 }};
+  window.__perf_total = {{ total_exams_taken or 0 }};
+</script>
+
+{% endblock %}

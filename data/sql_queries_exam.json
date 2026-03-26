@@ -1,0 +1,92 @@
+[
+  {
+    "question": "What will the following query return?\n\nSELECT department_id, COUNT(*) AS emp_count FROM employees GROUP BY department_id HAVING COUNT(*) > 5;",
+    "option_a": "All employees with more than 5 years of experience",
+    "option_b": "Departments having more than 5 employees",
+    "option_c": "Employees belonging to departments with fewer than 5 employees",
+    "option_d": "Departments with less than 5 employees",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does this query do?\n\nSELECT name, salary FROM employees WHERE salary > (SELECT AVG(salary) FROM employees);",
+    "option_a": "Lists employees earning more than the highest salary",
+    "option_b": "Lists employees earning less than average salary",
+    "option_c": "Lists employees earning above the average salary",
+    "option_d": "Lists all employees regardless of salary",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What will the query output?\n\nSELECT department_id, SUM(salary) OVER (PARTITION BY department_id) AS total_salary FROM employees;",
+    "option_a": "Total salary of all departments combined",
+    "option_b": "Total salary of each department shown with each employee",
+    "option_c": "Sum of all employee salaries divided by department count",
+    "option_d": "Average salary per department",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does this query accomplish?\n\nSELECT e1.name FROM employees e1 WHERE NOT EXISTS (SELECT 1 FROM employees e2 WHERE e2.manager_id = e1.id);",
+    "option_a": "Finds employees who are managers",
+    "option_b": "Finds employees who have no subordinates",
+    "option_c": "Finds employees with the most subordinates",
+    "option_d": "Finds employees managed by no one",
+    "correct_answer": "B",
+    "points": 3
+  },
+  {
+    "question": "What will this CTE query return?\n\nWITH dept_avg AS (\n  SELECT department_id, AVG(salary) AS avg_sal\n  FROM employees\n  GROUP BY department_id\n)\nSELECT e.name, e.salary FROM employees e\nJOIN dept_avg d ON e.department_id = d.department_id\nWHERE e.salary > d.avg_sal;",
+    "option_a": "Employees earning less than the average in their department",
+    "option_b": "Employees earning more than the average in their department",
+    "option_c": "Departments with above-average salaries",
+    "option_d": "Average salary per department only",
+    "correct_answer": "B",
+    "points": 3
+  },
+  {
+    "question": "What does this query return?\n\nSELECT DISTINCT department_id FROM employees WHERE department_id NOT IN (SELECT department_id FROM projects);",
+    "option_a": "Departments with no employees",
+    "option_b": "Departments with employees but no projects",
+    "option_c": "Projects with no assigned departments",
+    "option_d": "All active departments",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What will this query return?\n\nSELECT name, salary, RANK() OVER (ORDER BY salary DESC) AS rank FROM employees;",
+    "option_a": "Ranks employees based on joining date",
+    "option_b": "Ranks employees alphabetically by name",
+    "option_c": "Ranks employees by salary (highest salary gets rank 1)",
+    "option_d": "Gives random ranks to employees",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What is the effect of this query?\n\nDELETE FROM employees WHERE id IN (SELECT id FROM employees WHERE department_id = 3);",
+    "option_a": "Deletes all employees",
+    "option_b": "Deletes all employees belonging to department 3",
+    "option_c": "Deletes all departments except department 3",
+    "option_d": "Deletes department records only",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does this query return?\n\nSELECT department_id, MAX(salary) FILTER (WHERE gender = 'F') AS max_female_salary FROM employees GROUP BY department_id;",
+    "option_a": "Maximum salary among all employees per department",
+    "option_b": "Maximum female salary per department",
+    "option_c": "Average salary of female employees",
+    "option_d": "Total salary of female employees per department",
+    "correct_answer": "B",
+    "points": 3
+  },
+  {
+    "question": "What is the result of this query?\n\nSELECT name FROM employees WHERE salary = (SELECT MAX(salary) FROM employees WHERE department_id = 2);",
+    "option_a": "Employees with the highest salary overall",
+    "option_b": "Employees with the highest salary in department 2",
+    "option_c": "All employees in department 2",
+    "option_d": "Employees with salary less than the maximum in department 2",
+    "correct_answer": "B",
+    "points": 2
+  }
+]

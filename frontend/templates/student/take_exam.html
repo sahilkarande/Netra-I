@@ -1,0 +1,1662 @@
+{% extends "base.html" %}
+{% block title %}{{ exam.title }} – Secure Exam{% endblock %}
+
+{# ── Inject exam-mode class so CSS can hide nav/footer ── #}
+{% block body_class %}exam-mode{% endblock %}
+
+{% block content %}
+<style>
+  /* Hide all question slides; only the .active one is shown */
+  .question-slide { display: none !important; }
+  .question-slide.active { display: block !important; }
+</style>
+
+{# ══════════════════════════════════════
+ACCESS KEY OVERLAY (shown only when exam requires a key)
+══════════════════════════════════════ #}
+{% if needs_key %}
+<div id="key-overlay" style="
+  position:fixed; inset:0; z-index:9999;
+  background:radial-gradient(ellipse at 60% 40%, #0d1b2a 0%, #060d16 100%);
+  display:none; align-items:center; justify-content:center;
+">
+  <div style="
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.10);
+    border-radius:20px;
+    padding:2.5rem 2rem;
+    max-width:420px;
+    width:92%;
+    text-align:center;
+    box-shadow:0 24px 64px rgba(0,0,0,0.5);
+    backdrop-filter:blur(12px);
+  ">
+    <div style="font-size:3rem; margin-bottom:0.5rem;">🔑</div>
+    <h2 style="color:#e8eaf0; font-size:1.4rem; margin:0 0 0.4rem;">Exam Access Key Required</h2>
+    <p style="color:#8899aa; font-size:0.9rem; margin:0 0 1.5rem;">
+      Enter the key shared by your faculty to unlock <strong style="color:#a5b4fc;">{{ exam.title }}</strong>.
+    </p>
+
+    <div style="position:relative; margin-bottom:1rem;">
+      <input id="keyInput" type="text" maxlength="12" placeholder="Enter access key" autocomplete="off"
+        spellcheck="false" style="
+          width:100%; box-sizing:border-box;
+          padding:0.85rem 1rem;
+          font-size:1.2rem; letter-spacing:0.25em; text-transform:uppercase; text-align:center;
+          background:rgba(255,255,255,0.06);
+          border:1.5px solid rgba(255,255,255,0.15);
+          border-radius:10px;
+          color:#e8eaf0;
+          outline:none;
+          font-family:monospace;
+          transition:border-color 0.2s;
+        " oninput="this.value=this.value.toUpperCase(); document.getElementById('keyError').textContent='';"
+        onkeydown="if(event.key==='Enter') verifyKey();">
+    </div>
+
+    <div id="keyError" style="color:#f87171; font-size:0.85rem; min-height:1.2em; margin-bottom:0.8rem;"></div>
+
+    <button id="keyBtn" onclick="verifyKey()" style="
+        width:100%; padding:0.85rem;
+        background:linear-gradient(135deg,#6366f1,#4f46e5);
+        color:#fff; border:none; border-radius:10px;
+        font-size:1rem; font-weight:600; cursor:pointer;
+        transition:opacity 0.2s;
+      ">
+      <i class="bi bi-unlock-fill"></i> Verify &amp; Continue
+    </button>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const keyOverlay = document.getElementById('key-overlay');
+    const keyInput = document.getElementById('keyInput');
+    const keyError = document.getElementById('keyError');
+    const keyBtn = document.getElementById('keyBtn');
+
+    window.addEventListener('DOMContentLoaded', () => keyInput && keyInput.focus());
+
+    window.verifyKey = async function () {
+      const key = (keyInput.value || '').trim().toUpperCase();
+      if (!key) { keyError.textContent = 'Please enter the access key.'; return; }
+
+      keyBtn.disabled = true;
+      keyBtn.textContent = 'Verifying…';
+
+      try {
+        const resp = await fetch('{{ url_for("verify_exam_key", exam_id=exam.id) }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'access_key=' + encodeURIComponent(key)
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+          keyOverlay.style.transition = 'opacity 0.4s';
+          keyOverlay.style.opacity = '0';
+          setTimeout(() => {
+            keyOverlay.style.display = 'none';
+            keyOverlay.style.opacity = '';
+            /* Key verified — now show the instructions modal */
+            const instr = document.getElementById('modal-instr');
+            if (instr) instr.style.display = 'flex';
+          }, 400);
+        } else {
+          keyError.textContent = data.error || 'Invalid key. Please try again.';
+          keyInput.select();
+        }
+      } catch (e) {
+        keyError.textContent = 'Network error. Please try again.';
+      } finally {
+        keyBtn.disabled = false;
+        keyBtn.innerHTML = '<i class="bi bi-unlock-fill"></i> Verify &amp; Continue';
+      }
+    };
+  })();
+</script>
+{% endif %}
+
+{# ══════════════════════════════════════
+CALIBRATION OVERLAY
+══════════════════════════════════════ #}
+<div id="calib-overlay">
+  <div class="calib-card">
+    <div class="calib-hd">
+      <div class="calib-logo-box"><i class="bi bi-shield-lock-fill"></i></div>
+      <div class="calib-logo-txt">ProctoGuard</div>
+    </div>
+    <div class="calib-body">
+      <div class="cam-frame scanning" id="calibFrame">
+        <video id="calib-video" autoplay muted playsinline></video>
+        <div class="face-ring" id="calibRing" {% if exam.exam_mode=='home' %} style="display:none;" {% endif %}></div>
+        <div class="scan-line"></div>
+        <div class="chip-badge ca" id="calibChip">
+          <div class="chip-dot"></div>
+          <span id="calibChipTxt">Initializing</span>
+        </div>
+      </div>
+      <div class="calib-title">Face Calibration</div>
+      <div class="calib-sub">Look directly at the camera. Keep your face centered in good lighting.</div>
+      <div class="calib-prog">
+        <div class="calib-fill" id="calibFill"></div>
+      </div>
+      <div class="calib-steps">
+        <div class="cs ca" id="cs1"><i class="bi bi-camera-video"></i> Camera</div>
+        <div class="cs" id="cs2"><i class="bi bi-person-bounding-box"></i> Detect</div>
+        <div class="cs" id="cs3"><i class="bi bi-check2-circle"></i> Ready</div>
+      </div>
+      <div id="calib-msg"></div>
+      <button class="btn-calib-start" id="calibBtn" disabled>
+        <i class="bi bi-play-circle" id="calibBtnIco"></i>
+        <span id="calibBtnTxt">Initializing camera…</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ══════════════════════════════════════
+INSTRUCTIONS MODAL
+══════════════════════════════════════ #}
+<div id="modal-instr">
+  <div class="instr-modal">
+    <div class="instr-hd">
+      <h2><i class="bi bi-clipboard-check"></i> Exam Instructions</h2>
+      <span
+        style="font-size:10px; color:var(--exam-muted2); font-family:monospace; font-weight:700; border:1px solid var(--exam-border); padding:3px 7px; border-radius:5px;">READ
+        CAREFULLY</span>
+    </div>
+    <div class="instr-body">
+      <div class="instr-rules">
+        <div class="rule-box">
+          <div class="rule-ico b"><i class="bi bi-fullscreen"></i></div>
+          <div>
+            <h4>Fullscreen Required</h4>
+            <p>Stay in fullscreen throughout the exam</p>
+          </div>
+        </div>
+        <div class="rule-box">
+          <div class="rule-ico a"><i class="bi bi-exclamation-triangle"></i></div>
+          <div>
+            <h4>No Tab Switching</h4>
+            <p>{{ exam.max_tab_switches or 3 }} warnings max — then auto-submit</p>
+          </div>
+        </div>
+        <div class="rule-box">
+          <div class="rule-ico g"><i class="bi bi-cloud-arrow-up"></i></div>
+          <div>
+            <h4>Auto-Save On</h4>
+            <p>Answers save automatically</p>
+          </div>
+        </div>
+        <div class="rule-box">
+          <div class="rule-ico b"><i class="bi bi-camera-video-fill"></i></div>
+          <div>
+            <h4>Proctoring — {{ 'Classroom' if exam.exam_mode == 'classroom' else 'Home' }} Mode</h4>
+            <p id="ruleProctorFeatures">Loading monitoring features...</p>
+          </div>
+        </div>
+        <div class="rule-box">
+          <div class="rule-ico r"><i class="bi bi-slash-circle"></i></div>
+          <div>
+            <h4>No Copy / Paste</h4>
+            <p>All clipboard actions are blocked &amp; logged</p>
+          </div>
+        </div>
+        <div class="rule-box">
+          <div class="rule-ico a"><i class="bi bi-hourglass-split"></i></div>
+          <div>
+            <h4>{{ exam.duration_minutes }} Minutes</h4>
+            <p>Auto-submits when countdown hits zero</p>
+          </div>
+        </div>
+      </div>
+      <div class="warn-strip">
+        <i class="bi bi-lightning-fill" style="flex-shrink:0;"></i>
+        Unanswered questions score <strong>0 points</strong>. Questions &amp; options are randomized per student. All
+        violations are reviewed by instructors.
+      </div>
+    </div>
+    <div class="instr-foot">
+      <button class="btn-begin" onclick="startExam()">
+        <i class="bi bi-play-fill"></i> Begin Examination
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ══════════════════════════════════════
+MAIN EXAM UI (2-col: left nav + main)
+══════════════════════════════════════ #}
+<div id="exam-ui" style="display:none;">
+
+  {# ── STICKY TOP BAR ── #}
+  <div id="exam-topbar">
+    <div class="bar-title">
+      <i class="bi bi-shield-lock-fill" style="color:var(--exam-primary); flex-shrink:0;"></i>
+      <span class="bar-exam-name">{{ exam.title }}</span>
+    </div>
+
+    <div class="topbar-center">
+      <div class="exam-prog-track" style="width:220px;">
+        <div class="exam-prog-fill" id="progFill" style="width:0%"></div>
+      </div>
+      <span id="progLabel" style="font-size:11px; color:var(--exam-muted); white-space:nowrap;">Q 1 / {{
+        questions|length }}</span>
+    </div>
+
+    <div class="topbar-right">
+      <div id="tab-counter">
+        <i class="bi bi-arrow-left-right"></i>
+        <span id="tabNum">0</span>/{{ exam.max_tab_switches or 3 }}
+      </div>
+      <div id="timer-box">--:--:--</div>
+      <button id="btn-submit-top" onclick="openSubmit()">
+        <i class="bi bi-send-check"></i> Submit
+      </button>
+    </div>
+  </div>
+
+  {# ── EXAM BODY: left sidebar + main ── #}
+  <div id="exam-body-wrap">
+    <div class="exam-2col">
+
+      {# ──── LEFT PANEL ──── #}
+      <aside id="panel-left">
+
+        <div class="panel-label">Progress</div>
+        <div class="exam-stat-grid">
+          <div class="exam-stat-box es-tot"><span class="esn">{{ questions|length }}</span><span
+              class="esl">Total</span></div>
+          <div class="exam-stat-box es-ans"><span class="esn" id="stAns">0</span><span class="esl">Attempted</span></div>
+          <div class="exam-stat-box es-left"><span class="esn" id="stLeft">{{ questions|length }}</span><span
+              class="esl">Not Attempted</span></div>
+          <div class="exam-stat-box es-rev"><span class="esn" id="stRev">0</span><span class="esl">Review</span></div>
+        </div>
+
+        <div class="panel-label">Legend</div>
+        <div class="exam-legend-list">
+          <div class="exam-leg-row">
+            <div class="exam-leg-dot ld-cur"></div>Current
+          </div>
+          <div class="exam-leg-row">
+            <div class="exam-leg-dot ld-ans"></div>Answered
+          </div>
+          <div class="exam-leg-row">
+            <div class="exam-leg-dot ld-non"></div>Not Answered
+          </div>
+          <div class="exam-leg-row">
+            <div class="exam-leg-dot ld-rev"></div>For Review
+          </div>
+        </div>
+
+        <div class="panel-label">Questions</div>
+        <div class="q-nav-grid" id="qNavGrid">
+          {% for q in questions %}
+          <div
+            class="q-nav-btn{% if loop.index0 == 0 %} qn-cur{% endif %}{% if q.id in existing_answers %} qn-ans{% endif %}"
+            id="qnb{{ loop.index0 }}" onclick="goQ({{ loop.index0 }})">{{ loop.index }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="panel-label">Proctoring</div>
+        <div class="proctor-info-box">
+          <div class="proctor-live-label">
+            <div class="live-dot-anim"></div> AI Monitoring Active
+          </div>
+          <div class="exam-pw-row"><span class="pk">Tab Switches</span><span class="pv pv-warn" id="pwTabs">0/{{
+              exam.max_tab_switches or 3 }}</span></div>
+          <div class="exam-pw-row"><span class="pk">Violations</span><span class="pv pv-ok" id="pwViol">0</span></div>
+          <div class="exam-pw-row"><span class="pk">Camera</span><span class="pv pv-ok" id="pwCam">Active</span></div>
+          <div class="exam-pw-row"><span class="pk">Face</span><span class="pv pv-ok" id="pwFace">Detected</span></div>
+        </div>
+
+      </aside>
+
+      {# ──── MAIN QUESTION AREA ──── #}
+      <main id="panel-main">
+
+        {# ── QUESTION SLIDES ── #}
+        {% for q in questions %}
+        <div class="question-slide{% if loop.index0 == 0 %} active{% endif %}" id="qs{{ loop.index0 }}"
+          data-qid="{{ q.id }}" data-idx="{{ loop.index0 }}"
+          data-opts='{{ q.option_a|tojson }},{{ q.option_b|tojson }},{{ (q.option_c or "")|tojson }},{{ (q.option_d or "")|tojson }}'>
+
+          <div class="qh-row">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="q-label-tag">Question</span>
+              <span class="q-pos-txt">{{ loop.index }} of {{ questions|length }}</span>
+            </div>
+            <div class="qa-btns">
+              <button class="btn-mark" id="markBtn{{ loop.index0 }}" onclick="toggleMark({{ loop.index0 }})">
+                <i class="bi bi-bookmark"></i> Mark for Review
+              </button>
+              <button class="btn-mark btn-clear" onclick="clearAns({{ loop.index0 }})">
+                <i class="bi bi-x-lg"></i> Clear
+              </button>
+            </div>
+          </div>
+
+          <div class="q-main-card">
+            <div class="qmc-head">
+              <div class="qnum-badge">Q{{ '%02d'|format(loop.index) }}</div>
+              <div class="q-text">{{ q.question_text|safe }}</div>
+            </div>
+            {# Options rendered by JS after client-side shuffle #}
+            <div class="opts-list" id="opts{{ loop.index0 }}" data-qid="{{ q.id }}" data-idx="{{ loop.index0 }}"
+              data-oa="{{ q.option_a|e }}" data-ob="{{ q.option_b|e }}"
+              data-oc="{{ q.option_c|e if q.option_c else '' }}" data-od="{{ q.option_d|e if q.option_d else '' }}"
+              data-sel="{{ existing_answers.get(q.id, '') }}">
+            </div>
+          </div>
+
+          <div class="nav-btns-row">
+            <button class="btn-prev" onclick="goQ({{ loop.index0 - 1 }})" {% if loop.index0==0 %}disabled{% endif %}>
+              <i class="bi bi-chevron-left"></i> Previous
+            </button>
+            {% if loop.index0 == questions|length - 1 %}
+            <button class="btn-next finish-btn" onclick="openSubmit()">
+              <i class="bi bi-send-check-fill"></i> Finish &amp; Submit
+            </button>
+            {% else %}
+            <button class="btn-next" onclick="goQ({{ loop.index0 + 1 }})">
+              Next <i class="bi bi-chevron-right"></i>
+            </button>
+            {% endif %}
+          </div>
+
+        </div>
+        {% endfor %}
+
+      </main>
+
+    </div>
+  </div>
+</div>{# /exam-ui #}
+
+{# ══════════════════════════════════════
+DRAGGABLE FLOATING CAMERA WIDGET
+══════════════════════════════════════ #}
+<div id="cam-widget" style="display:none;">
+  <div id="cam-widget-bar">
+    <div style="display:flex; align-items:center; gap:6px;">
+      <div class="live-dot-anim"></div>
+      <span style="font-size:11px; font-weight:600; color:var(--exam-muted);">Camera</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px;">
+      <div class="cam-badge-pill cbp-ok" id="camBadge">
+        <i class="bi bi-circle-fill" style="font-size:6px;"></i> Active
+      </div>
+      <button id="cam-widget-toggle" title="Minimize/Restore camera" onclick="toggleCamWidget()">
+        <i class="bi bi-dash-lg" id="cam-widget-ico"></i>
+      </button>
+    </div>
+  </div>
+  <div id="cam-widget-body">
+    <div class="cam-live">
+      <video id="monitor-video" autoplay muted playsinline></video>
+      <div class="face-ring" id="monRing" {% if exam.exam_mode=='home' %} style="display:none;" {% endif %}></div>
+      <div class="rec-tag">
+        <div class="rec-pip"></div> REC
+      </div>
+    </div>
+    <div class="face-row">
+      <i id="faceIco" class="bi bi-person-check-fill" style="font-size:14px; color:var(--exam-success);"></i>
+      <div>
+        <span class="face-main" id="faceMain">Face Detected</span>
+        <span class="face-sub" id="faceSub">Centered &amp; clear</span>
+      </div>
+    </div>
+    <!-- ── Active Monitoring Features (shows what faculty enabled) ── -->
+    <div id="activeFeatures" style="margin:8px 0; padding:6px 10px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid rgba(255,255,255,0.08);">
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.4); margin-bottom:5px; font-weight:600;">Active Monitoring</div>
+      <div id="featureBadges" style="display:flex; flex-wrap:wrap; gap:4px;"></div>
+    </div>
+
+    <div class="viol-row">
+      <span class="viol-lbl">Reminders</span>
+      <div class="viol-pips" id="violPips">
+        {% set mv = exam.max_violations if exam.max_violations else 25 %}
+        {% for i in range(mv if mv <= 15 else 15) %}<div class="vpip" id="vp{{ i }}"></div>{% endfor %}
+      </div>
+      <span class="viol-num" id="violNum">0/{{ mv }}</span>
+    </div>
+    <div class="exam-log-card" style="margin-top:8px;">
+      <div class="exam-log-hd">Log <span id="logBadge"
+          style="font-family:monospace; color:var(--exam-primary);">0</span></div>
+      <div class="exam-log-scroll" id="logScroll"></div>
+    </div>
+  </div>
+</div>
+
+{# ── AUTOSAVE PILL ── #}
+<div id="as-pill">
+  <div class="as-dot"></div><span id="asTxt">All changes saved</span>
+</div>
+
+{# ── TAB FLASH BORDER ── #}
+<div id="tab-flash"></div>
+
+{# ── TOASTS ── #}
+<div id="toast-wrap"></div>
+
+{# ── SUBMIT MODAL ── #}
+<div id="modal-submit">
+  <div class="submit-modal">
+    <div class="sm-head">
+      <div class="sm-icon"><i class="bi bi-send-check-fill"></i></div>
+      <div class="sm-title">Submit Examination?</div>
+      <div class="sm-sub">This cannot be undone. Answers are graded immediately.</div>
+    </div>
+    <div class="sm-stats">
+      <div class="sm-stat"><span class="sn" id="ssAns">0</span><span class="sl">Answered</span></div>
+      <div class="sm-stat"><span class="sn" id="ssSkip">{{ questions|length }}</span><span class="sl">Skipped</span>
+      </div>
+      <div class="sm-stat"><span class="sn" id="ssRev">0</span><span class="sl">For Review</span></div>
+    </div>
+    <div class="sm-foot">
+      <button class="btn-sm-cancel" onclick="closeSubmit()">Cancel</button>
+      <button class="btn-sm-confirm" onclick="doSubmit()">
+        <i class="bi bi-send-check"></i> Submit Now
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ── FULLSCREEN BLOCKER ── #}
+<div id="fs-overlay">
+  <div class="fso-icon"><i class="bi bi-fullscreen-exit" style="color:var(--exam-warning);"></i></div>
+  <div class="fso-title">Fullscreen Required</div>
+  <div class="fso-sub">Re-enter fullscreen to continue your examination.</div>
+  <button class="btn-begin" style="margin-top:10px;" onclick="enterFS()">
+    <i class="bi bi-fullscreen"></i> Enter Fullscreen
+  </button>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+<script>
+  /* ── utils (must be first) ── */
+  const g = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, '0');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  /* ══════════════════════════════════
+     CONFIG
+  ══════════════════════════════════ */
+  const CFG = {
+    seId: {{ student_exam.id }},
+    examId: {{ exam.id }},
+    totalSec: {{ (time_remaining * 60) | int }},
+    maxTabs: {{ exam.max_tab_switches or 5 }},
+    maxViol: {{ exam.max_violations if exam.max_violations else 25 }},
+    examMode: "{{ exam.exam_mode or 'classroom' }}",
+    /* Faculty-driven proctoring settings — safe defaults if not set */
+    proctor: (() => {
+      const SAFE_DEFAULTS = {
+        camera_enabled: true,
+        face_detection: true,
+        head_pose: false,
+        object_detection: false,
+        voice_detection: false,
+        tab_switch: true,
+        max_warnings: 25,
+        max_tab_switches: 5,
+        sensitivity: 'medium'
+      };
+      try {
+        /* Use tojson to safely embed OR fix escaped quotes from | e filter */
+        let raw = '{{ exam.proctor_settings | default("{}", true) }}'.replace(/&quot;/g, '"').replace(/&#34;/g, '"').replace(/&amp;/g, '&');
+        if (!raw || raw === 'None' || raw === 'null') raw = '{}';
+        const parsed = JSON.parse(raw);
+        console.log('✅ Proctor settings loaded:', parsed);
+        return { ...SAFE_DEFAULTS, ...parsed };
+      } catch (e) {
+        console.warn('⚠️ Could not parse proctor_settings, using safe defaults:', e);
+        return SAFE_DEFAULTS;
+      }
+    })(),
+    urls: {
+      save: "{{ url_for('save_answer') }}",
+      tabUpd: "{{ url_for('api_update_tabcount', student_exam_id=student_exam.id) }}",
+      logAct: "{{ url_for('api_log_activity',   student_exam_id=student_exam.id) }}",
+      status: "{{ url_for('api_check_exam_status', student_exam_id=student_exam.id) }}",
+      submit: "{{ url_for('submit_exam', student_exam_id=student_exam.id) }}"
+    }
+  };
+
+  /* ══════════════════════════════════
+     STATE
+  ══════════════════════════════════ */
+  const S = {
+    cur: 0,
+    answers: {},
+    marked: new Set(),
+    /* qMap[idx] = { qid, optionOrder:['A','B','C','D'], displayToKey:{displayIdx→'A'|'B'|'C'|'D'} } */
+    qMap: [],
+    tabs: 0, viol: 0,
+    secs: CFG.totalSec,
+    done: false,
+    stream: null, socket: null,
+    logs: 0,
+    _saveT: null, _timerT: null, _pollT: null, _frameT: null, _autoT: null,
+  };
+
+  /* seed existing answers */
+  {% for qid, ans in existing_answers.items() %}
+  S.answers[{{ qid }}] = "{{ ans }}";
+  {% endfor %}
+
+  /* ══════════════════════════════════
+     OPTION SHUFFLING
+     Each slide's .opts-list element carries data-oa..od
+     We shuffle A/B/C/D order client-side (seeded per student_exam id
+     so refreshes give the same order).
+  ══════════════════════════════════ */
+  function seededShuffle(arr, seed) {
+    /* deterministic Fisher-Yates with mulberry32 RNG */
+    let s = seed >>> 0;
+    function rng() { s += 0x6D2B79F5; let t = Math.imul(s ^ s >>> 15, 1 | s); t ^= t + Math.imul(t ^ t >>> 7, 61 | t); return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function buildAllOptions() {
+    document.querySelectorAll('.opts-list').forEach((el, idx) => {
+      const qid = parseInt(el.dataset.qid);
+      const oa = el.dataset.oa || '';
+      const ob = el.dataset.ob || '';
+      const oc = el.dataset.oc || '';
+      const od = el.dataset.od || '';
+      const sel = el.dataset.sel || '';  /* previously saved answer key */
+
+      const keys = ['A', 'B', 'C', 'D'];
+      const texts = { A: oa, B: ob, C: oc, D: od };
+
+      /* only include keys that have non-empty text */
+      const available = keys.filter(k => texts[k].trim() !== '');
+
+      /* deterministic shuffle: seed = student_exam_id * 1000 + qid */
+      const seed = (CFG.seId * 1000 + qid) % 2147483647;
+      const shuffled = seededShuffle([...available], seed);
+
+      /* store mapping: canonical key → display position letter */
+      const displayMap = {}; /* e.g. {A→'B', B→'D', ...} display label → original key */
+      shuffled.forEach((origKey, i) => {
+        displayMap[keys[i]] = origKey;
+      });
+
+      S.qMap[idx] = { qid, displayMap, available };
+
+      /* render options */
+      el.innerHTML = '';
+      shuffled.forEach((origKey, i) => {
+        const dispLetter = keys[i];
+        const text = texts[origKey];
+        const isSelected = (sel === origKey);
+
+        const div = document.createElement('div');
+        div.className = 'opt-row' + (isSelected ? ' opt-selected' : '');
+        div.id = `opt${idx}_${dispLetter}`;
+        div.setAttribute('data-orig-key', origKey);
+        div.onclick = () => pickAns(idx, qid, origKey, div);
+        div.innerHTML = `<div class="opt-letter">${dispLetter}</div><div class="opt-text">${text}</div>`;
+        el.appendChild(div);
+      });
+    });
+  }
+
+  /* ══════════════════════════════════
+     SOCKET.IO
+  ══════════════════════════════════ */
+  function initSocket() {
+    S.socket = io();
+
+    /* Join rooms immediately on connect */
+    S.socket.on('connect', () => {
+      S.socket.emit('join_exam', {
+        exam_id: CFG.examId,
+        student_exam_id: CFG.seId
+      });
+    });
+
+    S.socket.on('calibration_result', d => {
+      if (d.success) onCalibOK();
+      else { setCalibMsg(d.message, false); setTimeout(sendCalibFrame, 2000); }
+    });
+    /* Toast cooldown: don't spam the student. Max 1 toast per 15 seconds. */
+    let _lastToastByType = {};
+    const TOAST_COOLDOWN = 20000; /* 20 seconds between same-type toasts */
+    const TOAST_GLOBAL_MIN = 8000; /* 8 seconds minimum between any toasts */
+    let _lastToastAny = 0;
+
+    function safeToast(title, msg, cls, violationType) {
+      const now = Date.now();
+      /* Global minimum gap */
+      if (now - _lastToastAny < TOAST_GLOBAL_MIN) return;
+      /* Per-type cooldown */
+      const vtype = violationType || msg;
+      if (_lastToastByType[vtype] && now - _lastToastByType[vtype] < TOAST_COOLDOWN) return;
+      _lastToastByType[vtype] = now;
+      _lastToastAny = now;
+      toast(title, msg, cls);
+    }
+
+    S.socket.on('proctor_result', d => {
+      if (d.terminated) {
+        addLog('Exam auto-submitted by system', 'le');
+        toast('Exam Submitted', 'Your exam has been submitted. Please contact your instructor if you have concerns.', 'td');
+        setTimeout(() => autoSubmit('Warning limit reached'), 3000);
+        return;
+      }
+      if (!d.success) {
+        S.viol = d.total_violations ?? (S.viol + 1);
+        updateViolUI();
+
+        const v = d.violation;
+
+        /* Just update UI and log — only toast occasionally */
+        if (v === 'no_face' || v === 'no_face_brief') {
+          setFace(false, 'Face Not Visible', 'Look at the camera');
+          addLog('Face not detected', 'lw');
+          safeToast('Reminder', 'Please face the camera.', 'tw', 'no_face');
+        } else if (v === 'multiple_faces') {
+          setFace(false, 'Multiple Faces', 'Only you should be visible');
+          addLog('Multiple faces', 'lw');
+          safeToast('Reminder', 'Please ensure only you are visible on camera.', 'tw', 'multiple_faces');
+        } else if (v === 'looking_away' || v === 'looking_away_soft' || v === 'looking_away_hard') {
+          setFace(false, 'Facing Away', 'Face the screen');
+          addLog('Head movement detected', 'lw');
+          safeToast('Reminder', 'Please face the screen.', 'tw', 'looking_away');
+        } else if (v === 'cell_phone' || v === 'mobile_phone') {
+          addLog('Phone detected', 'lw');
+          safeToast('Reminder', 'A phone was detected — please keep it away.', 'tw', 'object');
+        } else if (v === 'voice_detected') {
+          addLog('Voice detected', 'lw');
+          safeToast('Reminder', 'Please remain silent.', 'tw', 'voice');
+        } else {
+          addLog(`Warning: ${d.message || v}`, 'lw');
+          safeToast('Reminder', d.message || 'Please follow exam guidelines.', 'tw', v);
+        }
+
+        /* Only auto-submit at the limit — no early termination */
+        if (S.viol >= CFG.maxViol) {
+          setTimeout(() => autoSubmit('Warning limit reached'), 3000);
+        }
+      } else {
+        setFace(true, 'Face Detected', 'All good');
+        if (CFG.examMode === 'classroom') g('monRing').classList.add('show');
+      }
+    });
+
+    // Heartbeat acknowledgement
+    S.socket.on('heartbeat_ack', d => { /* connection confirmed */ });
+
+    /* ── FORCE-END: this specific student ── */
+    S.socket.on('student_force_ended', d => {
+      if (S.done) return;
+      if (d.student_exam_id && d.student_exam_id != CFG.seId) return;
+      _showForceEndBanner('Your exam has been ended by the instructor.');
+      addLog('Exam force-ended by instructor', 'le');
+      setTimeout(() => autoSubmit('Exam ended by instructor'), 3000);
+    });
+
+    /* ── FORCE-END: entire exam ── */
+    S.socket.on('exam_force_ended', d => {
+      if (S.done) return;
+      _showForceEndBanner('The exam has been ended by the instructor.');
+      addLog('Exam force-ended by instructor', 'le');
+      setTimeout(() => autoSubmit('Exam ended by instructor'), 3000);
+    });
+
+    /* ── EXAM REACTIVATED ── */
+    S.socket.on('exam_reactivated', d => {
+      const banner = document.getElementById('force-end-banner');
+      if (banner) banner.remove();
+    });
+  }
+
+  /* Cheating score UI updater */
+  function updateCheatingScore(score) {
+    const el = g('cheatingScore');
+    if (!el) return;
+    el.textContent = score.toFixed(1);
+    el.className = score > 1.0 ? 'cs-danger' : score > 0.5 ? 'cs-warn' : 'cs-ok';
+  }
+
+  /* ══════════════════════════════════
+     CAMERA
+  ══════════════════════════════════ */
+  /* Full-screen force-end banner */
+  function _showForceEndBanner(msg) {
+    if (document.getElementById('force-end-banner')) return;
+    const el = document.createElement('div');
+    el.id = 'force-end-banner';
+    el.innerHTML =
+      '<div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;padding:40px;">' +
+      '<div style="font-size:52px;">🛑</div>' +
+      '<div style="font-size:22px;font-weight:700;color:#fff;">' + msg + '</div>' +
+      '<div style="font-size:15px;color:rgba(255,255,255,0.7);">Your answers are being saved and submitted automatically.</div>' +
+      '</div>';
+    document.body.appendChild(el);
+  }
+
+  let _calibRetries = 0;
+  const MAX_CALIB_RETRIES = 5;
+
+  async function initCam() {
+    setChip('ca', 'Requesting Camera...');
+    setCalibMsg('Please allow camera access when prompted.', false);
+
+    try {
+      /* Check if getUserMedia is available at all */
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera API not available. Use HTTPS or localhost.');
+      }
+
+      /* Constraint sets to try, from ideal to fallback */
+      const constraintSets = [
+        { video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: true },
+        { video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' }, audio: true },
+        { video: { facingMode: 'user' }, audio: true },
+        { video: true, audio: true },
+        { video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false },
+        { video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' }, audio: false },
+        { video: { facingMode: 'user' }, audio: false },
+        { video: true, audio: false }
+      ];
+
+      let stream = null;
+      let lastError = null;
+
+      for (let i = 0; i < constraintSets.length; i++) {
+        try {
+          console.log(`📹 Trying camera constraints set ${i + 1}/${constraintSets.length}...`);
+          const camPromise = navigator.mediaDevices.getUserMedia(constraintSets[i]);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Camera permission timeout (15s)')), 15000)
+          );
+          stream = await Promise.race([camPromise, timeoutPromise]);
+          console.log('✅ Camera stream obtained with constraint set', i + 1);
+          break;
+        } catch (e) {
+          lastError = e;
+          console.warn(`⚠️ Constraint set ${i + 1} failed:`, e.name, e.message);
+          /* If permission denied, don't try other constraints */
+          if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+            throw e;
+          }
+        }
+      }
+
+      if (!stream) {
+        throw lastError || new Error('Could not access camera with any constraints');
+      }
+
+      S.stream = stream;
+
+      const calibVid = g('calib-video');
+      const monVid = g('monitor-video');
+
+      /* Force video element to be visible and properly sized */
+      calibVid.style.display = 'block';
+      calibVid.style.width = '100%';
+      calibVid.style.height = '100%';
+      calibVid.style.objectFit = 'cover';
+
+      /* Set attributes for maximum compatibility */
+      [calibVid, monVid].forEach(v => {
+        v.setAttribute('autoplay', 'true');
+        v.setAttribute('muted', 'true');
+        v.setAttribute('playsinline', 'true');
+        v.muted = true;
+        v.playsInline = true;
+        v.srcObject = S.stream;
+      });
+
+      setChip('ca', 'Starting Video...');
+      console.log('📹 Stream assigned, tracks:', S.stream.getTracks().map(t => `${t.kind}:${t.readyState}`));
+
+      /* Play both video elements */
+      try { await calibVid.play(); console.log('✅ calib-video playing'); } catch (e) { console.warn('⚠️ calib-video play failed:', e.message); }
+      try { await monVid.play(); console.log('✅ monitor-video playing'); } catch (e) { console.warn('⚠️ monitor-video play failed:', e.message); }
+
+      /* Poll until video actually produces frames (up to 8 seconds) */
+      const frameReady = await new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 40; /* 40 × 200ms = 8 seconds */
+        const poll = () => {
+          attempts++;
+          const vw = calibVid.videoWidth, vh = calibVid.videoHeight;
+          const rs = calibVid.readyState;
+          if (attempts % 5 === 0) console.log(`📹 Frame check #${attempts}: ${vw}×${vh}, readyState=${rs}`);
+          if (vw > 0 && vh > 0) {
+            console.log(`✅ Video producing frames: ${vw}×${vh} after ${attempts * 200}ms`);
+            return resolve(true);
+          }
+          if (attempts >= maxAttempts) {
+            console.warn('⚠️ Video frame timeout — proceeding anyway');
+            return resolve(false);
+          }
+          setTimeout(poll, 200);
+        };
+        calibVid.addEventListener('loadeddata', () => { console.log('📹 loadeddata event'); }, { once: true });
+        calibVid.addEventListener('playing', () => { console.log('📹 playing event'); }, { once: true });
+        calibVid.addEventListener('canplay', () => { console.log('📹 canplay event'); }, { once: true });
+        poll();
+      });
+
+      await wait(400);
+      cstep(1, 'cd'); cstep(2, 'ca');
+      setFill(33); setChip('ca', 'Camera Active');
+      console.log('📹 Camera ready:', calibVid.videoWidth, 'x', calibVid.videoHeight);
+
+      if (!frameReady && calibVid.videoWidth === 0) {
+        console.log('🔄 Re-assigning stream to video element...');
+        calibVid.srcObject = null;
+        await wait(100);
+        calibVid.srcObject = S.stream;
+        await calibVid.play().catch(() => { });
+        await wait(1000);
+      }
+
+      await wait(500);
+      sendCalibFrame();
+    } catch (e) {
+      console.error('❌ Camera init failed:', e.name, e.message);
+      setChip('', 'No Camera');
+
+      /* Show specific error messages */
+      let errMsg = '';
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+        errMsg = '⚠️ Camera permission denied. Click the 🔒 icon in your address bar → Site Settings → Camera → Allow, then reload the page.';
+      } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+        errMsg = '⚠️ No camera found. Please connect a camera and reload.';
+      } else if (e.name === 'NotReadableError' || e.name === 'TrackStartError') {
+        errMsg = '⚠️ Camera is in use by another app. Close other apps using your camera and reload.';
+      } else if (e.message.includes('Camera API not available')) {
+        errMsg = '⚠️ Camera requires a secure connection (HTTPS). Please contact your instructor.';
+      } else {
+        errMsg = '⚠️ Camera unavailable: ' + e.message;
+      }
+
+      setCalibMsg(errMsg, false);
+      g('calib-msg').style.fontSize = '11px';
+      g('calib-msg').style.lineHeight = '1.5';
+      g('calib-msg').style.padding = '8px';
+
+      await wait(600);
+      [1, 2, 3].forEach(n => cstep(n, 'cd'));
+      setFill(100);
+      enableCalibBtn();
+      g('calibBtnTxt').textContent = 'Proceed Without Camera';
+    }
+  }
+
+  function sendCalibFrame() {
+    if (!S.stream || !S.socket) {
+      console.warn('⚠️ sendCalibFrame: no stream or socket', { stream: !!S.stream, socket: !!S.socket });
+      /* If socket isn't ready yet, retry */
+      if (S.stream && !S.socket) {
+        setTimeout(sendCalibFrame, 1000);
+      }
+      return;
+    }
+    const v = g('calib-video');
+    const w = v.videoWidth, h = v.videoHeight;
+    /* If video isn't producing frames yet, retry */
+    if (!w || !h || w < 10 || h < 10) {
+      _calibRetries++;
+      console.log(`⏳ Video not ready yet (attempt ${_calibRetries}), retrying in 1.5s...`, w, h);
+      if (_calibRetries > MAX_CALIB_RETRIES) {
+        console.warn('⚠️ Max calibration retries reached — proceeding without calibration');
+        setCalibMsg('Camera feed unavailable. Click below to proceed.', false);
+        [1, 2, 3].forEach(n => cstep(n, 'cd'));
+        setFill(100); enableCalibBtn();
+        return;
+      }
+      setTimeout(sendCalibFrame, 1500);
+      return;
+    }
+    _calibRetries = 0;
+    console.log(`📸 Capturing calibration frame: ${w}×${h}`);
+    const c = Object.assign(document.createElement('canvas'), { width: w, height: h });
+    const ctx = c.getContext('2d');
+    ctx.drawImage(v, 0, 0, w, h);
+
+    /* Check if the frame actually has content (not all black) */
+    const imgData = ctx.getImageData(0, 0, Math.min(w, 10), Math.min(h, 10)).data;
+    let nonBlack = 0;
+    for (let i = 0; i < imgData.length; i += 4) {
+      if (imgData[i] > 10 || imgData[i + 1] > 10 || imgData[i + 2] > 10) nonBlack++;
+    }
+
+    c.toBlob(blob => {
+      if (blob && blob.size > 1000 && nonBlack > 5) {
+        console.log(`📤 Sending calibration frame: ${blob.size} bytes, nonBlack=${nonBlack}`);
+        blob.arrayBuffer().then(buf =>
+          S.socket.emit('calibrationBinary', { studentExamId: CFG.seId, frame: buf })
+        );
+      } else {
+        console.log(`⏳ Frame too small or blank (size=${blob?.size}, nonBlack=${nonBlack}), retrying...`);
+        setTimeout(sendCalibFrame, 1500);
+      }
+    }, 'image/jpeg', 0.85);
+  }
+
+  function onCalibOK() {
+    cstep(2, 'cd'); cstep(3, 'ca'); setFill(66);
+    setTimeout(() => {
+      cstep(3, 'cd'); setFill(100);
+      setChip('cr', 'Calibrated');
+      if (CFG.examMode === 'classroom') g('calibRing').classList.add('show');
+      g('calibFrame').classList.remove('scanning');
+      setCalibMsg('Calibration successful!', true);
+      enableCalibBtn();
+    }, 700);
+  }
+
+  /* ══════════════════════════════════
+     EXAM START
+  ══════════════════════════════════ */
+  function startExam() {
+    g('modal-instr').style.display = 'none';
+    g('exam-ui').style.display = 'block';
+    const showCam = CFG.proctor.camera_enabled !== false;
+    g('cam-widget').style.display = showCam ? 'block' : 'none';
+
+    buildAllOptions();
+    showQ(0);
+    startTimer();
+    S._autoT = setInterval(pushAnswers, 20000);
+    S._pollT = setInterval(pollStatus, 15000);
+    startFrameLoop();
+    setupAntiCheat();
+    enterFS();
+    initDraggableCam();
+
+    /* Join socket rooms so server can target this student for force-end */
+    if (S.socket) {
+      S.socket.emit('join_exam', {
+        exam_id: CFG.examId,
+        student_exam_id: CFG.seId
+      });
+    }
+
+    addLog('Exam session started', 'lo');
+    addLog(`AI proctoring active (${CFG.examMode} mode)`, 'lo');
+  }
+
+  /* ══════════════════════════════════
+     QUESTION NAVIGATION
+  ══════════════════════════════════ */
+  function showQ(idx) {
+    const total = document.querySelectorAll('.question-slide').length;
+    if (idx < 0 || idx >= total) return;
+    document.querySelectorAll('.question-slide.active').forEach(el => el.classList.remove('active'));
+    const next = g(`qs${idx}`);
+    if (next) next.classList.add('active');
+    S.cur = idx;
+
+    /* update nav buttons */
+    document.querySelectorAll('.q-nav-btn').forEach((el, i) => {
+      el.classList.remove('qn-cur');
+      const qid = getQid(i);
+      el.classList.toggle('qn-ans', S.answers[qid] !== undefined);
+      el.classList.toggle('qn-rev', S.marked.has(i));
+    });
+    const nb = g(`qnb${idx}`);
+    if (nb) { nb.classList.remove('qn-ans'); nb.classList.add('qn-cur'); }
+
+    const pct = Math.round((idx + 1) / total * 100);
+    g('progFill').style.width = pct + '%';
+    g('progLabel').textContent = `Q ${idx + 1} / ${total}`;
+
+    /* Scroll left panel nav button into view */
+    if (nb) nb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+    syncStats();
+  }
+
+  const goQ = idx => showQ(idx);
+
+  /* ══════════════════════════════════
+     ANSWER HANDLING
+  ══════════════════════════════════ */
+  function pickAns(idx, qid, origKey, el) {
+    S.answers[qid] = origKey;
+
+    /* deselect all in this slide */
+    document.querySelectorAll(`#opts${idx} .opt-row`).forEach(r => r.classList.remove('opt-selected'));
+    el.classList.add('opt-selected');
+
+    const nc = g(`qnb${idx}`);
+    if (nc && !nc.classList.contains('qn-cur')) nc.classList.add('qn-ans');
+
+    syncStats();
+    triggerSave();
+  }
+
+  function clearAns(idx) {
+    const slide = g(`qs${idx}`);
+    if (!slide) return;
+    const qid = parseInt(slide.dataset.qid);
+    delete S.answers[qid];
+    document.querySelectorAll(`#opts${idx} .opt-row`).forEach(r => r.classList.remove('opt-selected'));
+    const nc = g(`qnb${idx}`);
+    if (nc) nc.classList.remove('qn-ans');
+    syncStats();
+    triggerSave();
+  }
+
+  function toggleMark(idx) {
+    if (S.marked.has(idx)) {
+      S.marked.delete(idx);
+      const b = g(`markBtn${idx}`);
+      if (b) { b.classList.remove('is-marked'); b.innerHTML = '<i class="bi bi-bookmark"></i> Mark for Review'; }
+      const nc = g(`qnb${idx}`);
+      if (nc) nc.classList.remove('qn-rev');
+    } else {
+      S.marked.add(idx);
+      const b = g(`markBtn${idx}`);
+      if (b) { b.classList.add('is-marked'); b.innerHTML = '<i class="bi bi-bookmark-fill"></i> Marked'; }
+      const nc = g(`qnb${idx}`);
+      if (nc) nc.classList.add('qn-rev');
+      addLog(`Q${idx + 1} marked for review`, 'lo');
+    }
+    syncStats();
+  }
+
+  function getQid(idx) {
+    const s = g(`qs${idx}`);
+    return s ? parseInt(s.dataset.qid) : null;
+  }
+
+  /* ══════════════════════════════════
+     STATS
+  ══════════════════════════════════ */
+  function syncStats() {
+    const total = document.querySelectorAll('.question-slide').length;
+    const ans = Object.keys(S.answers).length;
+    const rev = S.marked.size;
+    const left = total - ans;
+    g('stAns').textContent = ans;
+    g('stLeft').textContent = left;
+    g('stRev').textContent = rev;
+    g('ssAns').textContent = ans;
+    g('ssSkip').textContent = left;
+    g('ssRev').textContent = rev;
+  }
+
+  /* ══════════════════════════════════
+     TIMER
+  ══════════════════════════════════ */
+  function startTimer() {
+    renderTimer();
+    S._timerT = setInterval(() => {
+      S.secs--;
+      renderTimer();
+      if (S.secs <= 0) { clearInterval(S._timerT); autoSubmit('Time expired'); }
+    }, 1000);
+  }
+
+  function renderTimer() {
+    const h = Math.floor(S.secs / 3600);
+    const m = Math.floor(S.secs % 3600 / 60);
+    const s = S.secs % 60;
+    const el = g('timer-box');
+    el.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+    el.classList.remove('warn', 'crit');
+    const mins = S.secs / 60;
+    if (mins <= 5) { el.classList.add('crit'); if (S.secs === 300) toast('5 Minutes Left', 'Only 5 minutes remaining!', 'td'); }
+    else if (mins <= 15) { el.classList.add('warn'); }
+  }
+
+  /* ══════════════════════════════════
+     AUTO-SAVE
+  ══════════════════════════════════ */
+  function triggerSave() { clearTimeout(S._saveT); S._saveT = setTimeout(pushAnswers, 1500); }
+
+  async function pushAnswers() {
+    if (S.done) return;
+    setAS('saving', 'Saving…');
+    try {
+      const r = await fetch(CFG.urls.save, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_exam_id: CFG.seId, answers: S.answers })
+      });
+      if (r.ok) {
+        const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setAS('saved', `Saved ${t}`);
+        setTimeout(() => setAS('', 'All changes saved'), 3000);
+      }
+    } catch { setAS('', 'Save failed — retrying'); }
+  }
+
+  /* ══════════════════════════════════
+     STATUS POLL
+  ══════════════════════════════════ */
+  async function pollStatus() {
+    if (S.done) return;
+    try {
+      const d = await (await fetch(CFG.urls.status)).json();
+      if (d.force_ended || d.exam_status === 'ended') { addLog('Exam force-ended by instructor', 'le'); autoSubmit('Exam ended by instructor'); }
+    } catch { }
+  }
+
+  /* ══════════════════════════════════
+     FRAME LOOP (Enhanced: 1s interval for faster detection)
+  ══════════════════════════════════ */
+  function startFrameLoop() {
+    if (!S.stream || !S.socket) return;
+    const vid = g('monitor-video');
+    const cvs = Object.assign(document.createElement('canvas'), { width: 320, height: 240 });
+    const ctx = cvs.getContext('2d');
+    /* Only send frames if camera is enabled by faculty */
+    const cameraOn = CFG.proctor.camera_enabled !== false;
+    if (cameraOn) {
+      S._frameT = setInterval(() => {
+        if (S.done) return;
+        ctx.drawImage(vid, 0, 0, 320, 240);
+        cvs.toBlob(blob => blob && blob.arrayBuffer().then(buf =>
+          S.socket.emit('frameBinary', { studentExamId: CFG.seId, frame: buf })
+        ), 'image/jpeg', 0.6);
+      }, 3000);  // 3 seconds — balanced between performance and detection
+    }
+
+    // ── Heartbeat for network security (every 10s) ──
+    S._heartbeatT = setInterval(() => {
+      if (S.done || !S.socket) return;
+      S.socket.emit('heartbeat', { studentExamId: CFG.seId });
+    }, 10000);
+
+    // ── Start audio monitoring ONLY if faculty enabled it ──
+    if (CFG.proctor.voice_detection) {
+      startAudioMonitor();
+    }
+  }
+
+  /* ══════════════════════════════════
+     AUDIO MONITORING (Voice Activity Detection)
+  ══════════════════════════════════ */
+  let _audioCtx = null, _audioAnalyser = null, _audioInterval = null;
+  let _voiceStartTime = null;
+  const VOICE_THRESHOLD = 0.15;        // minimum RMS to consider as voice
+  const VOICE_SUSTAINED_MS = 2000;     // must be continuous for 2s to trigger
+
+  function startAudioMonitor() {
+    if (!S.stream || !S.socket) return;
+
+    try {
+      // Check if stream has audio tracks, if not request audio
+      let audioStream = S.stream;
+      const audioTracks = S.stream.getAudioTracks();
+
+      if (audioTracks.length === 0) {
+        // Request audio separately
+        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+          .then(aStream => {
+            _initAudioAnalyser(aStream);
+          })
+          .catch(e => {
+            console.log('🎤 Audio monitoring not available:', e.message);
+            addLog('Audio monitoring unavailable', 'lo');
+          });
+        return;
+      }
+
+      _initAudioAnalyser(audioStream);
+    } catch (e) {
+      console.log('🎤 Audio monitoring init error:', e.message);
+    }
+  }
+
+  function _initAudioAnalyser(stream) {
+    try {
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = _audioCtx.createMediaStreamSource(stream);
+      _audioAnalyser = _audioCtx.createAnalyser();
+      _audioAnalyser.fftSize = 512;
+      source.connect(_audioAnalyser);
+
+      const dataArr = new Uint8Array(_audioAnalyser.frequencyBinCount);
+
+      _audioInterval = setInterval(() => {
+        if (S.done) return;
+        _audioAnalyser.getByteFrequencyData(dataArr);
+
+        // Calculate RMS (root mean square) for volume level
+        let sum = 0;
+        for (let i = 0; i < dataArr.length; i++) {
+          const v = dataArr[i] / 255;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / dataArr.length);
+
+        if (rms > VOICE_THRESHOLD) {
+          if (!_voiceStartTime) _voiceStartTime = Date.now();
+          const duration = Date.now() - _voiceStartTime;
+
+          if (duration >= VOICE_SUSTAINED_MS) {
+            // Sustained voice detected — send to backend
+            S.socket.emit('audioLevel', {
+              studentExamId: CFG.seId,
+              level: rms,
+              isVoice: true,
+              duration: duration
+            });
+            _voiceStartTime = null;  // reset after sending
+            addLog('Voice activity detected', 'lw');
+            toast('Warning', 'Talking/voice detected. Please remain silent.', 'tw');
+          }
+        } else {
+          _voiceStartTime = null;
+        }
+      }, 500);
+
+      addLog('Audio monitoring active', 'lo');
+    } catch (e) {
+      console.log('🎤 Audio analyser error:', e);
+    }
+  }
+
+  /* ══════════════════════════════════
+     ANTI-CHEAT — copy/paste/select/keyboard + DevTools + Console
+  ══════════════════════════════════ */
+  function setupAntiCheat() {
+    /* Tab / window focus */
+    document.addEventListener('visibilitychange', () => { if (document.hidden && !S.done) handleTabSwitch('Tab hidden'); });
+    window.addEventListener('blur', () => { if (!S.done) handleTabSwitch('Window lost focus'); });
+
+    /* ── COPY / PASTE / CUT — block & log ── */
+    ['copy', 'cut', 'paste'].forEach(ev => {
+      document.addEventListener(ev, e => {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (S.done) return;
+        logAct('clipboard_attempt', `${ev} blocked`, 'medium');
+        addLog(`${ev} attempt blocked`, 'lw');
+        toast('Blocked', `${ev} is not allowed during the exam.`, 'tw');
+      }, true);
+    });
+
+    /* ── SELECT — block text selection ── */
+    document.addEventListener('selectstart', e => {
+      /* Allow select inside inputs only (none in this UI) */
+      if (!e.target.matches('input, textarea')) e.preventDefault();
+    });
+    document.addEventListener('mousedown', e => {
+      /* Prevent drag-to-select on question text & options */
+      if (e.target.closest('.q-text, .opt-text, .q-main-card, .qh-row')) e.preventDefault();
+    });
+
+    /* ── KEYBOARD — block dev tools / print / inspect ── */
+    document.addEventListener('keydown', e => {
+      const blocked =
+        (e.ctrlKey && ['a', 'c', 'v', 'x', 'u', 's', 'p'].includes(e.key.toLowerCase())) ||
+        (e.metaKey && ['a', 'c', 'v', 'x', 'u', 's', 'p'].includes(e.key.toLowerCase())) ||
+        ['F12', 'F11', 'F5', 'F1'].includes(e.key) ||
+        (e.altKey && e.key === 'Tab') ||
+        (e.shiftKey && e.key === 'F10') ||
+        /* Additional DevTools shortcuts */
+        (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) ||
+        (e.metaKey && e.altKey && ['i', 'j', 'c'].includes(e.key.toLowerCase()));
+      if (blocked) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        logAct('keyboard_shortcut', `Blocked: ${e.key}`, 'medium');
+        addLog(`Blocked shortcut: ${e.key}`, 'lw');
+      }
+    }, true);
+
+    /* ── RIGHT-CLICK / CONTEXT MENU ── */
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    /* ── DRAG ── */
+    document.addEventListener('dragstart', e => { if (!e.target.closest('#cam-widget-bar')) e.preventDefault(); });
+
+    /* ── DEVTOOLS DETECTION (anti-tampering) ── */
+    (function detectDevTools() {
+      let devToolsOpen = false;
+      const threshold = 160;
+
+      const checkDevTools = () => {
+        const widthDiff = window.outerWidth - window.innerWidth > threshold;
+        const heightDiff = window.outerHeight - window.innerHeight > threshold;
+
+        if ((widthDiff || heightDiff) && !devToolsOpen && !S.done) {
+          devToolsOpen = true;
+          logAct('devtools_detected', 'Developer tools opened', 'high');
+          addLog('⚠️ Developer tools detected!', 'le');
+          toast('Security Alert', 'Developer tools detected. This has been logged.', 'td');
+          handleTabSwitch('Developer tools detected');
+        } else if (!widthDiff && !heightDiff) {
+          devToolsOpen = false;
+        }
+      };
+
+      // Check periodically
+      setInterval(checkDevTools, 2000);
+
+      // Debugger trap — triggers if devtools console is open
+      const _devtoolsCheck = new Image();
+      Object.defineProperty(_devtoolsCheck, 'id', {
+        get: function() {
+          if (!S.done) {
+            logAct('devtools_console', 'Console access detected', 'high');
+          }
+        }
+      });
+      setInterval(() => { console.log('%c', _devtoolsCheck); }, 5000);
+    })();
+
+    /* ── DISABLE CONSOLE (anti-tampering) ── */
+    (function disableConsole() {
+      const noop = function() { return undefined; };
+      try {
+        // Overwrite console methods used for tampering
+        ['log', 'debug', 'info', 'warn', 'error', 'dir', 'table', 'trace'].forEach(method => {
+          // Keep a reference for our own internal logging (prefix with _)
+          window['_orig_' + method] = console[method];
+        });
+        // Only disable after a short delay so our own init logs go through
+        setTimeout(() => {
+          ['log', 'debug', 'info', 'warn', 'error', 'dir', 'table', 'trace'].forEach(method => {
+            console[method] = noop;
+          });
+        }, 3000);
+      } catch(e) { /* silently fail */ }
+    })();
+
+    /* ── FULLSCREEN ── */
+    const onFS = () => {
+      const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      g('fs-overlay').style.display = inFS ? 'none' : 'flex';
+      if (!inFS && !S.done) addLog('Fullscreen exited', 'lw');
+    };
+    document.addEventListener('fullscreenchange', onFS);
+    document.addEventListener('webkitfullscreenchange', onFS);
+  }
+
+  async function handleTabSwitch(reason) {
+    S.tabs++;
+    const max = CFG.maxTabs;
+
+    const fl = g('tab-flash');
+    fl.classList.remove('on'); void fl.offsetHeight; fl.classList.add('on');
+
+    g('tabNum').textContent = S.tabs;
+    g('pwTabs').textContent = `${S.tabs}/${max}`;
+    const tb = g('tab-counter');
+    if (S.tabs >= max) tb.className = 'tab-counter danger';
+    else if (S.tabs >= Math.ceil(max / 2)) tb.className = 'tab-counter warn';
+
+    addLog(`Tab switch #${S.tabs}: ${reason}`, 'le');
+    await fetch(CFG.urls.tabUpd, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tab_switch_count: S.tabs }) }).catch(() => { });
+    await logAct('tab_switch', `${reason} (${S.tabs}/${max})`, 'high');
+
+    if (S.tabs >= max) { toast('Exam Submitted', `Tab switches reached the limit. Your exam has been submitted.`, 'td'); setTimeout(() => autoSubmit('Maximum tab switches exceeded'), 2000); }
+    else { toast('Reminder', `Tab switch ${S.tabs} of ${max}. Please stay in the exam window.`, 'tw'); }
+  }
+
+  async function logAct(type, desc, sev) {
+    return fetch(CFG.urls.logAct, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activity_type: type, description: desc, severity: sev }) }).catch(() => { });
+  }
+
+  /* ══════════════════════════════════
+     SUBMIT FLOW
+  ══════════════════════════════════ */
+  function openSubmit() { syncStats(); g('modal-submit').style.display = 'flex'; }
+  function closeSubmit() { g('modal-submit').style.display = 'none'; }
+
+  async function doSubmit() {
+    if (S.done) return;
+    S.done = true;
+    await pushAnswers();
+    [S._timerT, S._autoT, S._pollT, S._frameT, S._heartbeatT].forEach(clearInterval);
+    if (_audioInterval) clearInterval(_audioInterval);
+    if (_audioCtx) { try { _audioCtx.close(); } catch(e) {} }
+    if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+    if (document.exitFullscreen) document.exitFullscreen().catch(() => { });
+    const form = document.createElement('form');
+    form.method = 'POST'; form.action = CFG.urls.submit;
+    document.body.appendChild(form); form.submit();
+  }
+
+  function autoSubmit(reason) {
+    if (S.done) return;
+    addLog(`Auto-submit: ${reason}`, 'le');
+    toast('Auto-Submitting', reason, 'tw');
+    setTimeout(doSubmit, 2000);
+  }
+
+  /* ══════════════════════════════════
+     FULLSCREEN
+  ══════════════════════════════════ */
+  function enterFS() {
+    const el = document.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen || (() => { })).call(el).catch(() => { });
+  }
+
+  /* ══════════════════════════════════
+     DRAGGABLE CAMERA WIDGET
+  ══════════════════════════════════ */
+  function initDraggableCam() {
+    const widget = g('cam-widget');
+    const bar = g('cam-widget-bar');
+    let dragging = false, ox = 0, oy = 0;
+
+    bar.addEventListener('mousedown', e => {
+      if (e.target.closest('button')) return;
+      dragging = true;
+      ox = e.clientX - widget.offsetLeft;
+      oy = e.clientY - widget.offsetTop;
+      bar.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const nx = Math.max(0, Math.min(window.innerWidth - widget.offsetWidth, e.clientX - ox));
+      const ny = Math.max(0, Math.min(window.innerHeight - widget.offsetHeight, e.clientY - oy));
+      widget.style.left = nx + 'px';
+      widget.style.top = ny + 'px';
+      widget.style.right = 'auto';
+      widget.style.bottom = 'auto';
+    });
+
+    document.addEventListener('mouseup', () => { dragging = false; bar.style.cursor = ''; });
+
+    /* Touch support */
+    bar.addEventListener('touchstart', e => {
+      if (e.target.closest('button')) return;
+      const t = e.touches[0];
+      ox = t.clientX - widget.offsetLeft;
+      oy = t.clientY - widget.offsetTop;
+    }, { passive: true });
+
+    bar.addEventListener('touchmove', e => {
+      const t = e.touches[0];
+      const nx = Math.max(0, Math.min(window.innerWidth - widget.offsetWidth, t.clientX - ox));
+      const ny = Math.max(0, Math.min(window.innerHeight - widget.offsetHeight, t.clientY - oy));
+      widget.style.left = nx + 'px';
+      widget.style.top = ny + 'px';
+      widget.style.right = 'auto';
+      widget.style.bottom = 'auto';
+      e.preventDefault();
+    }, { passive: false });
+  }
+
+  let camMinimized = false;
+  function toggleCamWidget() {
+    camMinimized = !camMinimized;
+    const body = g('cam-widget-body');
+    const ico = g('cam-widget-ico');
+    body.style.display = camMinimized ? 'none' : '';
+    ico.className = camMinimized ? 'bi bi-plus-lg' : 'bi bi-dash-lg';
+  }
+
+  /* ══════════════════════════════════
+     UI HELPERS
+  ══════════════════════════════════ */
+  function setFace(ok, main, sub) {
+    const ico = g('faceIco');
+    ico.style.color = ok ? 'var(--exam-success)' : 'var(--exam-warning)';
+    ico.className = `bi ${ok ? 'bi-person-check-fill' : 'bi-person-exclamation'}`;
+    g('faceMain').textContent = main;
+    g('faceSub').textContent = sub;
+    g('pwFace').textContent = ok ? 'Detected' : 'Warning';
+    g('pwFace').className = ok ? 'pv pv-ok' : 'pv pv-bad';
+    const b = g('camBadge');
+    b.className = `cam-badge-pill ${ok ? 'cbp-ok' : 'cbp-warn'}`;
+    b.innerHTML = `<i class="bi bi-circle-fill" style="font-size:6px;"></i> ${ok ? 'Active' : 'Warning'}`;
+  }
+
+  function updateViolUI() {
+    const n = S.viol, mx = CFG.maxViol;
+    g('violNum').textContent = `${n}/${mx}`;
+    g('pwViol').textContent = n;
+    g('pwViol').className = n === 0 ? 'pv pv-ok' : n < mx ? 'pv pv-warn' : 'pv pv-bad';
+    const pipsToShow = Math.min(mx, 15); // cap visual pips at 15
+    for (let i = 0; i < pipsToShow; i++) {
+      const p = g(`vp${i}`);
+      if (!p) continue;
+      p.classList.toggle('vp-on', i < n);
+      p.classList.toggle('vp-w', i < n && n < mx);
+    }
+  }
+
+  /* ── Render feature badges so student sees what's being monitored ── */
+  function renderFeatureBadges() {
+    const container = g('featureBadges');
+    if (!container) return;
+
+    const P = CFG.proctor;
+    const features = [
+      { key: 'camera_enabled',   label: 'Camera',          icon: 'bi-camera-video-fill',    on: P.camera_enabled !== false && P.face_detection !== false },
+      { key: 'head_pose',        label: 'Head Tracking',   icon: 'bi-arrows-move',          on: P.head_pose === true },
+      { key: 'object_detection', label: 'Object Detection',icon: 'bi-phone-fill',           on: P.object_detection === true },
+      { key: 'voice_detection',  label: 'Audio',           icon: 'bi-mic-fill',             on: P.voice_detection === true },
+      { key: 'tab_switch',       label: 'Tab Switch',      icon: 'bi-window-stack',         on: P.tab_switch !== false },
+    ];
+
+    container.innerHTML = features.map(f => {
+      const color = f.on ? 'rgba(99,220,150,0.9)' : 'rgba(255,255,255,0.25)';
+      const bg    = f.on ? 'rgba(99,220,150,0.12)' : 'rgba(255,255,255,0.04)';
+      const border = f.on ? 'rgba(99,220,150,0.25)' : 'rgba(255,255,255,0.08)';
+      return `<span style="display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:500; color:${color}; background:${bg}; border:1px solid ${border};">`
+        + `<i class="bi ${f.icon}" style="font-size:9px;"></i>${f.label}`
+        + (f.on ? '' : ' <span style="opacity:0.5">OFF</span>')
+        + `</span>`;
+    }).join('');
+
+    /* Show sensitivity level */
+    const sens = P.sensitivity || 'medium';
+    const sensColors = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444' };
+    const sensLabels = { low: 'Relaxed', medium: 'Balanced', high: 'Strict' };
+    container.innerHTML += `<span style="display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:600; color:${sensColors[sens]}; background:${sensColors[sens]}15; border:1px solid ${sensColors[sens]}30;"><i class="bi bi-speedometer2" style="font-size:9px;"></i>${sensLabels[sens]}</span>`;
+  }
+
+  /* ── Show active features in the instructions modal ── */
+  function renderRuleFeatures() {
+    const el = g('ruleProctorFeatures');
+    if (!el) return;
+    const P = CFG.proctor;
+    const active = [];
+    if (P.camera_enabled !== false) active.push('📹 Camera');
+    if (P.head_pose === true) active.push('🔄 Head Tracking');
+    if (P.object_detection === true) active.push('📱 Object Detection');
+    if (P.voice_detection === true) active.push('🎤 Audio Monitoring');
+    if (P.tab_switch !== false) active.push('🪟 Tab Switch Detection');
+    if (active.length === 0) {
+      el.textContent = 'No active monitoring for this exam.';
+    } else {
+      el.innerHTML = '<strong>Active:</strong> ' + active.join(' &nbsp;·&nbsp; ')
+        + '<br><span style="opacity:0.7; font-size:0.85em;">Max ' + CFG.maxViol + ' reminders before auto-submit</span>';
+    }
+  }
+
+  function toast(title, msg, cls = 'ti') {
+    const iconMap = { tw: 'bi-exclamation-triangle-fill', td: 'bi-x-octagon-fill', ti: 'bi-info-circle-fill', to: 'bi-check-circle-fill' };
+    const el = document.createElement('div');
+    el.className = `toast-item ${cls}`;
+    el.innerHTML = `<i class="bi ${iconMap[cls] || 'bi-info-circle-fill'}" style="font-size:15px; flex-shrink:0;"></i><div><div class="ti-title">${title}</div><div class="ti-msg">${msg}</div></div><button class="ti-close" onclick="this.closest('.toast-item').remove()"><i class="bi bi-x"></i></button>`;
+    g('toast-wrap').appendChild(el);
+    setTimeout(() => el.parentElement && el.remove(), 5500);
+  }
+
+  function addLog(msg, cls = '') {
+    S.logs++;
+    const t = new Date().toLocaleTimeString([], { hour12: false });
+    const el = document.createElement('div');
+    el.className = `log-item ${cls}`;
+    el.innerHTML = `<span class="lt">${t}</span><span class="lm">${msg}</span>`;
+    const scroll = g('logScroll');
+    scroll.insertBefore(el, scroll.firstChild);
+    g('logBadge').textContent = S.logs;
+  }
+
+  function setAS(state, txt) {
+    const pill = g('as-pill');
+    pill.classList.remove('saving', 'saved');
+    if (state) pill.classList.add(state);
+    g('asTxt').textContent = txt;
+  }
+
+  /* calibration helpers */
+  function cstep(n, cls) { const e = g(`cs${n}`); if (!e) return; e.className = 'cs'; if (cls) e.classList.add(cls); }
+  function setFill(p) { g('calibFill').style.width = p + '%'; }
+  function setChip(cls, txt) { g('calibChip').className = `chip-badge ${cls}`; g('calibChipTxt').textContent = txt; }
+  function setCalibMsg(m, ok) { g('calib-msg').textContent = m; g('calib-msg').className = ok ? 'ok' : ''; }
+  function enableCalibBtn() { g('calibBtn').disabled = false; g('calibBtnIco').className = 'bi bi-play-circle-fill'; g('calibBtnTxt').textContent = 'Start Examination'; }
+
+  /* ══════════════════════════════════
+     CALIB BUTTON
+  ══════════════════════════════════ */
+  g('calibBtn').addEventListener('click', () => {
+    g('calib-overlay').style.opacity = '0';
+    g('calib-overlay').style.transition = 'opacity .25s';
+    setTimeout(() => {
+      g('calib-overlay').style.display = 'none';
+      /* If exam requires a key, show key overlay now (post-calibration) */
+      const keyOverlay = document.getElementById('key-overlay');
+      if (keyOverlay) {
+        keyOverlay.style.display = 'flex';
+        const ki = document.getElementById('keyInput');
+        if (ki) ki.focus();
+      } else {
+        g('modal-instr').style.display = 'flex';
+      }
+    }, 260);
+  });
+
+  /* ══════════════════════════════════
+     BOOT
+  ══════════════════════════════════ */
+  document.addEventListener('DOMContentLoaded', () => {
+    initSocket();
+    console.log('📋 CFG.proctor loaded:', JSON.stringify(CFG.proctor));
+    console.log('📋 Head pose:', CFG.proctor.head_pose, '| Object det:', CFG.proctor.object_detection, '| Voice:', CFG.proctor.voice_detection);
+    renderFeatureBadges(); /* Show which features are active */
+    renderRuleFeatures();  /* Show active features in instructions modal */
+    /* Only init camera if faculty enabled it */
+    const cameraEnabled = CFG.proctor.camera_enabled !== false;
+    if (cameraEnabled) {
+      initCam();
+    } else {
+      /* Skip calibration entirely — go straight to instructions */
+      [1,2,3].forEach(n => cstep(n, 'cd'));
+      setFill(100);
+      setChip('cr', 'Camera Off');
+      setCalibMsg('Camera monitoring is not required for this exam.', true);
+      enableCalibBtn();
+      g('calibBtnTxt').textContent = 'Continue to Exam';
+    }
+  });
+</script>
+
+
+{% endblock %}

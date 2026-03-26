@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify OTP - Proctored Exam Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+</head>
+<body>
+    <div class="otp-container">
+        <div class="otp-card">
+            <!-- Header -->
+            <div class="otp-header">
+                <div class="otp-icon">
+                    <i class="bi bi-shield-lock"></i>
+                </div>
+                <h2>Email Verification</h2>
+                <p>Enter the 6-digit code sent to your email</p>
+            </div>
+
+            <!-- Body -->
+            <div class="otp-body">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }}" role="alert">
+                                <i class="bi bi-{{ 'exclamation-circle' if category == 'error' else 'check-circle' if category == 'success' else 'info-circle' }}"></i>
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Info Box -->
+                <div class="info-box">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <span>Code sent to: <span class="email">{{ email }}</span></span>
+                    <br>
+                    <small style="color: #6b7280; margin-left: 30px;">For user: <strong>{{ username }}</strong></small>
+                </div>
+
+                <!-- OTP Form -->
+                <form method="POST" id="otpForm">
+                    <!-- OTP Input -->
+                    <div class="otp-input-group">
+                        <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" autocomplete="off" data-index="0" required>
+                        <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" autocomplete="off" data-index="1" required>
+                        <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" autocomplete="off" data-index="2" required>
+                        <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" autocomplete="off" data-index="3" required>
+                        <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" autocomplete="off" data-index="4" required>
+                        <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" autocomplete="off" data-index="5" required>
+                    </div>
+
+                    <!-- Hidden input for actual OTP value -->
+                    <input type="hidden" name="otp" id="otpValue">
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn btn-verify" id="verifyBtn" disabled>
+                        <i class="bi bi-check-circle"></i> Verify Email
+                    </button>
+                </form>
+
+                <!-- Resend Section -->
+                <div class="resend-section">
+                    <p class="resend-text">
+                        Didn't receive the code?
+                    </p>
+                    <button class="btn btn-resend" id="resendBtn">
+                        <i class="bi bi-arrow-clockwise"></i> Resend OTP
+                    </button>
+                    <div class="mt-2" id="timerText" style="display: none;">
+                        <small class="text-muted">
+                            Resend available in <span class="timer" id="timer">60</span> seconds
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Back to Login -->
+                <div class="back-link">
+                    <a href="{{ url_for('login') }}">
+                        <i class="bi bi-arrow-left"></i> Back to Login
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // OTP Input Handling
+        const otpInputs = document.querySelectorAll('.otp-input');
+        const otpValue = document.getElementById('otpValue');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const resendBtn = document.getElementById('resendBtn');
+        const timerText = document.getElementById('timerText');
+        const timerSpan = document.getElementById('timer');
+        const otpForm = document.getElementById('otpForm');
+
+        // Auto-focus first input
+        otpInputs[0].focus();
+
+        // Handle OTP input
+        otpInputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                const value = e.target.value;
+                
+                // Only allow numbers
+                if (!/^\d$/.test(value)) {
+                    e.target.value = '';
+                    return;
+                }
+
+                // Add filled class
+                if (value) {
+                    e.target.classList.add('filled');
+                } else {
+                    e.target.classList.remove('filled');
+                }
+
+                // Move to next input
+                if (value && index < otpInputs.length - 1) {
+                    otpInputs[index + 1].focus();
+                }
+
+                // Update hidden input and enable/disable button
+                updateOTPValue();
+            });
+
+            // Handle backspace
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace') {
+                    if (!input.value && index > 0) {
+                        otpInputs[index - 1].focus();
+                        otpInputs[index - 1].value = '';
+                        otpInputs[index - 1].classList.remove('filled');
+                        updateOTPValue();
+                    } else if (input.value) {
+                        input.value = '';
+                        input.classList.remove('filled');
+                        updateOTPValue();
+                    }
+                }
+            });
+
+            // Handle paste
+            input.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const pastedData = e.clipboardData.getData('text').slice(0, 6);
+                
+                if (/^\d{6}$/.test(pastedData)) {
+                    pastedData.split('').forEach((char, idx) => {
+                        if (otpInputs[idx]) {
+                            otpInputs[idx].value = char;
+                            otpInputs[idx].classList.add('filled');
+                        }
+                    });
+                    otpInputs[5].focus();
+                    updateOTPValue();
+                }
+            });
+        });
+
+        // Update OTP value and button state
+        function updateOTPValue() {
+            const otp = Array.from(otpInputs).map(input => input.value).join('');
+            otpValue.value = otp;
+            verifyBtn.disabled = otp.length !== 6;
+        }
+
+        // Form submission with loading state
+        otpForm.addEventListener('submit', (e) => {
+            verifyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verifying...';
+            verifyBtn.disabled = true;
+        });
+
+        // Resend OTP functionality
+        let resendTimer = null;
+        let timeLeft = 60;
+
+        resendBtn.addEventListener('click', async () => {
+            if (resendBtn.disabled) return;
+
+            resendBtn.disabled = true;
+            resendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending...';
+
+            try {
+                const response = await fetch('{{ url_for("resend_otp") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Show success message
+                    showMessage('success', data.message);
+                    
+                    // Start countdown timer
+                    startResendTimer();
+                    
+                    // Clear OTP inputs
+                    otpInputs.forEach(input => {
+                        input.value = '';
+                        input.classList.remove('filled');
+                    });
+                    otpInputs[0].focus();
+                    updateOTPValue();
+                } else {
+                    showMessage('danger', data.error || 'Failed to resend OTP');
+                    resendBtn.disabled = false;
+                    resendBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Resend OTP';
+                }
+            } catch (error) {
+                showMessage('danger', 'Network error. Please try again.');
+                resendBtn.disabled = false;
+                resendBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Resend OTP';
+            }
+        });
+
+        // Start resend timer
+        function startResendTimer() {
+            timeLeft = 60;
+            timerSpan.textContent = timeLeft;
+            timerText.style.display = 'block';
+            resendBtn.style.display = 'none';
+
+            resendTimer = setInterval(() => {
+                timeLeft--;
+                timerSpan.textContent = timeLeft;
+
+                if (timeLeft <= 0) {
+                    clearInterval(resendTimer);
+                    timerText.style.display = 'none';
+                    resendBtn.style.display = 'inline-block';
+                    resendBtn.disabled = false;
+                    resendBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Resend OTP';
+                }
+            }, 1000);
+        }
+
+        // Show message function
+        function showMessage(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.innerHTML = `
+                <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                ${message}
+            `;
+            
+            const firstChild = document.querySelector('.otp-body').firstElementChild;
+            document.querySelector('.otp-body').insertBefore(alertDiv, firstChild);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        // Auto-start timer if page reloads after resend
+        {% if request.args.get('resent') %}
+        startResendTimer();
+        {% endif %}
+    </script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Register - ExamPro{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div style="max-width: 550px; margin: 2rem auto;">
+        <div class="card">
+            <div class="card-header text-center">
+                <h1 class="card-title">Create Account</h1>
+                <p class="card-subtitle">Join our secure exam platform</p>
+            </div>
+
+            <form method="POST" id="registerForm">
+                <!-- Full Name -->
+                <div class="form-group">
+                    <label class="form-label" for="full_name">Full Name</label>
+                    <input type="text" id="full_name" name="full_name" class="form-input" placeholder="Enter your full name" required>
+                </div>
+
+                <!-- Username -->
+                <div class="form-group">
+                    <label class="form-label" for="username">Username</label>
+                    <input type="text" id="username" name="username" class="form-input" placeholder="Choose a username" required>
+                </div>
+
+                <!-- Email -->
+                <div class="form-group">
+                    <label class="form-label" for="email">Email Address</label>
+                    <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email" required>
+                </div>
+
+                <!-- Phone -->
+                <div class="form-group">
+                    <label class="form-label" for="phone">Phone Number</label>
+                    <input type="tel" id="phone" name="phone" class="form-input" placeholder="Enter your phone number" required>
+                </div>
+
+                <!-- Role -->
+                <div class="form-group">
+                    <label class="form-label" for="role">I am a:</label>
+                    <select id="role" name="role" class="form-select" required onchange="toggleRoleFields()">
+                        <option value="">Select your role...</option>
+                        <option value="student">Student</option>
+                        <option value="faculty">Faculty</option>
+                    </select>
+                </div>
+
+                <!-- Student Fields -->
+                <div id="student-fields" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label" for="prn_number">PRN Number</label>
+                        <input type="text" id="prn_number" name="prn_number" class="form-input" placeholder="Enter your 12-digit PRN number" oninput="updateRollId()">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="roll_id">Roll ID</label>
+                        <input type="text" id="roll_id" name="roll_id" class="form-input" placeholder="Auto-generated from PRN" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="batch">Batch</label>
+                        <input type="text" id="batch" name="batch" class="form-input" placeholder="Enter your batch (e.g., DBDA March 2025)">
+                    </div>
+                </div>
+
+                <!-- Faculty Fields -->
+                <div id="faculty-fields" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label" for="employee_id">Employee ID</label>
+                        <input type="text" id="employee_id" name="employee_id" class="form-input" placeholder="Enter your Employee ID">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="department">Department</label>
+                        <select id="department" name="department" class="form-select">
+                            <option value="Education & Training">Education & Training</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Password -->
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" id="password" name="password" class="form-input" placeholder="Create a strong password" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                    Create Account
+                </button>
+            </form>
+
+            <div style="text-align: center; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <p style="color: var(--text-secondary);">Already have an account? 
+                    <a href="{{ url_for('login') }}" style="color: var(--primary-color); font-weight: 600; text-decoration: none;">Login here</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleRoleFields() {
+    const role = document.getElementById('role').value;
+    const studentFields = document.getElementById('student-fields');
+    const facultyFields = document.getElementById('faculty-fields');
+    const prn = document.getElementById('prn_number');
+    const roll = document.getElementById('roll_id');
+    const batch = document.getElementById('batch');
+    const empId = document.getElementById('employee_id');
+    const dept = document.getElementById('department');
+
+    if (role === 'student') {
+        studentFields.style.display = 'block';
+        facultyFields.style.display = 'none';
+        prn.required = true;
+        empId.required = false;
+        // Clear faculty fields
+        empId.value = '';
+        dept.value = 'Education & Training';
+    } 
+    else if (role === 'faculty') {
+        studentFields.style.display = 'none';
+        facultyFields.style.display = 'block';
+        prn.required = false;
+        empId.required = true;
+        // Clear student fields to avoid backend confusion
+        prn.value = '0';
+        roll.value = '0';
+        batch.value = '0';
+    } 
+    else {
+        studentFields.style.display = 'none';
+        facultyFields.style.display = 'none';
+        prn.required = false;
+        empId.required = false;
+    }
+}
+
+// Auto-generate Roll ID from PRN
+function updateRollId() {
+    const prn = document.getElementById('prn_number').value.trim();
+    const rollField = document.getElementById('roll_id');
+    if (prn.length >= 2) {
+        rollField.value = prn.slice(-2);
+    } else {
+        rollField.value = '';
+    }
+}
+</script>
+{% endblock %}

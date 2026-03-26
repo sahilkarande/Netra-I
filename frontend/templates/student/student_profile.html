@@ -1,0 +1,567 @@
+{% extends "base.html" %}
+{% block title %}Student Profile - {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Back Button -->
+    <div style="margin-bottom: 1.5rem;">
+        <a href="{{ url_for('faculty_dashboard') }}" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+            <i class="bi bi-arrow-left"></i>
+            Back to Dashboard
+        </a>
+    </div>
+
+    <!-- ===================================
+         ENHANCED STUDENT BANNER
+         =================================== -->
+    <div class="student-banner">
+        <div class="student-banner-content">
+            <!-- Left Section: Avatar + Info -->
+            <div class="student-banner-left">
+                <!-- Profile Avatar with Initials -->
+                <div class="student-avatar">
+                    {% set name_parts = (student.full_name or student.username).split() %}
+                    
+                    <div class="student-avatar-placeholder">
+
+                        {% if student.gender == "Male" %}
+                            <img src="{{ url_for('static', filename='images/Male.png') }}" 
+                                class="avatar-gender-image" 
+                                alt="Male">
+
+                        {% elif student.gender == "Female" %}
+                            <img src="{{ url_for('static', filename='images/Female.png') }}" 
+                                class="avatar-gender-image" 
+                                alt="Female">
+
+                        {% else %}
+                            {% if name_parts|length > 1 %}
+                                {{ name_parts[0][0] }}{{ name_parts[-1][0] }}
+                            {% else %}
+                                {{ name_parts[0][0] }}{{ name_parts[0][1] if name_parts[0]|length > 1 else '' }}
+                            {% endif %}
+                        {% endif %}
+
+                    </div>
+
+                    <!-- Status Badge -->
+                    <div class="student-avatar-badge"></div>
+                </div>
+                
+                <!-- Student Information -->
+                <div class="student-info">
+                    <h2 class="student-name">
+                        {{ student.full_name or student.username }}
+                    </h2>
+                    <p class="student-prn">
+                        <i class="bi bi-hash"></i> 
+                        {{ student.prn_number or 'N/A' }}
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Right Section: Status + Actions -->
+            <div class="student-banner-right">
+                <!-- Verification Status Badge -->
+                {% if student.is_verified %}
+                    <div class="student-status-badge active">
+                        <i class="bi bi-check-circle-fill"></i>
+                        Verified
+                    </div>
+                {% else %}
+                    <div class="student-status-badge inactive">
+                        <i class="bi bi-clock-fill"></i>
+                        Pending
+                    </div>
+                {% endif %}
+                
+                <!-- Reset Password Button -->
+                <button class="student-action-btn" onclick="openPasswordModal()">
+                    <i class="bi bi-key-fill"></i>
+                    Reset Password
+                </button>
+            </div>
+        </div>
+        
+        <!-- Optional: Extended Details Grid -->
+        {% if student_exams %}
+        <div class="student-details-grid">
+            <div class="student-detail-item">
+                <div class="student-detail-label">Total Exams</div>
+                <div class="student-detail-value">{{ student_exams|length }}</div>
+            </div>
+            <div class="student-detail-item">
+                <div class="student-detail-label">Completed</div>
+                <div class="student-detail-value">
+                    {{ student_exams|selectattr('completed')|list|length }}
+                </div>
+            </div>
+            <div class="student-detail-item">
+                <div class="student-detail-label">Average Score</div>
+                <div class="student-detail-value">
+                    {% set total_percentage = student_exams|map(attribute='percentage')|select|sum %}
+                    {% set count = student_exams|selectattr('percentage')|list|length %}
+                    {% if count > 0 %}
+                        {{ "%.1f"|format(total_percentage / count) }}%
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+            <div class="student-detail-item">
+                <div class="student-detail-label">Password Status</div>
+                <div class="student-detail-value">
+                    {% if student.password_changed %}
+                        <span style="color: #d1fae5;">✓ Changed</span>
+                    {% else %}
+                        <span style="color: #fde68a;">⚠ Must Change</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Student Information Card -->
+    <div class="card" style="margin-bottom: 2rem;">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="bi bi-info-circle-fill"></i> Student Information
+            </h3>
+        </div>
+        <div class="card-body">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+                
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-person-badge-fill"></i> Full Name
+                    </div>
+                    <div class="info-value">{{ student.full_name or 'N/A' }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-at"></i> Username
+                    </div>
+                    <div class="info-value">{{ student.username }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-envelope-fill"></i> Email
+                    </div>
+                    <div class="info-value">{{ student.email }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-card-text"></i> PRN Number
+                    </div>
+                    <div class="info-value">{{ student.prn_number or 'N/A' }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-calendar-event-fill"></i> Batch
+                    </div>
+                    <div class="info-value">{{ student.batch or 'N/A' }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-building-fill"></i> Department
+                    </div>
+                    <div class="info-value">{{ student.department or 'N/A' }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-phone-fill"></i> Phone
+                    </div>
+                    <div class="info-value">{{ student.phone or 'N/A' }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-gender-ambiguous"></i> Gender
+                    </div>
+                    <div class="info-value">{{ student.gender or 'N/A' }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-shield-check-fill"></i> Verification Status
+                    </div>
+                    <div class="info-value">
+                        {% if student.is_verified %}
+                            <span class="badge badge-success">
+                                <i class="bi bi-check-circle-fill"></i> Verified
+                            </span>
+                        {% else %}
+                            <span class="badge badge-warning">
+                                <i class="bi bi-clock-fill"></i> Pending
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-key-fill"></i> Password Status
+                    </div>
+                    <div class="info-value">
+                        {% if student.password_changed %}
+                            <span class="badge badge-success">
+                                <i class="bi bi-check-circle-fill"></i> Changed
+                            </span>
+                        {% else %}
+                            <span class="badge badge-warning">
+                                <i class="bi bi-exclamation-triangle-fill"></i> Must Change
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-calendar-plus-fill"></i> Registered
+                    </div>
+                    <div class="info-value">{{ student.created_at.strftime('%d %b, %Y at %I:%M %p') if student.created_at else 'N/A' }}</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="bi bi-clock-history"></i> Last Updated
+                    </div>
+                    <div class="info-value">{{ student.updated_at.strftime('%d %b, %Y at %I:%M %p') if student.updated_at else 'N/A' }}</div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Exam Performance -->
+    {% if student_exams %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="bi bi-graph-up-arrow"></i> Exam Performance
+            </h3>
+            <span class="badge" style="background: var(--primary-color); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600;">
+                <i class="bi bi-file-earmark-text-fill"></i> {{ student_exams|length }} Exams Taken
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th><i class="bi bi-journal-text"></i> Exam Title</th>
+                            <th><i class="bi bi-123"></i> Score</th>
+                            <th><i class="bi bi-percent"></i> Percentage</th>
+                            <th><i class="bi bi-check-circle"></i> Status</th>
+                            <th><i class="bi bi-clock"></i> Time Taken</th>
+                            <th><i class="bi bi-exclamation-triangle"></i> Violations</th>
+                            <th><i class="bi bi-calendar"></i> Submitted</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for se in student_exams %}
+                        <tr {% if not se.passed %}style="background: rgba(239, 68, 68, 0.05);"{% endif %}>
+                            <td>
+                                <strong style="color: var(--text-primary);">{{ se.exam.title }}</strong>
+                            </td>
+                            <td>
+                                <strong style="font-family: 'Courier New', monospace;">{{ se.score or 0 }}/{{ se.total_points or 0 }}</strong>
+                            </td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <div class="progress-container" style="width: 100px; height: 8px;">
+                                        <div class="progress-bar {{ 'success' if se.passed else 'danger' }}" 
+                                             style="width: {{ se.percentage or 0 }}%;"></div>
+                                    </div>
+                                    <strong style="font-size: 0.95rem; min-width: 50px;">{{ "%.1f"|format(se.percentage or 0) }}%</strong>
+                                </div>
+                            </td>
+                            <td>
+                                {% if se.is_invalidated %}
+                                    <span class="badge badge-danger">
+                                        <i class="bi bi-slash-circle-fill"></i> Invalidated
+                                    </span>
+                                {% elif se.passed %}
+                                    <span class="badge badge-success">
+                                        <i class="bi bi-check-circle-fill"></i> Passed
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-danger">
+                                        <i class="bi bi-x-circle-fill"></i> Failed
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span style="font-family: 'Courier New', monospace; color: var(--text-secondary);">
+                                    {% if se.time_taken %}
+                                        {{ (se.time_taken // 60)|int }}m {{ se.time_taken % 60 }}s
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                {% set vcount = se.total_violations or 0 %}
+                                {% if vcount > 0 %}
+                                    <span class="badge badge-warning">
+                                        <i class="bi bi-exclamation-triangle-fill"></i> {{ vcount }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-success">
+                                        <i class="bi bi-shield-check"></i> None
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span style="color: var(--text-secondary); font-size: 0.875rem;">
+                                    {{ se.submitted_at.strftime('%d %b, %Y') if se.submitted_at else 'N/A' }}
+                                    <br>
+                                    <small style="opacity: 0.7;">{{ se.submitted_at.strftime('%I:%M %p') if se.submitted_at else '' }}</small>
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- No Exams Card -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="bi bi-graph-up-arrow"></i> Exam Performance
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="bi bi-inbox"></i>
+                </div>
+                <h4 class="empty-state-title">No Exams Taken Yet</h4>
+                <p class="empty-state-text">
+                    This student hasn't taken any exams yet. Exam performance data will appear here once they complete their first exam.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Password Reset Modal -->
+<div id="passwordModal" class="password-modal">
+    <div class="password-modal-content">
+        <div class="password-modal-header">
+            <h3>
+                <i class="bi bi-key-fill" style="color: #ef4444;"></i>
+                Reset Student Password
+            </h3>
+            <button class="password-modal-close" onclick="closePasswordModal()">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+
+        <div class="password-warning">
+            <p>
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>Warning:</strong> This will reset the password for <strong>{{ student.full_name or student.username }}</strong>. 
+                The student will be required to change it on their next login.
+            </p>
+        </div>
+
+        <form id="passwordResetForm">
+            <div class="form-group-modal">
+                <label for="new_password">
+                    <i class="bi bi-shield-lock-fill"></i>
+                    New Password
+                </label>
+                <input type="password" 
+                       id="new_password" 
+                       name="new_password" 
+                       required
+                       minlength="6"
+                       placeholder="Enter new password (min 6 characters)">
+            </div>
+
+            <div class="form-group-modal">
+                <label for="confirm_password">
+                    <i class="bi bi-check-circle-fill"></i>
+                    Confirm Password
+                </label>
+                <input type="password" 
+                       id="confirm_password" 
+                       name="confirm_password" 
+                       required
+                       minlength="6"
+                       placeholder="Confirm new password"
+                       oninput="validatePasswordMatch()">
+            </div>
+
+            <div id="passwordMatchStatus" style="display: none;"></div>
+
+            <button type="submit" class="btn-reset-password" id="submitBtn">
+                <i class="bi bi-shield-check"></i>
+                Reset Password
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Open password modal
+    function openPasswordModal() {
+        document.getElementById('passwordModal').classList.add('active');
+        document.getElementById('new_password').focus();
+    }
+
+    // Close password modal
+    function closePasswordModal() {
+        document.getElementById('passwordModal').classList.remove('active');
+        document.getElementById('passwordResetForm').reset();
+        document.getElementById('passwordMatchStatus').style.display = 'none';
+        document.getElementById('passwordMatchStatus').className = '';
+    }
+
+    // Close on outside click
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('passwordModal');
+        if (e.target === modal) {
+            closePasswordModal();
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closePasswordModal();
+        }
+    });
+
+    // Validate password match in real-time with enhanced styling
+    function validatePasswordMatch() {
+        const newPassword = document.getElementById('new_password').value;
+        const confirmPassword = document.getElementById('confirm_password').value;
+        const statusDiv = document.getElementById('passwordMatchStatus');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        if (confirmPassword.length === 0) {
+            statusDiv.style.display = 'none';
+            statusDiv.className = '';
+            submitBtn.disabled = false;
+            return;
+        }
+        
+        statusDiv.style.display = 'block';
+        
+        if (newPassword.length < 6) {
+            statusDiv.className = 'warning';
+            statusDiv.textContent = 'Password must be at least 6 characters';
+            submitBtn.disabled = true;
+        } else if (newPassword === confirmPassword) {
+            statusDiv.className = 'match';
+            statusDiv.textContent = 'Passwords match!';
+            submitBtn.disabled = false;
+        } else {
+            statusDiv.className = 'no-match';
+            statusDiv.textContent = 'Passwords do not match';
+            submitBtn.disabled = true;
+        }
+    }
+
+    // Handle form submission
+    document.getElementById('passwordResetForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const newPassword = document.getElementById('new_password').value;
+        const confirmPassword = document.getElementById('confirm_password').value;
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // Validation
+        if (!newPassword || !confirmPassword) {
+            alert('❌ Both password fields are required!');
+            return;
+        }
+        
+        if (newPassword !== confirmPassword) {
+            alert('❌ Passwords do not match!');
+            return;
+        }
+        
+        if (newPassword.length < 6) {
+            alert('❌ Password must be at least 6 characters long!');
+            return;
+        }
+        
+        // Confirm action
+        if (!confirm('Are you sure you want to reset this student\'s password?')) {
+            return;
+        }
+        
+        // Disable button and show loading
+        const originalHTML = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.classList.add('loading');
+        submitBtn.innerHTML = '<span>Resetting Password...</span>';
+        
+        try {
+            const formData = new FormData();
+            formData.append('new_password', newPassword);
+            formData.append('confirm_password', confirmPassword);
+            
+            const response = await fetch('{{ url_for("faculty_change_student_password", student_id=student.id) }}', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('✅ ' + data.message);
+                closePasswordModal();
+                
+                // Update password status badge on page
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                alert('❌ ' + data.message);
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.innerHTML = originalHTML;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('❌ An error occurred: ' + error.message);
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading');
+            submitBtn.innerHTML = originalHTML;
+        }
+    });
+
+    // Add enter key support
+    document.getElementById('new_password').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('confirm_password').focus();
+        }
+    });
+
+    document.getElementById('confirm_password').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !document.getElementById('submitBtn').disabled) {
+            e.preventDefault();
+            document.getElementById('passwordResetForm').dispatchEvent(new Event('submit'));
+        }
+    });
+</script>
+{% endblock %}

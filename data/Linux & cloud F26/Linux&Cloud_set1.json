@@ -1,0 +1,182 @@
+[
+  {
+    "question": "Which command is used to display last 10 lines of a file by default?",
+    "option_a": "head",
+    "option_b": "tail",
+    "option_c": "less",
+    "option_d": "cat",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which command is used to change ownership of a file?",
+    "option_a": "chmod",
+    "option_b": "chown",
+    "option_c": "chgrp",
+    "option_d": "ownership",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which Linux command is used to display manual/help pages?",
+    "option_a": "help",
+    "option_b": "info",
+    "option_c": "man",
+    "option_d": "guide",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "What will be the output?\n\necho $HOME",
+    "option_a": "Current directory",
+    "option_b": "Root directory",
+    "option_c": "User home directory path",
+    "option_d": "Nothing",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "What does rm file.txt do if file does not exist?",
+    "option_a": "Creates file",
+    "option_b": "Shows error",
+    "option_c": "Ignores silently",
+    "option_d": "Deletes directory",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What will ls -l display in the first column?",
+    "option_a": "File size",
+    "option_b": "File name",
+    "option_c": "File permissions",
+    "option_d": "Owner name",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "What does cd ~ do?",
+    "option_a": "Goes to root",
+    "option_b": "Goes to previous directory",
+    "option_c": "Goes to user home directory",
+    "option_d": "Does nothing",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "Which command will append output to a file without overwriting?",
+    "option_a": ">",
+    "option_b": ">>",
+    "option_c": "|",
+    "option_d": "append",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What does whoami return?",
+    "option_a": "Current user name",
+    "option_b": "System name",
+    "option_c": "Hostname",
+    "option_d": "Logged users",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which command will display number of lines in a file?",
+    "option_a": "wc -l",
+    "option_b": "wc -w",
+    "option_c": "count -l",
+    "option_d": "lines",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "What happens if a Security Group blocks a port?",
+    "option_a": "Traffic is redirected",
+    "option_b": "Traffic is allowed",
+    "option_c": "Traffic is denied",
+    "option_d": "Instance stops",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "Which AWS service is used to manage users and permissions?",
+    "option_a": "EC2",
+    "option_b": "IAM",
+    "option_c": "S3",
+    "option_d": "VPC",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What is Amazon S3 mainly used for?",
+    "option_a": "Running applications",
+    "option_b": "Storing files and data",
+    "option_c": "Managing users",
+    "option_d": "Monitoring logs",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What is a bucket in Amazon S3?",
+    "option_a": "A virtual machine",
+    "option_b": "A storage container for objects",
+    "option_c": "A database table",
+    "option_d": "A network service",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What is an IAM user?",
+    "option_a": "A storage unit",
+    "option_b": "A virtual server",
+    "option_c": "An identity with permissions",
+    "option_d": "A network",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "Which service is used to launch virtual servers in AWS?",
+    "option_a": "S3",
+    "option_b": "IAM",
+    "option_c": "EC2",
+    "option_d": "Lambda",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "What is the default access level of an S3 bucket?",
+    "option_a": "Public",
+    "option_b": "Private",
+    "option_c": "Shared",
+    "option_d": "Open",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which AWS service is used for scalable storage?",
+    "option_a": "EC2",
+    "option_b": "S3",
+    "option_c": "IAM",
+    "option_d": "Route 53",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What is IAM policy used for?",
+    "option_a": "Store data",
+    "option_b": "Define permissions",
+    "option_c": "Launch instances",
+    "option_d": "Monitor logs",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What does EC2 stand for?",
+    "option_a": "Elastic Compute Cloud",
+    "option_b": "Elastic Cloud Core",
+    "option_c": "External Compute Console",
+    "option_d": "Enhanced Cloud Control",
+    "correct_answer": "A",
+    "points": 1
+  }
+]

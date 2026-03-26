@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+{% block title %}Manage Students{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/student_management.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="sm-container">
+
+    <!-- Page Header -->
+    <div class="sm-header">
+        <div class="sm-header-left">
+            <div class="sm-header-icon">
+                <i class="bi bi-people-fill" colo></i>
+            </div>
+            <div>
+                <h1 class="sm-title">Student Management</h1>
+                <p class="sm-subtitle">Manage, import, and monitor student records</p>
+            </div>
+        </div>
+        <div class="sm-header-actions">
+            <button class="sm-btn sm-btn-outline" onclick="openImportModal()">
+                <i class="bi bi-cloud-upload"></i> Import
+            </button>
+            <button class="sm-btn sm-btn-success" onclick="exportStudents()">
+                <i class="bi bi-download"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats Row -->
+    <div class="sm-stats-row">
+        <div class="sm-stat-pill sm-stat-blue">
+            <i class="bi bi-people"></i>
+            <span class="sm-stat-num">{{ students|length }}</span>
+            <span class="sm-stat-text">Students</span>
+        </div>
+        <div class="sm-stat-pill sm-stat-purple">
+            <i class="bi bi-calendar-event"></i>
+            <span class="sm-stat-num">{{ batches|length }}</span>
+            <span class="sm-stat-text">Batches</span>
+        </div>
+        <div class="sm-stat-pill sm-stat-orange">
+            <i class="bi bi-building"></i>
+            <span class="sm-stat-num">{{ departments|length }}</span>
+            <span class="sm-stat-text">Depts</span>
+        </div>
+        <div class="sm-stat-pill sm-stat-green">
+            <i class="bi bi-patch-check-fill"></i>
+            <span class="sm-stat-num">{{ students|selectattr('is_verified')|list|length }}</span>
+            <span class="sm-stat-text">Verified</span>
+        </div>
+    </div>
+
+    <!-- Search & Filter Card -->
+    <div class="sm-search-card">
+        <form method="get" id="filterForm" class="sm-search-form">
+            <div class="sm-search-row">
+                <div class="sm-search-input-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text" name="q" placeholder="Search by name, email, PRN, roll..."
+                        value="{{ request.args.get('q', '') }}" autocomplete="off">
+                    {% if request.args.get('q') %}
+                    <button type="button" class="sm-search-clear" onclick="clearSearch()">
+                        <i class="bi bi-x"></i>
+                    </button>
+                    {% endif %}
+                </div>
+                <button type="submit" class="sm-btn sm-btn-primary sm-btn-sm">
+                    <i class="bi bi-search"></i> Search
+                </button>
+                <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="toggleAdvancedFilters()">
+                    <i class="bi bi-sliders" id="filterToggleIcon"></i>
+                    <span id="filterToggleText">Filters</span>
+                </button>
+            </div>
+
+            <div class="sm-filters-panel" id="advancedFilters" style="display: none;">
+                <div class="sm-filters-grid">
+                    <div class="sm-filter-item">
+                        <label>Batch</label>
+                        <select name="batch">
+                            <option value="">All Batches</option>
+                            {% for batch in batches %}
+                            <option value="{{ batch }}" {% if request.args.get('batch')==batch %}selected{% endif %}>{{
+                                batch }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="sm-filter-item">
+                        <label>Department</label>
+                        <select name="department">
+                            <option value="">All Departments</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept }}" {% if request.args.get('department')==dept %}selected{% endif %}>
+                                {{ dept }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="sm-filter-item">
+                        <label>Status</label>
+                        <select name="verified">
+                            <option value="">All</option>
+                            <option value="true" {% if request.args.get('verified')=='true' %}selected{% endif %}>
+                                Verified</option>
+                            <option value="false" {% if request.args.get('verified')=='false' %}selected{% endif %}>
+                                Unverified</option>
+                        </select>
+                    </div>
+                    <div class="sm-filter-item">
+                        <label>Sort</label>
+                        <select name="sort">
+                            <option value="">Recent First</option>
+                            <option value="name" {% if request.args.get('sort')=='name' %}selected{% endif %}>Name (A-Z)
+                            </option>
+                            <option value="batch" {% if request.args.get('sort')=='batch' %}selected{% endif %}>Batch
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <div class="sm-filter-actions">
+                    <button type="submit" class="sm-btn sm-btn-primary sm-btn-sm">
+                        <i class="bi bi-check2"></i> Apply
+                    </button>
+                    <button type="button" class="sm-btn sm-btn-ghost sm-btn-sm" onclick="clearFilters()">
+                        <i class="bi bi-arrow-counterclockwise"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Students Table -->
+    {% if students %}
+    <div class="sm-table-card">
+        <!-- Table Toolbar -->
+        <div class="sm-table-toolbar">
+            <div class="sm-toolbar-left">
+                <input type="checkbox" id="selectAll" onclick="toggleSelectAll()" class="sm-checkbox">
+                <span class="sm-selection-count" id="selectionCount">0 selected</span>
+            </div>
+            <div class="sm-toolbar-right">
+                <button class="sm-btn sm-btn-ghost sm-btn-xs" onclick="exportSelected()">
+                    <i class="bi bi-download"></i> Export
+                </button>
+                <button class="sm-btn sm-btn-danger-ghost sm-btn-xs" onclick="deleteSelected()">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="sm-table-wrap">
+            <table class="sm-table">
+                <thead>
+                    <tr>
+                        <th class="sm-th-check"><input type="checkbox" class="header-checkbox sm-checkbox"
+                                onclick="toggleSelectAll()"></th>
+                        <th>Student</th>
+                        <th>PRN</th>
+                        <th>Roll</th>
+                        <th>Batch</th>
+                        <th>Dept</th>
+                        <th>Contact</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td><input type="checkbox" class="student-checkbox sm-checkbox" value="{{ student.id }}"></td>
+                        <td>
+                            <div class="sm-student-cell">
+                                <div class="sm-avatar"
+                                    style="background: linear-gradient(135deg, {{ ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']|random }}, {{ ['#4f46e5', '#7c3aed', '#db2777', '#d97706', '#059669']|random }});">
+                                    {{ (student.full_name or student.username)[0]|upper }}
+                                </div>
+                                <div class="sm-student-info">
+                                    <div class="sm-student-name">{{ student.full_name or student.username }}</div>
+                                    <div class="sm-student-username">@{{ student.username }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="sm-mono">{{ student.prn_number or '—' }}</span></td>
+                        <td><span class="sm-mono">{{ student.roll_id or '—' }}</span></td>
+                        <td>
+                            {% if student.batch %}
+                            <span class="sm-tag sm-tag-blue">{{ student.batch }}</span>
+                            {% else %}
+                            <span class="sm-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="sm-dept">{{ student.department or '—' }}</span></td>
+                        <td>
+                            <div class="sm-contact-cell">
+                                {% if student.email %}
+                                <a href="mailto:{{ student.email }}" class="sm-contact-icon"
+                                    title="{{ student.email }}">
+                                    <i class="bi bi-envelope"></i>
+                                </a>
+                                {% endif %}
+                                {% if student.phone %}
+                                <a href="tel:{{ student.phone }}" class="sm-contact-icon" title="{{ student.phone }}">
+                                    <i class="bi bi-telephone"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if student.is_verified %}
+                            <span class="sm-badge sm-badge-green">Verified</span>
+                            {% else %}
+                            <span class="sm-badge sm-badge-amber">Pending</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="sm-actions">
+                                <a href="{{ url_for('student_profile', student_id=student.id) }}"
+                                    class="sm-action-btn sm-action-view" title="View Profile">
+                                    <i class="bi bi-eye-fill"></i>
+                                </a>
+                                <a href="{{ url_for('faculty_edit_student', student_id=student.id) }}"
+                                    class="sm-action-btn sm-action-edit" title="Edit Student">
+                                    <i class="bi bi-pencil-fill"></i>
+                                </a>
+                                <button class="sm-action-btn sm-action-delete" onclick="deleteStudent({{ student.id }})"
+                                    title="Delete Student">
+                                    <i class="bi bi-trash-fill"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Table Footer -->
+        <div class="sm-table-footer">
+            Showing <strong>{{ students|length }}</strong> student{{ 's' if students|length != 1 else '' }}
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="sm-empty">
+        <div class="sm-empty-icon"><i class="bi bi-inbox"></i></div>
+        <h3>No Students Found</h3>
+        <p>
+            {% if request.args.get('q') %}
+            No results for "{{ request.args.get('q') }}". Try different search terms.
+            {% else %}
+            Start by importing student records.
+            {% endif %}
+        </p>
+        <div class="sm-empty-actions">
+            {% if request.args.get('q') %}
+            <a href="{{ url_for('faculty_student_list') }}" class="sm-btn sm-btn-primary">
+                <i class="bi bi-arrow-left"></i> Show All
+            </a>
+            {% else %}
+            <button class="sm-btn sm-btn-primary" onclick="openImportModal()">
+                <i class="bi bi-upload"></i> Import Students
+            </button>
+            <a href="{{ url_for('download_student_template') }}" class="sm-btn sm-btn-outline">
+                <i class="bi bi-download"></i> Download Template
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Import Modal -->
+<div class="modal-backdrop" id="importModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content-wrapper">
+            <div class="modal-header-custom">
+                <div class="modal-title-wrapper">
+                    <div class="modal-icon">
+                        <i class="bi bi-cloud-upload"></i>
+                    </div>
+                    <div>
+                        <h3 class="modal-title-custom">Import Students</h3>
+                        <p class="modal-subtitle">Upload CSV or Excel file</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" onclick="closeImportModal()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <form id="importForm" action="{{ url_for('faculty_import_students') }}" method="POST"
+                enctype="multipart/form-data">
+                <div class="modal-body-custom">
+                    <div class="quick-actions-bar">
+                        <a href="{{ url_for('download_student_template') }}" class="btn-quick-action">
+                            <i class="bi bi-download"></i> Download Template
+                        </a>
+                    </div>
+
+                    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('csvFile').click()">
+                        <div class="upload-zone-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+                        <h4 class="upload-zone-title">Drop your file here</h4><br>
+                        <br>
+                        <p class="upload-zone-text">or click to browse</p>
+                        <p class="upload-zone-hint">CSV, XLSX, XLS, JSON &bull; Max 5MB</p>
+                        <input type="file" id="csvFile" name="file" accept=".csv,.xlsx,.xls,.json"
+                            style="display: none;" onchange="handleFileSelect(event)">
+                    </div>
+
+                    <div id="filePreview" class="file-preview">
+                        <div class="file-preview-icon"><i class="bi bi-file-earmark-spreadsheet"></i></div>
+                        <div class="file-preview-info">
+                            <div class="file-preview-name" id="fileName"></div>
+                            <div class="file-preview-size" id="fileSize"></div>
+                        </div>
+                        <button type="button" class="file-remove-btn" onclick="clearFile()">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+
+                    <div class="sample-preview">
+                        <div class="sample-preview-header">
+                            <i class="bi bi-table"></i> <strong>Sample Format</strong>
+                        </div>
+                        <div class="sample-table-wrapper">
+                            <table class="sample-table">
+                                <thead>
+                                    <tr>
+                                        <th>email</th>
+                                        <th>full_name</th>
+                                        <th>prn_number</th>
+                                        <th>batch</th>
+                                        <th>department</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>john@university.edu</td>
+                                        <td>John Doe</td>
+                                        <td>250840325012</td>
+                                        <td>2024</td>
+                                        <td>Computer Science</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer-custom">
+                    <button type="button" class="btn-modal btn-modal-cancel"
+                        onclick="closeImportModal()">Cancel</button>
+                    <button type="submit" class="btn-modal btn-modal-primary" id="uploadBtn" disabled>
+                        <i class="bi bi-upload"></i> Upload & Import
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/student_management.js') }}"></script>
+{% endblock %}

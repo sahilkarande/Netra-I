@@ -1,0 +1,540 @@
+{% extends "base.html" %}
+{% block title %}Edit Student - {{ student.full_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/edit_student.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Page Header with Actions -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">
+                <i class="bi bi-pencil-square"></i>
+                Edit Student Profile
+            </h1>
+            <p class="page-subtitle">
+                Update student information and manage account
+            </p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-danger" onclick="openPasswordModal()">
+                <i class="bi bi-key-fill"></i>
+                Reset Password
+            </button>
+            <a href="{{ url_for('faculty_student_list') }}" class="btn btn-outline">
+                <i class="bi bi-arrow-left"></i>
+                Back to List
+            </a>
+        </div>
+    </div>
+
+    <!-- Student Quick Info Banner -->
+    <div class="card student-banner">
+        <div class="student-banner-body">
+            <div class="student-avatar">
+                {{ student.full_name[0] if student.full_name else student.username[0] }}
+            </div>
+            <div class="student-banner-content">
+                <h3>{{ student.full_name or student.username }}</h3>
+                <div class="student-banner-info">
+                    <span>
+                        <i class="bi bi-person-badge"></i>
+                        {{ student.prn_number or 'No PRN' }}
+                    </span>
+                    <span>
+                        <i class="bi bi-envelope"></i>
+                        {{ student.email }}
+                    </span>
+                    <span>
+                        <i class="bi bi-calendar"></i>
+                        Joined {{ student.created_at.strftime('%B %Y') if student.created_at else 'N/A' }}
+                    </span>
+                </div>
+            </div>
+            <div class="student-banner-badge">
+                {% if student.is_verified %}
+                    <span class="badge">
+                        <i class="bi bi-check-circle-fill"></i> Verified
+                    </span>
+                {% else %}
+                    <span class="badge">
+                        <i class="bi bi-clock"></i> Pending
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Status Alert -->
+    {% if not student.password_changed %}
+    <div class="alert password-alert">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div class="password-alert-content">
+            <strong>Password Not Changed</strong>
+            <p>This student must change their password on next login for security.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Edit Form -->
+    <form method="POST">
+        
+        <!-- Personal Information Section -->
+        <div class="card section-card">
+            <div class="section-card-header">
+                <h3 class="section-card-title">
+                    <div class="section-icon personal">
+                        <i class="bi bi-person-circle"></i>
+                    </div>
+                    Personal Information
+                </h3>
+            </div>
+            <div class="section-card-body">
+                <div class="form-grid">
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="bi bi-person-fill"></i>
+                            Full Name <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="full_name" 
+                            class="form-input" 
+                            value="{{ student.full_name }}" 
+                            required
+                            placeholder="Enter full name"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="bi bi-envelope-fill"></i>
+                            Email Address <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="email" 
+                            name="email" 
+                            class="form-input" 
+                            value="{{ student.email }}" 
+                            required
+                            placeholder="student@example.com"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="bi bi-telephone-fill"></i>
+                            Phone Number
+                        </label>
+                        <input 
+                            type="tel" 
+                            name="phone" 
+                            class="form-input" 
+                            value="{{ student.phone or '' }}"
+                            placeholder="+91 98765 43210"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="bi bi-gender-ambiguous"></i>
+                            Gender
+                        </label>
+                        <select name="gender" class="form-input">
+                            <option value="">Select Gender</option>
+                            <option value="Male" {% if student.gender == 'Male' %}selected{% endif %}>Male</option>
+                            <option value="Female" {% if student.gender == 'Female' %}selected{% endif %}>Female</option>
+                            <option value="Other" {% if student.gender == 'Other' %}selected{% endif %}>Other</option>
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Academic Information Section -->
+        <div class="card section-card">
+            <div class="section-card-header">
+                <h3 class="section-card-title">
+                    <div class="section-icon academic">
+                        <i class="bi bi-book-fill"></i>
+                    </div>
+                    Academic Information
+                </h3>
+            </div>
+            <div class="section-card-body">
+                <div class="form-grid">
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="bi bi-credit-card-fill"></i>
+                            PRN Number <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="prn_number" 
+                            class="form-input" 
+                            value="{{ student.prn_number or '' }}"
+                            placeholder="12-digit PRN"
+                            maxlength="12"
+                            pattern="^\d{12}$"
+                            title="PRN must be exactly 12 digits"
+                            oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 12)"
+                            required
+                        >
+                        <small class="form-help">
+                            <i class="bi bi-info-circle"></i> Must be exactly 12 digits
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="bi bi-123"></i>
+                            Roll ID
+                        </label>
+                        <input 
+                            type="text" 
+                            name="roll_id" 
+                            class="form-input" 
+                            value="{{ student.roll_id or '' }}"
+                            placeholder="Enter roll ID"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="bi bi-calendar-event-fill"></i>
+                            Batch
+                        </label>
+                        <input 
+                            type="text" 
+                            name="batch" 
+                            class="form-input" 
+                            value="{{ student.batch or '' }}"
+                            placeholder="e.g., 2024"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="bi bi-building-fill"></i>
+                            Department
+                        </label>
+                        <select name="department" class="form-input">
+                            <option value="">Select Department</option>
+                            <option value="Computer Science" {% if student.department == 'Computer Science' %}selected{% endif %}>Computer Science</option>
+                            <option value="Information Technology" {% if student.department == 'Information Technology' %}selected{% endif %}>Information Technology</option>
+                            <option value="Electronics" {% if student.department == 'Electronics' %}selected{% endif %}>Electronics</option>
+                            <option value="Mechanical" {% if student.department == 'Mechanical' %}selected{% endif %}>Mechanical</option>
+                            <option value="Civil" {% if student.department == 'Civil' %}selected{% endif %}>Civil</option>
+                            <option value="Electrical" {% if student.department == 'Electrical' %}selected{% endif %}>Electrical</option>
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Status Section -->
+        <div class="card section-card">
+            <div class="section-card-header">
+                <h3 class="section-card-title">
+                    <div class="section-icon account">
+                        <i class="bi bi-shield-check-fill"></i>
+                    </div>
+                    Account Status
+                </h3>
+            </div>
+            <div class="section-card-body">
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="bi bi-toggle-on"></i>
+                        Verification Status
+                    </label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input 
+                                type="radio" 
+                                name="is_verified" 
+                                value="true" 
+                                {% if student.is_verified %}checked{% endif %}
+                            >
+                            <span>
+                                <i class="bi bi-check-circle-fill" style="color: #10b981;"></i> Verified
+                            </span>
+                        </label>
+                        <label class="radio-option">
+                            <input 
+                                type="radio" 
+                                name="is_verified" 
+                                value="false" 
+                                {% if not student.is_verified %}checked{% endif %}
+                            >
+                            <span>
+                                <i class="bi bi-x-circle-fill" style="color: #ef4444;"></i> Unverified
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="card form-actions-card">
+            <div class="form-actions">
+
+                <button type="reset" class="btn btn-outline btn-lg">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                    Reset Changes
+                </button>
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-check-circle-fill"></i>
+                    Save Changes
+                </button>
+            </div>
+        </div>
+
+    </form>
+
+    <!-- Danger Zone -->
+    <div class="card danger-zone">
+        <div class="danger-zone-header">
+            <h3 class="danger-zone-title">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                Danger Zone
+            </h3>
+        </div>
+        <div class="danger-zone-body">
+            <div class="danger-zone-content">
+                <div class="danger-zone-info">
+                    <h4>Delete Student Account</h4>
+                    <p>Permanently delete this student's account and all associated data. This action cannot be undone.</p>
+                </div>
+                <button class="btn btn-danger" onclick="confirmDelete()">
+                    <i class="bi bi-trash-fill"></i>
+                    Delete Account
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Password Reset Modal -->
+<div id="passwordModal" class="password-modal">
+    <div class="password-modal-content">
+        <div class="password-modal-header">
+            <h3>
+                <i class="bi bi-key-fill" style="color: #ef4444;"></i>
+                Reset Student Password
+            </h3>
+            <button class="password-modal-close" onclick="closePasswordModal()">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+
+        <div class="password-warning">
+            <p>
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>Warning:</strong> This will reset the password for <strong>{{ student.full_name or student.username }}</strong>. 
+                The student will be required to change it on their next login.
+            </p>
+        </div>
+
+        <form id="passwordResetForm">
+            <div class="form-group-modal">
+                <label for="new_password">
+                    <i class="bi bi-shield-lock-fill"></i>
+                    New Password
+                </label>
+                <input type="password" 
+                       id="new_password" 
+                       name="new_password" 
+                       required
+                       minlength="6"
+                       placeholder="Enter new password (min 6 characters)">
+            </div>
+
+            <div class="form-group-modal">
+                <label for="confirm_password">
+                    <i class="bi bi-check-circle-fill"></i>
+                    Confirm Password
+                </label>
+                <input type="password" 
+                       id="confirm_password" 
+                       name="confirm_password" 
+                       required
+                       minlength="6"
+                       placeholder="Confirm new password"
+                       oninput="validatePasswordMatch()">
+            </div>
+
+            <div id="passwordMatchStatus"></div>
+
+            <button type="submit" class="btn-reset-password" id="submitBtn">
+                <i class="bi bi-shield-check"></i>
+                Reset Password
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+
+    // Open password modal
+function openPasswordModal() {
+    document.getElementById('passwordModal').classList.add('active');
+    document.getElementById('new_password').focus();
+}
+
+// Close password modal
+function closePasswordModal() {
+    document.getElementById('passwordModal').classList.remove('active');
+    document.getElementById('passwordResetForm').reset();
+    const statusDiv = document.getElementById('passwordMatchStatus');
+    if (statusDiv) statusDiv.style.display = 'none';
+}
+
+// Close on outside click
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('passwordModal');
+    if (e.target === modal) {
+        closePasswordModal();
+    }
+});
+
+// Close on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePasswordModal();
+    }
+});
+
+// Validate password match in real-time
+function validatePasswordMatch() {
+    const newPassword = document.getElementById('new_password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+    const statusDiv = document.getElementById('passwordMatchStatus');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    if (confirmPassword.length === 0) {
+        statusDiv.style.display = 'none';
+        submitBtn.disabled = false;
+        return;
+    }
+    
+    statusDiv.style.display = 'block';
+    statusDiv.style.marginBottom = '1rem';
+    statusDiv.style.fontSize = '0.9rem';
+    
+    if (newPassword === confirmPassword) {
+        statusDiv.innerHTML = '<span style="color: #10b981;"><i class="bi bi-check-circle-fill"></i> Passwords match</span>';
+        submitBtn.disabled = false;
+    } else {
+        statusDiv.innerHTML = '<span style="color: #ef4444;"><i class="bi bi-x-circle-fill"></i> Passwords do not match</span>';
+        submitBtn.disabled = true;
+    }
+}
+
+// Handle form submission
+document.getElementById('passwordResetForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const newPassword = document.getElementById('new_password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Validation
+    if (!newPassword || !confirmPassword) {
+        alert('❌ Both password fields are required!');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        alert('❌ Passwords do not match!');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        alert('❌ Password must be at least 6 characters long!');
+        return;
+    }
+    
+    // Confirm action
+    if (!confirm('Are you sure you want to reset this student\'s password?')) {
+        return;
+    }
+    
+    // Disable button and show loading
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Resetting Password...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('new_password', newPassword);
+        formData.append('confirm_password', confirmPassword);
+        
+        const studentId = window.location.pathname.split('/').pop();
+        const response = await fetch(`/faculty/change-student-password/${studentId}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ ' + data.message);
+            closePasswordModal();
+            location.reload(); // Refresh to show updated status
+        } else {
+            alert('❌ ' + data.message);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-shield-check"></i> Reset Password';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ An error occurred: ' + error.message);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-shield-check"></i> Reset Password';
+    }
+});
+
+// Confirm delete
+function confirmDelete() {
+    if (confirm('⚠️ Are you sure you want to delete this student account?\n\nThis will permanently delete:\n• Student profile\n• All exam records\n• All performance data\n\nThis action CANNOT be undone!')) {
+        // TODO: Implement delete functionality
+        alert('Delete functionality - implement in backend');
+    }
+}
+
+// Add smooth radio button selection effect
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const label = this.closest('label');
+            const siblings = label.parentElement.querySelectorAll('label');
+            
+            siblings.forEach(sib => {
+                sib.classList.remove('selected');
+            });
+            
+            label.classList.add('selected');
+        });
+    });
+
+    // Initialize selected radio style
+    document.querySelectorAll('input[type="radio"]:checked').forEach(radio => {
+        const label = radio.closest('label');
+        if (label) {
+            label.classList.add('selected');
+        }
+    });
+});
+</script>
+{% endblock %}

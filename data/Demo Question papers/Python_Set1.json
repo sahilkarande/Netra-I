@@ -1,0 +1,182 @@
+[
+  {
+    "question": "What is the correct file extension for Python files?",
+    "option_a": ".pt",
+    "option_b": ".py",
+    "option_c": ".pyt",
+    "option_d": ".python",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which keyword is used to define a function in Python?",
+    "option_a": "function",
+    "option_b": "def",
+    "option_c": "fun",
+    "option_d": "define",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What will be the output of:\nprint(type(10))",
+    "option_a": "<class 'float'>",
+    "option_b": "<class 'str'>",
+    "option_c": "<class 'int'>",
+    "option_d": "<class 'bool'>",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which of the following is a mutable data type?",
+    "option_a": "tuple",
+    "option_b": "list",
+    "option_c": "string",
+    "option_d": "int",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "How do you insert comments in Python?",
+    "option_a": "// comment",
+    "option_b": "/* comment */",
+    "option_c": "# comment",
+    "option_d": "<!-- comment -->",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What is the output of:\nprint(2 ** 3)",
+    "option_a": "6",
+    "option_b": "8",
+    "option_c": "9",
+    "option_d": "5",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which function is used to get input from the user?",
+    "option_a": "scan()",
+    "option_b": "read()",
+    "option_c": "input()",
+    "option_d": "get()",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What will len([1, 2, 3, 4]) return?",
+    "option_a": "3",
+    "option_b": "4",
+    "option_c": "5",
+    "option_d": "Error",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which keyword is used for loops in Python?",
+    "option_a": "foreach",
+    "option_b": "iterate",
+    "option_c": "for",
+    "option_d": "repeat",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What does break do in a loop?",
+    "option_a": "Skips current iteration",
+    "option_b": "Stops the loop",
+    "option_c": "Restarts the loop",
+    "option_d": "Pauses the loop",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which operator is used for floor division?",
+    "option_a": "/",
+    "option_b": "//",
+    "option_c": "%",
+    "option_d": "**",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What is the output of:\nprint(bool(0))",
+    "option_a": "True",
+    "option_b": "0",
+    "option_c": "False",
+    "option_d": "None",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which method adds an item to a list?",
+    "option_a": "add()",
+    "option_b": "append()",
+    "option_c": "insertall()",
+    "option_d": "push()",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does pop() do to a list?",
+    "option_a": "Adds an element",
+    "option_b": "Removes an element",
+    "option_c": "Sorts the list",
+    "option_d": "Duplicates the list",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which statement creates a dictionary?",
+    "option_a": "[]",
+    "option_b": "()",
+    "option_c": "{}",
+    "option_d": "<>",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What will be the output?\nprint('Hello' + 'World')",
+    "option_a": "Hello World",
+    "option_b": "HelloWorld",
+    "option_c": "Hello+World",
+    "option_d": "Error",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which module is used for mathematical functions?",
+    "option_a": "math",
+    "option_b": "random",
+    "option_c": "sys",
+    "option_d": "os",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "What does range(5) generate?",
+    "option_a": "1 to 5",
+    "option_b": "0 to 4",
+    "option_c": "0 to 5",
+    "option_d": "1 to 4",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which statement is used to handle exceptions?",
+    "option_a": "try-except",
+    "option_b": "if-else",
+    "option_c": "for-while",
+    "option_d": "do-catch",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "What will be the output?\na = [1, 2, 3]\na[0] = 10\nprint(a)",
+    "option_a": "[1, 2, 3]",
+    "option_b": "[10, 2, 3]",
+    "option_c": "[1, 10, 3]",
+    "option_d": "Error",
+    "correct_answer": "B",
+    "points": 2
+  }
+]

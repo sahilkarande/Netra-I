@@ -1,0 +1,756 @@
+{% extends "base.html" %}
+{% block title %}Analytics - {{ exam.title }}{% endblock %}
+
+{% block content %}
+
+<div class="analytics-container">
+    <!-- Page Header -->
+    <div class="page-header" style="position:relative;">
+        <h1>📊 Exam Analytics Dashboard</h1>
+        <p><i class="bi bi-journal-text"></i> {{ exam.title }}</p>
+        <a href="{{ url_for('view_exam', exam_id=exam.id) }}" class="btn-back">
+            <i class="bi bi-arrow-left"></i> 
+        </a>
+
+        <!-- Publish Results Button -->
+        <div style="margin-top:12px;">
+            {% if exam.results_published %}
+                <div style="display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:10px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3);">
+                    <i class="bi bi-check-circle-fill" style="color:#10b981; font-size:1.1rem;"></i>
+                    <span style="color:#10b981; font-weight:600;">Results Published</span>
+                    {% if exam.results_published_at %}
+                        <span style="color:rgba(16,185,129,0.7); font-size:0.8rem; margin-left:4px;">
+                            — {{ exam.results_published_at.strftime('%d %b %Y, %I:%M %p') }}
+                        </span>
+                    {% endif %}
+                </div>
+            {% else %}
+                <button id="publishBtn" onclick="publishResults()" 
+                        style="display:inline-flex; align-items:center; gap:8px; padding:10px 24px; border:none; border-radius:10px; background:linear-gradient(135deg, #6366f1, #8b5cf6); color:white; cursor:pointer; font-weight:600; font-size:0.9rem; transition:all 0.2s; box-shadow:0 4px 15px rgba(99,102,241,0.3);"
+                        onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 20px rgba(99,102,241,0.4)'"
+                        onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 15px rgba(99,102,241,0.3)'">
+                    <i class="bi bi-megaphone-fill"></i>
+                    Publish Results
+                </button>
+                <div style="font-size:0.72rem; color:rgba(255,255,255,0.4); margin-top:4px;">
+                    Finalizes grades, deletes all proctoring evidence images &amp; clears cache
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Summary Statistics Drawer -->
+    <details class="drawer" open>
+        <summary>📈 Summary Statistics</summary>
+        <div class="drawer-content">
+            <div class="stats-grid">
+                <div class="stat-card primary">
+                    <span class="stat-icon"><i class="bi bi-people-fill"></i></span>
+                    <div class="stat-value">{{ total_attempts }}</div>
+                    <div class="stat-label">Total Attempts</div>
+                    <div class="stat-meta neutral">
+                        <i class="bi bi-graph-up"></i> Active Submissions
+                    </div>
+                </div>
+                
+                <div class="stat-card success">
+                    <span class="stat-icon"><i class="bi bi-check-circle-fill"></i></span>
+                    <div class="stat-value">{{ passed }}</div>
+                    <div class="stat-label">Students Passed</div>
+                    <div class="stat-meta positive">
+                        <i class="bi bi-arrow-up"></i> {{ "%.1f"|format((passed / total_attempts * 100) if total_attempts > 0 else 0) }}% Pass Rate
+                    </div>
+                </div>
+                
+                <div class="stat-card warning">
+                    <span class="stat-icon"><i class="bi bi-x-circle-fill"></i></span>
+                    <div class="stat-value">{{ failed }}</div>
+                    <div class="stat-label">Students Failed</div>
+                    <div class="stat-meta negative">
+                        <i class="bi bi-arrow-down"></i> {{ "%.1f"|format((failed / total_attempts * 100) if total_attempts > 0 else 0) }}% Fail Rate
+                    </div>
+                </div>
+                
+                <div class="stat-card info">
+                    <span class="stat-icon"><i class="bi bi-trophy-fill"></i></span>
+                    <div class="stat-value">{{ "%.1f"|format(avg_score) }}%</div>
+                    <div class="stat-label">Average Score</div>
+                    <div class="stat-meta neutral">
+                        <i class="bi bi-star-fill"></i> Class Performance
+                    </div>
+                </div>
+                
+                <div class="stat-card danger">
+                    <span class="stat-icon"><i class="bi bi-shield-exclamation"></i></span>
+                    <div class="stat-value">{{ flagged_exams|length }}</div>
+                    <div class="stat-label">Flagged Attempts</div>
+                    <div class="stat-meta negative">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Needs Review
+                    </div>
+                </div>
+                
+                <div class="stat-card primary">
+                    <span class="stat-icon"><i class="bi bi-clock-fill"></i></span>
+                    <div class="stat-value">{{ "%.1f"|format(avg_time) }}</div>
+                    <div class="stat-label">Avg Time (minutes)</div>
+                    <div class="stat-meta neutral">
+                        <i class="bi bi-hourglass-split"></i> Average Duration
+                    </div>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <!-- Charts & Visualizations Drawer -->
+    <details class="drawer">
+        <summary>📊 Performance Visualizations</summary>
+        <div class="drawer-content">
+            <div class="charts-grid">
+                <!-- Score Distribution Chart -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title">
+                            <i class="bi bi-bar-chart-fill"></i> Score Distribution
+                        </h3>
+                        <button class="btn-download" onclick="downloadChart('scoreDistChart')">
+                            <i class="bi bi-download"></i>
+                        </button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="scoreDistChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Pass/Fail Ratio Chart -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title">
+                            <i class="bi bi-pie-chart-fill"></i> Pass / Fail Ratio
+                        </h3>
+                        <button class="btn-download" onclick="downloadChart('passFailChart')">
+                            <i class="bi bi-download"></i>
+                        </button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="passFailChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Time Distribution Chart -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title">
+                            <i class="bi bi-clock-history"></i> Time Distribution
+                        </h3>
+                        <button class="btn-download" onclick="downloadChart('timeAnalysisChart')">
+                            <i class="bi bi-download"></i>
+                        </button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="timeAnalysisChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Attempt Timeline Chart -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title">
+                            <i class="bi bi-graph-up-arrow"></i> Attempt Timeline
+                        </h3>
+                        <button class="btn-download" onclick="downloadChart('timelineChart')">
+                            <i class="bi bi-download"></i>
+                        </button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="timelineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <!-- Question-wise Performance Drawer -->
+    {% if question_stats %}
+    <details class="drawer">
+        <summary>🧠 Question-wise Performance Analysis</summary>
+        <div class="drawer-content">
+            <div class="table-wrapper">
+                <div class="table-header">
+                    <h3 class="table-title">
+                        <i class="bi bi-question-circle-fill"></i> Individual Question Statistics
+                    </h3>
+                    <span class="badge badge-info">{{ question_stats|length }} Questions</span>
+                </div>
+                
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 40%;">Question</th>
+                            <th style="width: 10%;">Total</th>
+                            <th style="width: 10%;">Correct</th>
+                            <th style="width: 10%;">Incorrect</th>
+                            <th style="width: 25%;">Accuracy Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in question_stats %}
+                        <tr>
+                            <td><strong>{{ loop.index }}</strong></td>
+                            <td>{{ stat.question }}</td>
+                            <td>{{ stat.total_answers or 0 }}</td>
+                            <td>
+                                <span class="badge badge-success">
+                                    <i class="bi bi-check-lg"></i> {{ stat.correct_answers or 0 }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-danger">
+                                    <i class="bi bi-x-lg"></i> {{ (stat.total_answers or 0) - (stat.correct_answers or 0) }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="progress-wrapper">
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar-fill {{ 'success' if stat.accuracy >= 70 else 'warning' if stat.accuracy >= 40 else 'danger' }}" 
+                                            style="width: {{ stat.accuracy }}%"></div>
+                                    </div>
+                                    <div class="progress-value" style="color: {{ '#10b981' if stat.accuracy >= 70 else '#f59e0b' if stat.accuracy >= 40 else '#ef4444' }};">
+                                        {{ "%.1f"|format(stat.accuracy) }}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+   </details>
+{% endif %}
+<!-- Student Results Table -->
+{% if student_exams %}
+<details class="drawer">
+    <summary>👩‍🎓 Student Results</summary>
+    <div class="drawer-content">
+    <div class="table-container" style="margin-top: 2rem;">
+        <div class="table-header">
+            <h3 class="table-title">
+                <i class="bi bi-people"></i> Student Results
+            </h3>
+            <span class="badge" style="background: rgba(255,255,255,0.2);">
+                {{ student_exams|length }} Students
+            </span>
+        </div>
+        
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th><i class="bi bi-person"></i> Student</th>
+                        
+                        <th><i class="bi bi-calculator"></i> Score</th>
+                        <th><i class="bi bi-percent"></i> Percentage</th>
+                        <th><i class="bi bi-check-circle"></i> Status</th>
+                        <th><i class="bi bi-clock"></i> Time</th>
+                        <th><i class="bi bi-eye-slash"></i> Tab Switches</th>
+                        <th><i class="bi bi-camera"></i> Violations</th>
+                        <th><i class="bi bi-calendar"></i> Submitted</th>
+                        <th><i class="bi bi-gear"></i> Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for se in student_exams %}
+                    <tr {% if se.tab_switch_count > exam.max_tab_switches %}style="background: rgba(239, 68, 68, 0.05);"{% endif %}>
+                        <td>
+                            <strong>{{ se.student.full_name or se.student.username }}</strong>
+                            <br>
+                            <small style="color: var(--text-secondary);">{{ se.student.prn_number or 'N/A' }}</small>
+                        </td>
+                       
+                        <td><strong>{{ se.score }}/{{ se.total_points }}</strong></td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div class="progress-container" style="width: 80px;">
+                                    <div class="progress-bar {{ 'success' if se.passed else 'danger' }}" 
+                                        style="width: {{ se.percentage }}%"></div>
+                                </div>
+                                <strong>{% if se.percentage is not none %}
+                                            {{ "%.1f"|format(se.percentage) }}%
+                                        {% else %}
+                                            0.0%
+                                        {% endif %}
+                                </strong>
+                            </div>
+                        </td>
+                        <td>
+                            {% if se.is_invalidated %}
+                                <span class="badge badge-danger" title="{{ se.faculty_review_note or 'Invalidated by faculty' }}">
+                                    <i class="bi bi-slash-circle-fill mr-2"></i><span class="d-block mt-1">Invalidated</span>
+                                </span>
+                            {% elif se.passed %}
+                                <span class="badge badge-success">
+                                    <i class="bi bi-check-circle-fill mr-2"></i><span class="d-block mt-1">Passed</span>
+                                </span>
+                            {% else %}
+                                <span class="badge badge-danger">
+                                    <i class="bi bi-x-circle-fill mr-2"></i><span class="d-block mt-1">Failed</span>
+                                </span>
+                            {% endif %}
+
+                        </td>
+                        <td>{{ se.time_taken_minutes }} min</td>
+                        <td>
+                            {% if se.tab_switch_count > exam.max_tab_switches %}
+                            <span class="badge badge-warning">
+                                <i class="bi bi-exclamation-triangle"></i> {{ se.tab_switch_count }}
+                            </span>
+                            {% else %}
+                            <span class="badge badge-success">{{ se.tab_switch_count }}</span>
+                            {% endif %}
+                        </td>
+                        <!-- NEW VIOLATIONS COLUMN -->
+                        <td>
+                            {% if se.total_violations %}
+                                {% if se.total_violations >= (exam.max_violations or 6) %}
+                                <span class="badge badge-danger">
+                                    <i class="bi bi-exclamation-circle-fill"></i> {{ se.total_violations }}
+                                </span>
+                                {% elif se.total_violations >= 3 %}
+                                <span class="badge badge-warning">
+                                    <i class="bi bi-exclamation-triangle"></i> {{ se.total_violations }}
+                                </span>
+                                {% else %}
+                                <span class="badge badge-info">
+                                    <i class="bi bi-info-circle"></i> {{ se.total_violations }}
+                                </span>
+                                {% endif %}
+                                    <button class="btn btn-outline-primary btn-view-violation" 
+                                            onclick="viewViolations({{ se.id }}, '{{ se.student.full_name or se.student.username }}')"
+                                            title="View Violation Details"
+                                            style="margin-left: 8px; color: black;">
+                                        <i class="bi bi-eye" style="color: black;"></i> View
+                                    </button>
+
+                            {% else %}
+                            <span class="badge badge-success">
+                                <i class="bi bi-check-circle"></i> 0
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ se.submitted_at.strftime('%d %b, %H:%M') }}</td>
+                        <td>
+                            <a href="{{ url_for('student_profile', student_id=se.student.id) }}" 
+                            class="btn btn-primary btn-sm"
+                            title="View Profile">
+                                <i class="bi bi-person-circle"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+</details>
+
+<!-- VIOLATIONS MODAL -->
+<div id="violations-modal" class="violations-modal" style="display: none;">
+    <div class="violations-modal-content" style="max-width: 850px;">
+        <div class="violations-modal-header">
+            <h3>
+                <i class="bi bi-camera-video"></i>
+                <span id="modal-student-name">Proctoring Violations</span>
+            </h3>
+            <button class="violations-modal-close" onclick="closeViolationsModal()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        
+        <div class="violations-modal-body">
+            <div id="violations-summary" class="violations-summary">
+                <!-- Summary stats will be inserted here -->
+            </div>
+
+            <!-- Faculty Review Actions -->
+            <div id="faculty-review-actions" style="display:none; margin:12px 0; padding:14px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">
+                <div style="font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.5); margin-bottom:10px;">Faculty Decision</div>
+                <div id="review-status-badge" style="margin-bottom:10px;"></div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button id="btn-accept-exam" onclick="reviewExam('accept')" 
+                            style="padding:8px 18px; border:none; border-radius:8px; background:#10b981; color:white; cursor:pointer; font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:6px;">
+                        <i class="bi bi-check-circle-fill"></i> Accept Result
+                    </button>
+                    <button id="btn-invalidate-exam" onclick="reviewExam('invalidate')" 
+                            style="padding:8px 18px; border:none; border-radius:8px; background:#ef4444; color:white; cursor:pointer; font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:6px;">
+                        <i class="bi bi-x-circle-fill"></i> Invalidate (Mark Failed)
+                    </button>
+                </div>
+                <input type="text" id="review-note" placeholder="Optional note (e.g., reason for decision)..." 
+                       style="width:100%; margin-top:8px; padding:8px 12px; border:1px solid rgba(255,255,255,0.12); border-radius:8px; background:rgba(255,255,255,0.05); color:inherit; font-size:0.85rem;">
+            </div>
+            
+            <div id="violations-loading" class="violations-loading">
+                <div class="spinner"></div>
+                <p>Loading violations...</p>
+            </div>
+            
+            <div id="violations-content" class="violations-content">
+                <!-- Violation details will be inserted here -->
+            </div>
+            
+            <div id="violations-empty" class="violations-empty" style="display: none;">
+                <i class="bi bi-check-circle" style="font-size: 3rem; color: #10b981;"></i>
+                <p>No violations recorded</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
+{% if flagged_exams %}
+<details class="drawer">
+    <summary>🚨 Flagged Attempts</summary>
+    <div class="drawer-content">
+        <div class="card" style="margin-top: 2rem; border-left: 4px solid var(--danger);">
+            <div class="card-header" style="background: var(--gradient-danger);">
+                <h3 class="card-title" style="margin: 0;">
+                    <i class="bi bi-shield-exclamation"></i> Flagged Attempts ({{ flagged_exams|length }})
+                </h3>
+            </div>
+            
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Tab Switches</th>
+                            <th>Suspicious Activities</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for se in flagged_exams %}
+                        <tr class="flagged">
+                            <td>
+                                <strong>{{ se.student.full_name or se.student.username }}</strong>
+                                <br>
+                                <small>{{ se.student.email }}</small>
+                            </td>
+                            <td>
+                                <span class="badge badge-warning">
+                                    <i class="bi bi-exclamation-triangle"></i> {{ se.tab_switch_count }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-danger">
+                                    <i class="bi bi-shield-exclamation"></i> {{ se.suspicious_activity_count }}
+                                </span>
+                            </td>
+                            <td><strong>{{ "%.1f"|format(se.percentage) }}%</strong></td>
+                            <td>
+                                {% if se.passed %}
+                                <span class="badge badge-success">Passed</span>
+                                {% else %}
+                                <span class="badge badge-danger">Failed</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-danger btn-sm" onclick="reviewStudent({{ se.id }})">
+                                    <i class="bi bi-eye"></i> Review
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</details>
+
+{% endif %}
+
+<!-- Empty State -->
+{% if not student_exams %}
+<div class="empty-state" style="margin-top: 3rem;">
+    <div class="empty-state-icon">📊</div>
+    <div class="empty-state-title">No Submissions Yet</div>
+    <p class="empty-state-text">Analytics will appear once students start taking the exam.</p>
+</div>
+{% endif %}
+
+<!-- Chart.js Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    initAnalytics({
+        scores: {{ student_exams|map(attribute='percentage')|list|tojson if student_exams else '[]' }},
+        passed: {{ passed }},
+        failed: {{ failed }},
+        times: {{ student_exams|map(attribute='time_taken_minutes')|list|tojson if student_exams else '[]' }},
+        examDuration: {{ exam.duration_minutes }},
+        submissions: {{ student_exams|map(attribute='submitted_at')|map('string')|list|tojson if student_exams else '[]' }}
+    });
+});
+
+
+// View Violations Modal — with evidence images + faculty actions
+let _currentStudentExamId = null;
+
+async function viewViolations(studentExamId, studentName) {
+    _currentStudentExamId = studentExamId;
+    const modal = document.getElementById('violations-modal');
+    const loading = document.getElementById('violations-loading');
+    const content = document.getElementById('violations-content');
+    const empty = document.getElementById('violations-empty');
+    const summary = document.getElementById('violations-summary');
+    const studentNameEl = document.getElementById('modal-student-name');
+    const reviewActions = document.getElementById('faculty-review-actions');
+    
+    modal.style.display = 'flex';
+    loading.style.display = 'flex';
+    content.style.display = 'none';
+    empty.style.display = 'none';
+    summary.innerHTML = '';
+    reviewActions.style.display = 'none';
+    studentNameEl.textContent = `${studentName} — Proctoring Review`;
+    
+    try {
+        const response = await fetch(`/api/proctor/status/${studentExamId}`);
+        const data = await response.json();
+        
+        loading.style.display = 'none';
+        
+        // Show summary
+        const statusCls = data.proctoring_status === 'terminated' ? 'terminated' : data.proctoring_status === 'warning' ? 'warning' : 'active';
+        summary.innerHTML = `
+            <div class="summary-card ${statusCls}">
+                <div class="summary-item">
+                    <span class="summary-label">Total Violations</span>
+                    <span class="summary-value">${data.total_violations}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Status</span>
+                    <span class="summary-value">${data.proctoring_status.toUpperCase()}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Calibrated</span>
+                    <span class="summary-value">${data.calibration_completed ? 'Yes' : 'No'}</span>
+                </div>
+            </div>
+        `;
+
+        // Faculty review section
+        reviewActions.style.display = 'block';
+        const reviewBadge = document.getElementById('review-status-badge');
+        if (data.is_invalidated) {
+            reviewBadge.innerHTML = `<span style="padding:4px 12px; border-radius:6px; background:#ef444420; color:#ef4444; font-weight:600; font-size:0.8rem;"><i class="bi bi-x-circle-fill"></i> INVALIDATED — ${data.faculty_review_note || 'Marked as failed'}</span>`;
+        } else if (data.faculty_review_note) {
+            reviewBadge.innerHTML = `<span style="padding:4px 12px; border-radius:6px; background:#10b98120; color:#10b981; font-weight:600; font-size:0.8rem;"><i class="bi bi-check-circle-fill"></i> ACCEPTED — ${data.faculty_review_note}</span>`;
+        } else {
+            reviewBadge.innerHTML = `<span style="padding:4px 12px; border-radius:6px; background:#f59e0b20; color:#f59e0b; font-weight:600; font-size:0.8rem;"><i class="bi bi-clock-fill"></i> Pending faculty review</span>`;
+        }
+
+        if (!data.recent_violations || data.recent_violations.length === 0) {
+            empty.style.display = 'flex';
+            return;
+        }
+
+        // Count violations with evidence images
+        const withEvidence = data.recent_violations.filter(v => v.evidence_url).length;
+        
+        // Build violations timeline with evidence images
+        content.innerHTML = `
+            <div class="violations-timeline">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <span><i class="bi bi-clock-history"></i> Violation Timeline (${data.recent_violations.length} entries)</span>
+                    ${withEvidence > 0 ? `<span style="font-size:0.75rem; color:#6366f1;"><i class="bi bi-image"></i> ${withEvidence} with evidence</span>` : ''}
+                </div>
+                ${data.recent_violations.map(v => {
+                    const date = new Date(v.timestamp);
+                    const typeClass = v.severity === 'high' ? 'danger' : v.severity === 'medium' ? 'warning' : 'info';
+                    const icon = v.severity === 'high' ? 'x-circle-fill' : v.severity === 'medium' ? 'exclamation-triangle-fill' : 'info-circle-fill';
+                    
+                    return `
+                        <div class="violation-item violation-${typeClass}" id="viol-${v.id}" style="position:relative;">
+                            <div class="violation-icon">
+                                <i class="bi bi-${icon}"></i>
+                            </div>
+                            <div class="violation-details" style="flex:1;">
+                                <div class="violation-header">
+                                    <span class="violation-type">${v.type}</span>
+                                    <span class="violation-time">${date.toLocaleString()}</span>
+                                </div>
+                                <div class="violation-message">${v.message}</div>
+                                ${v.evidence_url ? `
+                                    <div style="margin-top:8px;">
+                                        <img src="${v.evidence_url}" 
+                                             alt="Evidence: ${v.type}" 
+                                             style="max-width:280px; max-height:180px; border-radius:8px; border:2px solid rgba(255,255,255,0.1); cursor:pointer; transition:transform 0.2s;"
+                                             onclick="this.style.maxWidth = this.style.maxWidth === '100%' ? '280px' : '100%'"
+                                             loading="lazy">
+                                        <div style="margin-top:4px; display:flex; gap:6px;">
+                                            <a href="${v.evidence_url}" target="_blank" 
+                                               style="font-size:0.7rem; color:#6366f1; text-decoration:none;">
+                                                <i class="bi bi-arrows-fullscreen"></i> Full size
+                                            </a>
+                                            <button onclick="deleteEvidence(${v.id}, this)" 
+                                                    style="font-size:0.7rem; color:#ef4444; background:none; border:none; cursor:pointer; padding:0;">
+                                                <i class="bi bi-trash3"></i> Delete image
+                                            </button>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <button onclick="deleteViolation(${v.id})" 
+                                    title="Delete this violation" 
+                                    style="position:absolute; top:8px; right:8px; background:none; border:none; color:rgba(255,255,255,0.3); cursor:pointer; font-size:0.85rem; padding:4px;"
+                                    onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='rgba(255,255,255,0.3)'">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+        
+        content.style.display = 'block';
+        
+    } catch (error) {
+        loading.style.display = 'none';
+        content.innerHTML = `
+            <div class="violations-error">
+                <i class="bi bi-exclamation-circle" style="font-size: 3rem; color: #ef4444;"></i>
+                <p>Failed to load violations</p>
+                <small>${error.message}</small>
+            </div>
+        `;
+        content.style.display = 'block';
+    }
+}
+
+// Faculty review exam
+async function reviewExam(action) {
+    if (!_currentStudentExamId) return;
+    const note = document.getElementById('review-note').value;
+    const confirmMsg = action === 'invalidate' 
+        ? 'This will mark the student as FAILED and exclude from reports. Continue?'
+        : 'This will accept the exam result as valid. Continue?';
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        const res = await fetch(`/api/faculty/review-exam/${_currentStudentExamId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action, note })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('❌ ' + (data.error || data.message));
+        }
+    } catch (e) {
+        alert('❌ Error: ' + e.message);
+    }
+}
+
+// Delete single violation
+async function deleteViolation(violationId) {
+    if (!confirm('Delete this violation record and its evidence?')) return;
+    try {
+        const res = await fetch(`/api/faculty/delete-violation/${violationId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            const el = document.getElementById(`viol-${violationId}`);
+            if (el) el.remove();
+        } else {
+            alert('❌ ' + data.message);
+        }
+    } catch (e) { alert('❌ ' + e.message); }
+}
+
+// Delete evidence image only
+async function deleteEvidence(violationId, btn) {
+    if (!confirm('Delete the evidence image? The violation record will be kept.')) return;
+    try {
+        const res = await fetch(`/api/faculty/delete-evidence/${violationId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            const imgContainer = btn.closest('div').parentElement;
+            const img = imgContainer.querySelector('img');
+            if (img) img.remove();
+            btn.closest('div').innerHTML = '<span style="font-size:0.7rem; color:rgba(255,255,255,0.3);">Image deleted</span>';
+        }
+    } catch (e) { alert('❌ ' + e.message); }
+}
+
+// Publish Results — finalize grades, clean up evidence
+async function publishResults() {
+    const msg = 'This will:\n\n'
+        + '✅ Finalize all student grades\n'
+        + '🗑️ Delete ALL proctoring evidence images\n'
+        + '🧹 Clear proctoring cache\n\n'
+        + 'This action cannot be undone. Continue?';
+    
+    if (!confirm(msg)) return;
+    if (!confirm('Are you absolutely sure? Evidence images will be permanently deleted.')) return;
+
+    const btn = document.getElementById('publishBtn');
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Publishing...';
+    btn.style.opacity = '0.7';
+
+    try {
+        const res = await fetch(`/api/faculty/publish-results/{{ exam.id }}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('❌ ' + (data.error || data.message));
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            btn.style.opacity = '1';
+        }
+    } catch (e) {
+        alert('❌ Error: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        btn.style.opacity = '1';
+    }
+}
+
+function closeViolationsModal() {
+    document.getElementById('violations-modal').style.display = 'none';
+}
+
+// Close modal on outside click
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('violations-modal');
+    if (event.target === modal) {
+        closeViolationsModal();
+    }
+});
+
+// Close on Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeViolationsModal();
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1009 @@
+{% extends "base.html" %}
+{% block title %}View Exam - {{ exam.title }}{% endblock %}
+
+{% block extra_css %}
+{% endblock %}
+
+{% block content %}
+
+<div class="container">
+
+    <!-- ========================== -->
+    <!-- HEADER -->
+    <!-- ========================== -->
+    <div class="exam-header">
+        <h1 class="exam-title">
+            <i class="bi bi-file-earmark-text"></i> {{ exam.title }}
+        </h1>
+        <p class="exam-description">
+            {{ exam.description or "No description provided." }}
+        </p>
+
+        <div class="header-actions">
+            <a href="{{ url_for('exam_analytics', exam_id=exam.id) }}" class="btn btn-primary">
+                Analytics
+            </a>
+        </div>
+    </div>
+
+    <!-- ========================== -->
+    <!-- TOP GRID (2 COLUMNS) -->
+    <!-- ========================== -->
+    <div class="top-grid">
+
+        <!-- Exam Controls -->
+        <div class="card panel-box">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-sliders"></i> Exam Controls</h3>
+            </div>
+            <div class="card-body">
+                <div class="control-buttons">
+
+                    <form method="POST" action="{{ url_for('faculty_force_end_exam', exam_id=exam.id) }}"
+                        onsubmit="return confirm('⚠ Are you sure? This will force-end the exam for ALL students!');">
+
+                        <button type="submit" class="btn btn-danger" {% if exam.status in ['inactive', 'ended' ] or
+                            exam.force_ended %}disabled{% endif %}>
+                            <i class="bi bi-stop-circle"></i>
+
+                            {% if exam.status == 'inactive' %}
+                            Exam Inactive
+                            {% elif exam.force_ended %}
+                            Exam Force Ended
+                            {% elif exam.status == 'ended' %}
+                            Exam Ended
+                            {% else %}
+                            Force End Exam
+                            {% endif %}
+                        </button>
+
+                    </form>
+
+                    {% if exam.status != 'ended' and not exam.force_ended %}
+                    <button onclick="showExtendTimeModal()" class="btn btn-extend">
+                        <i class="bi bi-clock-history"></i> Extend Time
+                    </button>
+                    {% endif %}
+
+                    <button onclick="location.reload()" class="btn btn-refresh">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+
+                </div>
+
+                <div class="status-display 
+                    {% if exam.status == 'inactive' %}status-inactive
+                    {% elif exam.status == 'ended' or exam.force_ended %}status-ended
+                    {% else %}status-active
+                    {% endif %}">
+
+                    <i class="bi 
+                        {% if exam.status == 'inactive' %}bi-slash-circle-fill
+                        {% elif exam.status == 'ended' or exam.force_ended %}bi-x-circle-fill
+                        {% else %}bi-check-circle-fill
+                        {% endif %}">
+                    </i>
+
+                    <span>
+                        {% if exam.status == 'inactive' %}
+                        Inactive
+                        {% elif exam.force_ended %}
+                        Force Ended by Faculty
+                        {% elif exam.status == 'ended' %}
+                        Ended
+                        {% else %}
+                        Active
+                        {% endif %}
+                    </span>
+                </div>
+
+            </div>
+        </div>
+        <!-- Live Status -->
+        <div class="card panel-box">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-graph-up"></i> Live Student Status</h3>
+            </div>
+
+            {% set active_count = student_exams|selectattr('submitted_at','none')|list|length %}
+            {% set completed_count = student_exams|rejectattr('submitted_at','none')|list|length %}
+
+            <div class="card-body">
+                <div class="stats-grid">
+                    <div class="stat-card stat-active">
+                        <div class="stat-value">{{ active_count }}</div>
+                        <div class="stat-label"><i class="bi bi-pencil-square"></i> Taking</div>
+                    </div>
+                    <div class="stat-card stat-completed">
+                        <div class="stat-value">{{ completed_count }}</div>
+                        <div class="stat-label"><i class="bi bi-check-circle"></i> Completed</div>
+                    </div>
+                    <div class="stat-card stat-duration">
+                        <div class="stat-value">{{ exam.duration or exam.duration_minutes or 60 }}</div>
+                        <div class="stat-label"><i class="bi bi-clock"></i> Minutes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /top-grid -->
+
+    <!-- ========================== -->
+    <!-- STUDENT ATTEMPTS TABLE -->
+    <!-- ========================== -->
+    <div class="student-attempts-section">
+        <div class="student-attempts-card">
+            <div class="student-attempts-header">
+                <h3>
+                    <i class="bi bi-people-fill"></i>
+                    Student Attempts
+                </h3>
+            </div>
+
+            <div class="attempts-table-wrapper">
+                {% if student_exams and student_exams|length > 0 %}
+                <table class="attempts-table">
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>PRN / Roll Number</th>
+                            <th>Attempt Status</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for se in student_exams %}
+                        <tr>
+                            <td class="student-name-cell">
+                                {{ se.student.full_name or se.student.username }}
+                            </td>
+                            <td class="prn-cell">
+                                {% if se.student.prn_number %}
+                                PRN: {{ se.student.prn_number }}
+                                {% elif se.student.roll_id %}
+                                Roll: {{ se.student.roll_id }}
+                                {% else %}
+                                N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if se.force_ended %}
+                                <span class="status-badge status-force-ended">
+                                    <i class="bi bi-x-circle-fill"></i> Force-Ended
+                                </span>
+                                {% elif se.submitted_at %}
+                                <span class="status-badge status-submitted">
+                                    <i class="bi bi-check-circle-fill"></i> Submitted
+                                </span>
+                                {% elif se.end_time %}
+                                <span class="status-badge status-completed">
+                                    <i class="bi bi-check-circle"></i> Completed
+                                </span>
+                                {% else %}
+                                <span class="status-badge status-in-progress">
+                                    <i class="bi bi-hourglass-split"></i> In Progress
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="time-cell">
+                                {% if se.start_time %}
+                                {{ se.start_time.strftime('%I:%M %p') if se.start_time else 'N/A' }}
+                                {% else %}
+                                Not Started
+                                {% endif %}
+                            </td>
+                            <td class="time-cell">
+                                {% if se.submitted_at %}
+                                {{ se.submitted_at.strftime('%I:%M %p') if se.submitted_at else 'N/A' }}
+                                {% elif se.end_time %}
+                                {{ se.end_time.strftime('%I:%M %p') if se.end_time else 'N/A' }}
+                                {% else %}
+                                ---
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST"
+                                    action="{{ url_for('faculty_force_end_student', exam_id=exam.id, student_exam_id=se.id) }}"
+                                    style="display: inline;"
+                                    onsubmit="return confirm('⚠️ Force-end exam for {{ se.student.full_name or se.student.username }}?');">
+                                    <button type="submit" class="force-end-btn" {% if se.submitted_at or se.force_ended
+                                        %}disabled{% endif %}>
+                                        <i class="bi bi-stop-circle-fill"></i>
+                                        Force End
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-attempts">
+                    <i class="bi bi-inbox"></i>
+                    <p>No student attempts recorded yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================= -->
+    <!-- MODAL: EXAM DETAILS -->
+    <!-- ======================================================= -->
+    <div id="exam-details-modal" class="custom-modal">
+        <div class="modal-content modal-md">
+
+            <div class="modal-header">
+                <h3><i class="bi bi-info-circle"></i> Exam Details</h3>
+                <button class="modal-close close-details-modal"><i class="bi bi-x"></i></button>
+            </div>
+
+            <div class="modal-body">
+
+                <table class="info-table full-width">
+                    <tr>
+                        <td>Duration</td>
+                        <td>{{ exam.duration_minutes or exam.duration or 60 }} minutes</td>
+                    </tr>
+                    <tr>
+                        <td>Passing Score</td>
+                        <td>{{ exam.passing_score or 40 }}%</td>
+                    </tr>
+                    <tr>
+                        <td>Status</td>
+                        <td>
+                            {% if exam.is_active %}
+                            <span class="badge badge-success">✓ Active</span>
+                            {% else %}
+                            <span class="badge badge-danger">✗ Inactive</span>
+                            {% endif %}
+
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Start Time</td>
+                        <td>{{ exam.start_time or "Not set" }}</td>
+                    </tr>
+                    <tr>
+                        <td>End Time</td>
+                        <td>{{ exam.end_time or "Not set" }}</td>
+                    </tr>
+                </table>
+
+            </div>
+
+
+        </div>
+    </div>
+
+
+
+    <!-- ======================================================= -->
+    <!-- MODAL: EXAM ACCESS CONTROL -->
+    <!-- ======================================================= -->
+    <!-- ======================================================= -->
+    <!-- MODAL: EXAM ACCESS CONTROL (CLEAN + MODERN + FIXED) -->
+    <!-- ======================================================= -->
+    <div id="exam-access-modal" class="custom-modal">
+        <div class="modal-content modal-md">
+
+            <div class="modal-header">
+                <h3><i class="bi bi-shield-lock"></i> Exam Access Control</h3>
+                <button class="modal-close close-access-modal"><i class="bi bi-x"></i></button>
+            </div>
+
+            <div class="modal-body">
+
+                <form method="POST" action="{{ url_for('update_exam_access', exam_id=exam.id) }}" id="access-form">
+
+                    <div class="access-group">
+
+                        <label class="access-label">Access Mode:</label>
+
+                        <!-- Stop Access -->
+                        <label class="radio-line">
+                            <input type="radio" name="access_mode" value="stopped" {% if not exam.is_active %}checked{%
+                                endif %} class="access-radio">
+                            <span>Stop Access for all students</span>
+                        </label>
+
+                        <!-- Allow All -->
+                        <label class="radio-line">
+                            <input type="radio" name="access_mode" value="all" {% if exam.allow_all_students %}checked{%
+                                endif %} class="access-radio">
+                            <span>Allow All Students</span>
+                        </label>
+
+                        <!-- Allow Specific -->
+                        <label class="radio-line">
+                            <input type="radio" name="access_mode" value="specific" {% if exam.allowed_students and not
+                                exam.allow_all_students %}checked{% endif %} class="access-radio" id="specific-radio">
+                            <span>Allow Specific Students Only</span>
+                        </label>
+
+                    </div>
+
+                    <!-- Hidden input for storing selected student IDs -->
+                    <input type="hidden" name="allowed_students" id="allowed-students-input"
+                        value="{{ exam.allowed_students or '' }}">
+
+                    <!-- Student Selector Button -->
+                    <div id="specific-student-selector" style="margin-top: 15px;
+                    {% if not exam.allowed_students or exam.allow_all_students %}display:none;{% endif %}">
+
+                        <button type="button" class="btn btn-secondary" id="open-student-selection">
+                            <i class="bi bi-person-check"></i> Select Students
+                        </button>
+
+                        {% if exam.allowed_students %}
+                        <p class="selected-text">Currently selected: {{ exam.allowed_students }}</p>
+                        {% endif %}
+                        <!-- Selected Students Preview -->
+                        <div id="selected-students-preview" class="selected-preview-box"
+                            style="margin-top: 15px; display: none;">
+                            <h4 class="preview-title">Selected Students (<span id="selected-count">0</span>)</h4>
+                            <ul id="selected-students-list" class="preview-list"></ul>
+                        </div>
+
+
+                    </div>
+
+                    <div class="modal-footer" style="padding-top: 25px;">
+                        <button type="button" class="btn btn-outline close-access-modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Save Settings
+                        </button>
+                    </div>
+
+                </form>
+
+            </div>
+
+        </div>
+    </div>
+
+
+
+
+    <!-- ======================================================= -->
+    <!-- MODAL: QUESTIONS -->
+    <!-- ======================================================= -->
+    <div id="questions-modal" class="custom-modal">
+        <div class="modal-content modal-xl">
+
+            <div class="modal-header">
+                <h3><i class="bi bi-question-circle"></i> Questions ({{ exam.questions|length }})</h3>
+                <button class="modal-close close-questions-modal"><i class="bi bi-x"></i></button>
+            </div>
+
+            <div class="modal-body modal-scroll">
+
+                {% if exam.questions %}
+                <table class="table q-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Question</th>
+                            <th>Marks</th>
+                            <th>Correct</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for q in exam.questions %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ q.question_text }}</td>
+                            <td>{{ q.points }}</td>
+                            <td>{{ q.correct_answer }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty">No questions added.</p>
+                {% endif %}
+
+            </div>
+
+
+        </div>
+    </div>
+
+
+
+    <!-- ======================================================= -->
+    <!-- STUDENT SELECTION MODAL (unchanged) -->
+    <!-- ======================================================= -->
+    <div id="student-selection-modal" class="custom-modal">
+        <div class="modal-content modal-xl">
+
+            <div class="modal-header">
+                <h3><i class="bi bi-people"></i> Select Students for Exam Access</h3>
+                <button class="modal-close" id="modal-close-btn"><i class="bi bi-x"></i></button>
+            </div>
+
+            <div class="modal-body student-modal-grid">
+
+                <!-- Column 1: Filters -->
+                <div class="modal-column filters-panel">
+                    <h4 class="column-title"><i class="bi bi-funnel"></i> Filters</h4>
+
+                    <label class="form-label">Batch:</label>
+                    <select id="batch-filter" class="form-input">
+                        <option value="">Select Batch</option>
+                        {% for batch in all_batches %}
+                        <option value="{{ batch }}">{{ batch }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label class="form-label">Search:</label>
+                    <input id="student-search" class="form-input" placeholder="Search name/PRN/roll">
+
+                    <h4 class="column-title"><i class="bi bi-list-ol"></i> Roll Range</h4>
+                    <input id="range-input" class="form-input" placeholder="e.g. 1-20, 25-40">
+
+                    <button id="apply-range-btn" class="btn btn-primary btn-sm">Apply</button>
+                    <button id="clear-range-btn" class="btn btn-outline btn-sm">Clear</button>
+
+                    <div id="range-error" class="range-error"></div>
+                </div>
+
+
+                <!-- Column 2: Student List -->
+                <div class="modal-column student-list-column">
+                    <h4 class="column-title"><i class="bi bi-list-check"></i> Students</h4>
+
+                    <div class="student-list student-grid">
+                        {% for s in all_students %}
+                        <label class="student-row" data-student-id="{{ s.id }}" data-batch="{{ s.batch or '' }}"
+                            data-roll-id="{{ s.roll_id or '' }}">
+
+                            <input type="checkbox" class="student-checkbox" value="{{ s.id }}" {% if
+                                exam.allowed_students and (s.id|string) in exam.allowed_students.split(',') %}checked{%
+                                endif %}>
+
+                            <div class="student-info">
+                                <strong class="student-name">{{ s.full_name }}</strong>
+
+                                <div class="student-meta">
+                                    Roll: {{ s.roll_id or 'N/A' }} • Batch: {{ s.batch or 'N/A' }}
+                                    {% if s.prn_number %}
+                                    • PRN: {{ s.prn_number }}
+                                    {% endif %}
+                                </div>
+
+                                {% if student_exam_map.get(s.id) %}
+                                <div class="student-tag">
+                                    Selected in: {{ student_exam_map[s.id] | join(", ") }}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                </div>
+
+
+                <!-- Column 3: Quick Actions -->
+                <div class="modal-column actions-panel">
+
+                    <h4 class="column-title"><i class="bi bi-lightning-charge"></i> Quick Actions</h4>
+
+                    <button id="select-all-btn" class="btn btn-success full-btn">Select All</button>
+                    <button id="deselect-all-btn" class="btn btn-danger full-btn">Deselect All</button>
+                    <button id="select-evens-btn" class="btn btn-secondary full-btn">Select Evens</button>
+                    <button id="select-odds-btn" class="btn btn-secondary full-btn">Select Odds</button>
+
+                    <div class="selected-counter-box">
+                        Selected: <span id="modal-selected-count">0</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button id="modal-cancel-btn" class="btn btn-outline btn-lg">Cancel</button>
+                <button id="modal-save-btn" class="btn btn-primary btn-lg">
+                    <i class="bi bi-save"></i> Save Selection
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Extend Time Modal -->
+    <div id="extendTimeModal" class="custom-modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3><i class="bi bi-clock-history"></i> Extend Exam Time</h3>
+                <button class="modal-close" onclick="hideExtendTimeModal()">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+
+            <form method="POST" action="{{ url_for('faculty_extend_exam_time', exam_id=exam.id) }}">
+                <div class="modal-body">
+                    <label class="form-label">Additional Minutes:</label>
+                    <input type="number" name="extra_minutes" min="1" max="120" value="15" required class="form-input">
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" onclick="hideExtendTimeModal()" class="btn btn-outline">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Extend Time
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ======================================================= -->
+    <!-- EXAM ACCESS KEY CARD                                       -->
+    <!-- ======================================================= -->
+    <div class="card panel-box" style="margin-top:24px;">
+        <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+            <h3 class="card-title" style="margin:0;"><i class="bi bi-key-fill" style="color:#f59e0b;"></i> Exam Access
+                Key</h3>
+            <span style="font-size:13px; color:#8899aa;">Share this key with students so they can unlock the exam</span>
+        </div>
+        <div class="card-body">
+            {% if exam.access_key %}
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div id="keyDisplay" style="
+                    font-family:monospace; font-size:2rem; font-weight:700;
+                    letter-spacing:0.4em; color:#f59e0b;
+                    background:rgba(245,158,11,0.08);
+                    border:2px dashed rgba(245,158,11,0.35);
+                    padding:0.6rem 1.4rem; border-radius:10px;
+                    min-width:200px; text-align:center;
+                ">{{ exam.access_key }}</div>
+                <button onclick="copyKey('{{ exam.access_key }}')" class="btn btn-secondary" title="Copy key">
+                    <i class="bi bi-clipboard" id="copyIco"></i> Copy
+                </button>
+                <button onclick="generateKey()" class="btn btn-primary">
+                    <i class="bi bi-arrow-clockwise"></i> Regenerate
+                </button>
+                <button onclick="clearKey()" class="btn btn-outline" style="border-color:#ef4444; color:#ef4444;"
+                    title="Remove key requirement">
+                    <i class="bi bi-x-circle"></i> Remove Key
+                </button>
+            </div>
+            <p style="margin:12px 0 0; color:#8899aa; font-size:13px;">
+                <i class="bi bi-info-circle"></i>
+                While this key is set, students must enter it before the camera calibration step.
+            </p>
+            {% else %}
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div style="color:#8899aa; font-style:italic;">No access key set — students can start this exam without
+                    a key.</div>
+                <button onclick="generateKey()" class="btn btn-primary">
+                    <i class="bi bi-key"></i> Generate Key
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ======================================================= -->
+    <!-- POST-EXAM SETTINGS CARD                                   -->
+    <!-- ======================================================= -->
+    <div class="card panel-box" style="margin-top:16px;">
+        <div class="card-header">
+            <h3 class="card-title" style="margin:0;"><i class="bi bi-flag-fill" style="color:#8b5cf6;"></i> Post-Exam
+                Behaviour</h3>
+        </div>
+        <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
+
+            <!-- Leaderboard Toggle -->
+            <div
+                style="display:flex; align-items:center; justify-content:space-between; padding:0.8rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background:rgba(255,255,255,0.03);">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div
+                        style="width:36px;height:36px;border-radius:8px;background:rgba(245,158,11,0.1);color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
+                        <i class="bi bi-trophy-fill"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:600;color:#e8eaf0;">Show Leaderboard</div>
+                        <div style="font-size:12px;color:#8899aa;">Allow students to view rankings after submitting
+                        </div>
+                    </div>
+                </div>
+                <label style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
+                    <input type="checkbox" id="leaderboardToggle" {% if exam.show_leaderboard %}checked{% endif %}
+                        onchange="savePostSetting('show_leaderboard', this.checked)"
+                        style="opacity:0;width:0;height:0;">
+                    <span
+                        style="position:absolute;inset:0;background:{% if exam.show_leaderboard %}#6366f1{% else %}#4a5568{% endif %};border-radius:24px;transition:.3s;"></span>
+                    <span
+                        style="position:absolute;height:18px;width:18px;background:white;border-radius:50%;bottom:3px;left:{% if exam.show_leaderboard %}23{% else %}3{% endif %}px;transition:.3s;box-shadow:0 1px 3px rgba(0,0,0,.15);"></span>
+                </label>
+            </div>
+
+            <!-- Post-Exam Redirect -->
+            <div
+                style="padding:0.8rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background:rgba(255,255,255,0.03);">
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                    <div
+                        style="width:36px;height:36px;border-radius:8px;background:rgba(139,92,246,0.1);color:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:600;color:#e8eaf0;">After Submission — Show</div>
+                        <div style="font-size:12px;color:#8899aa;">What students see immediately after they submit</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-post-results" onclick="setPostRedirect('results')"
+                        class="btn {% if not exam.post_exam_redirect or exam.post_exam_redirect == 'results' %}btn-primary{% else %}btn-secondary{% endif %}"
+                        style="flex:1;">
+                        <i class="bi bi-bar-chart-fill"></i> Their Results
+                    </button>
+                    <button id="btn-post-dashboard" onclick="setPostRedirect('dashboard')"
+                        class="btn {% if exam.post_exam_redirect == 'dashboard' %}btn-primary{% else %}btn-secondary{% endif %}"
+                        style="flex:1;">
+                        <i class="bi bi-house-fill"></i> Dashboard
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="modal-button-row">
+        <button class="btn btn-primary open-details-modal">
+            <i class="bi bi-info-circle"></i> Exam Details
+        </button>
+
+        <button class="btn  btn-primary open-access-modal">
+            <i class="bi bi-shield-lock"></i> Exam Access Control
+        </button>
+
+        <button class="btn btn-primary open-questions-modal">
+            <i class="bi bi-question-circle"></i> Questions ({{ exam.questions|length }})
+        </button>
+    </div>
+
+</div><!-- /container -->
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/view_exam.js') }}"></script>
+
+<style>
+    /* Student Attempts Table Styling */
+    .student-attempts-section {
+        margin-top: 30px;
+    }
+
+    .student-attempts-card {
+        background: linear-gradient(135deg, #1a1f35 0%, #242940 100%);
+        border: 1px solid #2d3448;
+        border-radius: 12px;
+        padding: 0;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .student-attempts-header {
+        background: linear-gradient(135deg, #2d3448 0%, #353b52 100%);
+        padding: 20px 25px;
+        border-bottom: 2px solid #3d4358;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .student-attempts-header h3 {
+        margin: 0;
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: #e8eaf0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .student-attempts-header h3 i {
+        color: #68a2ff;
+        font-size: 1.5rem;
+    }
+
+    .attempts-table-wrapper {
+        overflow-x: auto;
+        padding: 20px 25px;
+    }
+
+    .attempts-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .attempts-table thead {
+        background: linear-gradient(135deg, #2a3045 0%, #323750 100%);
+    }
+
+    .attempts-table thead th {
+        padding: 15px 12px;
+        text-align: left;
+        font-weight: 600;
+        color: #a8b3cf;
+        text-transform: uppercase;
+        font-size: 12px;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #3d4358;
+    }
+
+    .attempts-table tbody tr {
+        border-bottom: 1px solid #2d3448;
+        transition: background-color 0.2s ease;
+    }
+
+    .attempts-table tbody tr:hover {
+        background-color: rgba(104, 162, 255, 0.05);
+    }
+
+    .attempts-table tbody td {
+        padding: 14px 12px;
+        color: #d4dae8;
+    }
+
+    .student-name-cell {
+        font-weight: 600;
+        color: #e8eaf0;
+    }
+
+    .prn-cell {
+        color: #8899aa;
+        font-family: 'Courier New', monospace;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .status-in-progress {
+        background: linear-gradient(135deg, #4a90e2 0%, #5ba3ff 100%);
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+    }
+
+    .status-completed {
+        background: linear-gradient(135deg, #2ecc71 0%, #3de684 100%);
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(46, 204, 113, 0.3);
+    }
+
+    .status-submitted {
+        background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+    }
+
+    .status-force-ended {
+        background: linear-gradient(135deg, #e74c3c 0%, #ff6b5b 100%);
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+    }
+
+    .time-cell {
+        color: #a8b3cf;
+        font-size: 13px;
+    }
+
+    .force-end-btn {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .force-end-btn:hover:not(:disabled) {
+        background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+    }
+
+    .force-end-btn:disabled {
+        background: #4a5568;
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    .force-end-btn i {
+        font-size: 14px;
+    }
+
+    .empty-attempts {
+        text-align: center;
+        padding: 40px 20px;
+        color: #8899aa;
+    }
+
+    .empty-attempts i {
+        font-size: 48px;
+        color: #4a5568;
+        margin-bottom: 15px;
+        display: block;
+    }
+
+    .empty-attempts p {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 1024px) {
+        .attempts-table {
+            font-size: 13px;
+        }
+
+        .attempts-table thead th,
+        .attempts-table tbody td {
+            padding: 10px 8px;
+        }
+
+        .force-end-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .attempts-table-wrapper {
+            padding: 15px;
+        }
+
+        .student-attempts-header {
+            padding: 15px 20px;
+        }
+
+        .student-attempts-header h3 {
+            font-size: 1.2rem;
+        }
+    }
+
+    /* Original inline styles */
+    .access-group {
+        margin-bottom: 20px;
+        padding: 10px 5px;
+    }
+
+    .access-label {
+        font-weight: 600;
+        margin-bottom: 8px;
+        display: block;
+    }
+
+    .radio-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 8px 0;
+        cursor: pointer;
+    }
+
+    .access-radio {
+        width: 18px;
+        height: 18px;
+    }
+
+    .selected-text {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #68a2ff;
+    }
+
+    .selected-preview-box {
+        background: #1b2233;
+        border: 1px solid #2b3244;
+        padding: 12px 15px;
+        border-radius: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 10px;
+    }
+
+    .preview-title {
+        font-size: 15px;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+
+    .preview-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .preview-list li {
+        padding: 6px 0;
+        border-bottom: 1px solid #283040;
+        font-size: 14px;
+    }
+
+    .preview-list li:last-child {
+        border-bottom: none;
+    }
+
+    .status-inactive {
+        background: #2b3a4a;
+        border-left: 4px solid #8899a6;
+        color: #bfc7d1;
+    }
+
+    .status-inactive i {
+        color: #8899a6;
+    }
+</style>
+
+<script>
+    /* ── Exam Access Key Management ── */
+    async function generateKey() {
+        const resp = await fetch('{{ url_for("generate_exam_key", exam_id=exam.id) }}', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Could not generate key'));
+        }
+    }
+
+    async function clearKey() {
+        if (!confirm('Remove the access key? Students will be able to start this exam without a key.')) return;
+        const resp = await fetch('{{ url_for("clear_exam_key", exam_id=exam.id) }}', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Could not clear key'));
+        }
+    }
+
+    function copyKey(key) {
+        navigator.clipboard.writeText(key).then(() => {
+            const ico = document.getElementById('copyIco');
+            if (ico) { ico.className = 'bi bi-clipboard-check'; setTimeout(() => ico.className = 'bi bi-clipboard', 2000); }
+        }).catch(() => {
+            prompt('Copy this key:', key);
+        });
+    }
+
+    /* ── Post-Exam Settings ── */
+    async function savePostSetting(field, value) {
+        const body = {};
+        body[field] = value;
+        const resp = await fetch('/faculty/exam/{{ exam.id }}/post-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!data.success) alert('Save failed: ' + (data.error || 'Unknown error'));
+    }
+
+    function setPostRedirect(mode) {
+        savePostSetting('post_exam_redirect', mode);
+        document.getElementById('btn-post-results').className = 'btn ' + (mode === 'results' ? 'btn-primary' : 'btn-secondary');
+        document.getElementById('btn-post-dashboard').className = 'btn ' + (mode === 'dashboard' ? 'btn-primary' : 'btn-secondary');
+    }
+</script>
+{% endblock %}

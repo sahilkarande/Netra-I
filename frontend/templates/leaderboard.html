@@ -1,0 +1,640 @@
+{% extends "base.html" %}
+{% block title %}Global Leaderboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/leaderboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="lb-container">
+
+    <!-- ===== HEADER ===== -->
+    <div class="lb-header">
+        <div class="lb-header-left">
+            <div class="lb-header-icon">
+                <i class="bi bi-trophy-fill"></i>
+            </div>
+            <div>
+                <h1 class="lb-title">Global Leaderboard</h1>
+                <p class="lb-subtitle">Compare performance and track progress across C-DAC exams</p>
+            </div>
+        </div>
+        <div class="lb-header-actions">
+            <button type="button" class="lb-btn lb-btn-outline" onclick="exportLeaderboardCSV()">
+                <i class="bi bi-download"></i> Export CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== FILTER PANEL ===== -->
+    <div class="lb-filter-card lb-animate lb-d1">
+        <div class="lb-filter-header">
+            <div class="lb-filter-title">
+                <i class="bi bi-sliders"></i> Filters
+            </div>
+            <div class="lb-filter-actions">
+                <a href="{{ url_for('global_leaderboard') }}" class="lb-btn lb-btn-ghost lb-btn-sm"
+                    style="text-decoration:none;">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset
+                </a>
+            </div>
+        </div>
+        <form method="GET" action="{{ url_for('global_leaderboard') }}" id="main-filter-form">
+            <div class="lb-filter-form-grid">
+                <div class="lb-field">
+                    <label class="lb-field-label" for="start">Start Date</label>
+                    <input type="date" name="start" id="start" class="lb-input" value="{{ start_date or '' }}">
+                </div>
+                <div class="lb-field">
+                    <label class="lb-field-label" for="end">End Date</label>
+                    <input type="date" name="end" id="end" class="lb-input" value="{{ end_date or '' }}">
+                </div>
+                <div class="lb-field">
+                    <label class="lb-field-label" for="batch">Batch</label>
+                    <select name="batch" id="batch" class="lb-select">
+                        <option value="">All Batches</option>
+                        {% for b in batches %}
+                        <option value="{{ b }}" {% if request.args.get('batch')==b %}selected{% endif %}>{{ b }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="lb-field">
+                    <label class="lb-field-label">&nbsp;</label>
+                    <button type="submit" class="lb-btn lb-btn-primary">
+                        <i class="bi bi-funnel-fill"></i> Apply
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    {% if leaderboard|length > 0 %}
+
+    <!-- ===== TOP 3 PODIUM ===== -->
+    {% if leaderboard|length >= 3 %}
+    <div class="lb-podium-section lb-animate lb-d2">
+        <div class="lb-podium-grid">
+            <!-- 2nd Place (left) -->
+            {% set s2 = leaderboard[1] %}
+            <div class="lb-podium-card lb-podium-2nd">
+                <div class="lb-podium-medal">🥈</div>
+                <div class="lb-podium-avatar" style="background: linear-gradient(135deg, #94a3b8, #64748b);">
+                    {{ (s2.name or 'U')[0]|upper }}
+                </div>
+                <div class="lb-podium-name">{{ s2.name or 'Unknown' }}</div>
+                <div class="lb-podium-prn">{{ s2.prn or '—' }}</div>
+                <div class="lb-podium-score">{{ s2.marks_obtained }}</div>
+                <div class="lb-podium-score-label">Marks Scored</div>
+                <div class="lb-podium-stats">
+                    <div class="lb-podium-stat">
+                        <div class="lb-podium-stat-value">{{ s2.exams_attempted }}</div>
+                        <div class="lb-podium-stat-label">Exams</div>
+                    </div>
+                    <div class="lb-podium-stat">
+                        <div class="lb-podium-stat-value">{{ s2.percentage }}%</div>
+                        <div class="lb-podium-stat-label">Pct</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1st Place (center, taller) -->
+            {% set s1 = leaderboard[0] %}
+            <div class="lb-podium-card lb-podium-1st">
+                <div class="lb-podium-medal">🥇</div>
+                <div class="lb-podium-avatar" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                    {{ (s1.name or 'U')[0]|upper }}
+                </div>
+                <div class="lb-podium-name">{{ s1.name or 'Unknown' }}</div>
+                <div class="lb-podium-prn">{{ s1.prn or '—' }}</div>
+                <div class="lb-podium-score">{{ s1.marks_obtained }}</div>
+                <div class="lb-podium-score-label">Marks Scored</div>
+                <div class="lb-podium-stats">
+                    <div class="lb-podium-stat">
+                        <div class="lb-podium-stat-value">{{ s1.exams_attempted }}</div>
+                        <div class="lb-podium-stat-label">Exams</div>
+                    </div>
+                    <div class="lb-podium-stat">
+                        <div class="lb-podium-stat-value">{{ s1.percentage }}%</div>
+                        <div class="lb-podium-stat-label">Pct</div>
+                    </div>
+                    <div class="lb-podium-stat">
+                        <div class="lb-podium-stat-value">{{ s1.total_questions }}</div>
+                        <div class="lb-podium-stat-label">Questions</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3rd Place (right) -->
+            {% set s3 = leaderboard[2] %}
+            <div class="lb-podium-card lb-podium-3rd">
+                <div class="lb-podium-medal">🥉</div>
+                <div class="lb-podium-avatar" style="background: linear-gradient(135deg, #d97706, #b45309);">
+                    {{ (s3.name or 'U')[0]|upper }}
+                </div>
+                <div class="lb-podium-name">{{ s3.name or 'Unknown' }}</div>
+                <div class="lb-podium-prn">{{ s3.prn or '—' }}</div>
+                <div class="lb-podium-score">{{ s3.marks_obtained }}</div>
+                <div class="lb-podium-score-label">Marks Scored</div>
+                <div class="lb-podium-stats">
+                    <div class="lb-podium-stat">
+                        <div class="lb-podium-stat-value">{{ s3.exams_attempted }}</div>
+                        <div class="lb-podium-stat-label">Exams</div>
+                    </div>
+                    <div class="lb-podium-stat">
+                        <div class="lb-podium-stat-value">{{ s3.percentage }}%</div>
+                        <div class="lb-podium-stat-label">Pct</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ===== SUMMARY METRICS ===== -->
+    <div class="lb-metrics-grid lb-animate lb-d3">
+        <div class="lb-metric-card lb-mc-blue">
+            <div class="lb-metric-top">
+                <div class="lb-metric-icon"><i class="bi bi-people-fill"></i></div>
+            </div>
+            <div class="lb-metric-value">{{ leaderboard|length }}</div>
+            <div class="lb-metric-label">Total Students</div>
+        </div>
+
+        <div class="lb-metric-card lb-mc-purple">
+            <div class="lb-metric-top">
+                <div class="lb-metric-icon"><i class="bi bi-bar-chart-fill"></i></div>
+            </div>
+            {% set avg_pct = (leaderboard|map(attribute='percentage')|sum / leaderboard|length) if leaderboard|length >
+            0 else 0 %}
+            <div class="lb-metric-value">{{ "%.1f"|format(avg_pct) }}%</div>
+            <div class="lb-metric-label">Average Percentage</div>
+        </div>
+
+        <div class="lb-metric-card lb-mc-green">
+            <div class="lb-metric-top">
+                <div class="lb-metric-icon"><i class="bi bi-arrow-up-circle-fill"></i></div>
+            </div>
+            {% set max_marks = leaderboard|map(attribute='marks_obtained')|max if leaderboard|length > 0 else 0 %}
+            <div class="lb-metric-value">{{ max_marks }}</div>
+            <div class="lb-metric-label">Highest Marks</div>
+        </div>
+
+        <div class="lb-metric-card lb-mc-amber">
+            <div class="lb-metric-top">
+                <div class="lb-metric-icon"><i class="bi bi-journal-check"></i></div>
+            </div>
+            {% set total_poss = leaderboard[0].possible_marks if leaderboard|length > 0 else 0 %}
+            <div class="lb-metric-value">{{ total_poss }}</div>
+            <div class="lb-metric-label">Total Possible Marks</div>
+        </div>
+
+        <div class="lb-metric-card lb-mc-cyan">
+            <div class="lb-metric-top">
+                <div class="lb-metric-icon"><i class="bi bi-lightning-fill"></i></div>
+            </div>
+            {% set max_exams = leaderboard|map(attribute='exams_attempted')|max if leaderboard|length > 0 else 0 %}
+            <div class="lb-metric-value">{{ max_exams }}</div>
+            <div class="lb-metric-label">Max Exams Attempted</div>
+        </div>
+    </div>
+
+    <!-- ===== INLINE SEARCH FILTERS ===== -->
+    <div class="lb-search-bar lb-animate lb-d4">
+        <div class="lb-search-grid">
+            <div class="lb-field">
+                <label class="lb-search-label">Search PRN</label>
+                <input type="text" id="search-prn" class="lb-search-input" placeholder="Filter PRN...">
+            </div>
+            <div class="lb-field">
+                <label class="lb-search-label">Search Name</label>
+                <input type="text" id="search-name" class="lb-search-input" placeholder="Filter name...">
+            </div>
+            <div class="lb-field">
+                <label class="lb-search-label">Min Marks</label>
+                <input type="number" id="search-min-marks" class="lb-search-input" placeholder="Min marks...">
+            </div>
+            <div class="lb-field">
+                <label class="lb-search-label">Min Percentage</label>
+                <input type="number" id="search-min-pct" class="lb-search-input" placeholder="Min %...">
+            </div>
+            <div class="lb-field">
+                <label class="lb-search-label">Min Exams</label>
+                <input type="number" id="search-min-exams" class="lb-search-input" placeholder="Min exams...">
+            </div>
+            <div class="lb-field">
+                <label class="lb-search-label">&nbsp;</label>
+                <button type="button" class="lb-btn lb-btn-ghost lb-btn-sm" onclick="clearSearch()">
+                    <i class="bi bi-x-lg"></i> Clear
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== DATA TABLE ===== -->
+    <div class="lb-table-card lb-animate lb-d5">
+        <div class="lb-table-toolbar">
+            <div class="lb-table-title">
+                <i class="bi bi-list-ol"></i> Full Rankings
+            </div>
+            <div class="lb-toolbar-right">
+                <span class="lb-result-count">
+                    Showing <strong id="lb-visible">{{ leaderboard|length }}</strong>
+                    of <strong>{{ leaderboard|length }}</strong> students
+                </span>
+            </div>
+        </div>
+
+        <div class="lb-table-wrap">
+            <table class="lb-table" id="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px; text-align:center;">
+                            <input type="checkbox" class="lb-check" id="select-all" title="Select all">
+                        </th>
+                        <th class="sortable" data-col="1">Rank</th>
+                        <th class="sortable" data-col="2">PRN</th>
+                        <th class="sortable" data-col="3">Student</th>
+                        <th class="sortable" data-col="4">Exams</th>
+                        <th class="sortable" data-col="5">Answered</th>
+                        <th class="sortable" data-col="6">Marks</th>
+                        <th class="sortable" data-col="7">Total</th>
+                        <th class="sortable" data-col="8">Percentage</th>
+                        <th class="sortable" data-col="9">Gap</th>
+                        <th>Level</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in leaderboard %}
+                    <tr data-prn="{{ s.prn or '' }}" data-name="{{ s.name or '' }}" data-marks="{{ s.marks_obtained }}"
+                        data-pct="{{ s.percentage }}" data-exams="{{ s.exams_attempted }}">
+
+                        <!-- Checkbox -->
+                        <td style="text-align:center;">
+                            <input type="checkbox" class="lb-check compare-check" data-name="{{ s.name }}"
+                                data-prn="{{ s.prn }}" data-exams="{{ s.exams_attempted }}"
+                                data-ans="{{ s.total_questions }}" data-marks="{{ s.marks_obtained }}"
+                                data-perc="{{ s.percentage }}">
+                        </td>
+
+                        <!-- Rank -->
+                        <td>
+                            <div
+                                class="lb-rank {% if loop.index == 1 %}lb-rank-gold{% elif loop.index == 2 %}lb-rank-silver{% elif loop.index == 3 %}lb-rank-bronze{% endif %}">
+                                {% if loop.index == 1 %}🥇
+                                {% elif loop.index == 2 %}🥈
+                                {% elif loop.index == 3 %}🥉
+                                {% else %}{{ loop.index }}
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- PRN -->
+                        <td><span class="lb-mono">{{ s.prn or '—' }}</span></td>
+
+                        <!-- Student -->
+                        <td>
+                            <div class="lb-student-cell">
+                                <div class="lb-avatar-sm"
+                                    style="background: linear-gradient(135deg, {{ ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#06b6d4']|random }}, {{ ['#4f46e5','#7c3aed','#db2777','#d97706','#059669','#0891b2']|random }});">
+                                    {{ (s.name or 'U')[0]|upper }}
+                                </div>
+                                <span class="lb-sname">{{ s.name or 'Unknown' }}</span>
+                            </div>
+                        </td>
+
+                        <!-- Exams Attempted -->
+                        <td class="lb-num">{{ s.exams_attempted }}</td>
+
+                        <!-- Questions Answered -->
+                        <td class="lb-num">{{ s.total_questions }}</td>
+
+                        <!-- Marks -->
+                        <td class="lb-num" style="font-weight:700;">{{ s.marks_obtained }}</td>
+
+                        <!-- Total Possible -->
+                        <td class="lb-num" style="color: var(--lb-text-muted);">{{ s.possible_marks }}</td>
+
+                        <!-- Percentage with bar -->
+                        <td>
+                            <div class="lb-pct-cell">
+                                <div class="lb-pct-bar">
+                                    <div class="lb-pct-fill {% if s.percentage >= 70 %}lb-pct-high{% elif s.percentage >= 40 %}lb-pct-mid{% else %}lb-pct-low{% endif %}"
+                                        style="width: {{ [s.percentage, 100]|min }}%;"></div>
+                                </div>
+                                <span
+                                    class="lb-pct-value {% if s.percentage >= 70 %}lb-pct-value-high{% elif s.percentage >= 40 %}lb-pct-value-mid{% else %}lb-pct-value-low{% endif %}">
+                                    {{ s.percentage }}%
+                                </span>
+                            </div>
+                        </td>
+
+                        <!-- Behind (Gap to Leader) -->
+                        <td>
+                            <span class="lb-behind {% if s.behind_marks == 0 %}lb-behind-zero{% endif %}">
+                                {% if s.behind_marks == 0 %}
+                                <i class="bi bi-star-fill" style="color: var(--lb-gold);"></i>
+                                {% else %}
+                                -{{ s.behind_marks }}
+                                {% endif %}
+                            </span>
+                        </td>
+
+                        <!-- Performance Badge -->
+                        <td>
+                            {% if loop.index <= 3 %} <span class="lb-badge lb-badge-top">Top Performer</span>
+                                {% elif s.percentage >= 70 %}
+                                <span class="lb-badge lb-badge-great">Excellent</span>
+                                {% elif s.percentage >= 50 %}
+                                <span class="lb-badge lb-badge-good">Good</span>
+                                {% elif s.percentage >= 30 %}
+                                <span class="lb-badge lb-badge-avg">Average</span>
+                                {% else %}
+                                <span class="lb-badge lb-badge-low">Needs Work</span>
+                                {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="lb-table-footer">
+            <span>Showing <strong id="lb-footer-visible">{{ leaderboard|length }}</strong>
+                of <strong>{{ leaderboard|length }}</strong> students</span>
+            <span style="color: var(--lb-text-muted); font-size:0.85rem;">Click headers to sort • Select rows to
+                compare</span>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="lb-empty lb-animate lb-d2">
+        <div class="lb-empty-icon"><i class="bi bi-trophy"></i></div>
+        <h3>No Leaderboard Data</h3>
+        <p>No students or exams found for the current filters. Try adjusting the date range or batch selection.</p>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- ===== FLOATING COMPARE BUTTON ===== -->
+<button id="compare-btn" class="lb-compare-fab" onclick="openCompare()">
+    <i class="bi bi-people-fill"></i>
+    Compare (<span id="compare-count">0</span>)
+</button>
+
+<!-- ===== COMPARE MODAL ===== -->
+<div class="lb-modal-overlay" id="compare-modal">
+    <div class="lb-modal-dialog">
+        <div class="lb-modal-header">
+            <div class="lb-modal-title">
+                <i class="bi bi-people-fill"></i> Student Comparison
+            </div>
+            <button class="lb-modal-close" onclick="closeCompare()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="lb-modal-body" id="compare-content"></div>
+    </div>
+</div>
+
+<script>
+    // ============================================================================
+    // LEADERBOARD — SORT, SEARCH, COMPARE, EXPORT
+    // ============================================================================
+
+    // ===== SORTING =====
+    let sortState = { col: null, asc: true };
+
+    document.querySelectorAll('.lb-table th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = parseInt(th.dataset.col);
+            const tbody = document.querySelector('#leaderboard-table tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            const asc = sortState.col === col ? !sortState.asc : true;
+            sortState = { col, asc };
+
+            document.querySelectorAll('.lb-table th.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+            th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+
+            rows.sort((a, b) => {
+                const va = a.cells[col].textContent.trim();
+                const vb = b.cells[col].textContent.trim();
+                const na = parseFloat(va.replace(/[^0-9.\-]/g, ''));
+                const nb = parseFloat(vb.replace(/[^0-9.\-]/g, ''));
+
+                if (!isNaN(na) && !isNaN(nb)) return asc ? na - nb : nb - na;
+                return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+
+            rows.forEach(r => tbody.appendChild(r));
+        });
+    });
+
+    // ===== REAL-TIME SEARCH FILTERING =====
+    function debounce(fn, delay = 180) {
+        let t;
+        return (...args) => {
+            clearTimeout(t);
+            t = setTimeout(() => fn(...args), delay);
+        };
+    }
+
+    const searchFields = [
+        { id: 'search-prn', attr: 'prn', type: 'text' },
+        { id: 'search-name', attr: 'name', type: 'text' },
+        { id: 'search-min-marks', attr: 'marks', type: 'min' },
+        { id: 'search-min-pct', attr: 'pct', type: 'min' },
+        { id: 'search-min-exams', attr: 'exams', type: 'min' }
+    ];
+
+    function applySearch() {
+        const filters = searchFields.map(f => ({
+            ...f,
+            val: (document.getElementById(f.id)?.value || '').trim()
+        }));
+
+        const rows = document.querySelectorAll('#leaderboard-table tbody tr');
+        let visible = 0;
+
+        rows.forEach(row => {
+            let show = true;
+
+            filters.forEach(f => {
+                if (!f.val) return;
+                const dataVal = (row.dataset[f.attr] || '').toLowerCase();
+
+                if (f.type === 'text') {
+                    if (!dataVal.includes(f.val.toLowerCase())) show = false;
+                } else if (f.type === 'min') {
+                    if (parseFloat(dataVal) < parseFloat(f.val)) show = false;
+                }
+            });
+
+            row.classList.toggle('lb-filtered-out', !show);
+            if (show) visible++;
+        });
+
+        const visEl = document.getElementById('lb-visible');
+        const footEl = document.getElementById('lb-footer-visible');
+        if (visEl) visEl.textContent = visible;
+        if (footEl) footEl.textContent = visible;
+    }
+
+    searchFields.forEach(f => {
+        const el = document.getElementById(f.id);
+        if (el) {
+            el.addEventListener('input', debounce(applySearch));
+            el.addEventListener('change', applySearch);
+        }
+    });
+
+    function clearSearch() {
+        searchFields.forEach(f => {
+            const el = document.getElementById(f.id);
+            if (el) el.value = '';
+        });
+        document.querySelectorAll('#leaderboard-table tbody tr').forEach(r => r.classList.remove('lb-filtered-out'));
+        applySearch();
+    }
+
+    // ===== SELECT ALL CHECKBOX =====
+    const selectAllCb = document.getElementById('select-all');
+    if (selectAllCb) {
+        selectAllCb.addEventListener('change', () => {
+            document.querySelectorAll('.compare-check').forEach(cb => {
+                cb.checked = selectAllCb.checked;
+            });
+            updateCompareCount();
+        });
+    }
+
+    // ===== COMPARE FUNCTIONALITY =====
+    const compareBtn = document.getElementById('compare-btn');
+    const compareCount = document.getElementById('compare-count');
+
+    document.querySelectorAll('.compare-check').forEach(chk => {
+        chk.addEventListener('change', updateCompareCount);
+    });
+
+    function updateCompareCount() {
+        const count = document.querySelectorAll('.compare-check:checked').length;
+        if (compareCount) compareCount.textContent = count;
+        if (compareBtn) compareBtn.style.display = count >= 2 ? 'flex' : 'none';
+    }
+
+    function openCompare() {
+        const selected = [...document.querySelectorAll('.compare-check:checked')];
+        if (selected.length < 2) return;
+
+        // Find best values for highlighting
+        const data = selected.map(s => ({
+            name: s.dataset.name,
+            prn: s.dataset.prn,
+            exams: parseInt(s.dataset.exams) || 0,
+            ans: parseInt(s.dataset.ans) || 0,
+            marks: parseFloat(s.dataset.marks) || 0,
+            perc: parseFloat(s.dataset.perc) || 0
+        }));
+
+        const best = {
+            exams: Math.max(...data.map(d => d.exams)),
+            ans: Math.max(...data.map(d => d.ans)),
+            marks: Math.max(...data.map(d => d.marks)),
+            perc: Math.max(...data.map(d => d.perc))
+        };
+
+        let html = `<table class="lb-compare-table">
+        <thead><tr>
+            <th>Student</th><th>PRN</th><th>Exams</th>
+            <th>Answered</th><th>Marks</th><th>Percentage</th>
+        </tr></thead><tbody>`;
+
+        data.forEach(d => {
+            html += `<tr>
+            <td style="font-weight:600;">${d.name}</td>
+            <td><span class="lb-mono">${d.prn}</span></td>
+            <td class="${d.exams === best.exams ? 'lb-best' : ''}">${d.exams}</td>
+            <td class="${d.ans === best.ans ? 'lb-best' : ''}">${d.ans}</td>
+            <td class="${d.marks === best.marks ? 'lb-best' : ''}">${d.marks}</td>
+            <td class="${d.perc === best.perc ? 'lb-best' : ''}">${d.perc}%</td>
+        </tr>`;
+        });
+
+        html += '</tbody></table>';
+
+        document.getElementById('compare-content').innerHTML = html;
+        const modal = document.getElementById('compare-modal');
+        modal.style.display = 'flex';
+
+        // Close on backdrop click
+        modal.onclick = function (e) {
+            if (e.target === modal) closeCompare();
+        };
+
+        // Stop propagation inside dialog
+        modal.querySelector('.lb-modal-dialog').onclick = function (e) {
+            e.stopPropagation();
+        };
+    }
+
+    function closeCompare() {
+        document.getElementById('compare-modal').style.display = 'none';
+    }
+
+    // Close modal with Escape
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeCompare();
+    });
+
+    // ===== EXPORT CSV =====
+    function exportLeaderboardCSV() {
+        const table = document.getElementById('leaderboard-table');
+        if (!table) return;
+
+        const headers = ['Rank', 'PRN', 'Name', 'Exams Attempted', 'Questions Answered',
+            'Marks Obtained', 'Total Marks', 'Percentage', 'Behind Marks', 'Level'];
+
+        const rows = Array.from(table.querySelectorAll('tbody tr:not(.lb-filtered-out)'));
+
+        let csv = headers.join(',') + '\n';
+        let rank = 1;
+
+        rows.forEach(row => {
+            const cells = Array.from(row.cells);
+            const rowData = [
+                rank++,
+                row.dataset.prn || '',
+                `"${row.dataset.name || ''}"`,
+                cells[4]?.textContent.trim() || '',
+                cells[5]?.textContent.trim() || '',
+                cells[6]?.textContent.trim() || '',
+                cells[7]?.textContent.trim() || '',
+                (row.dataset.pct || '') + '%',
+                cells[9]?.textContent.trim() || '',
+                cells[10]?.textContent.trim() || ''
+            ];
+            csv += rowData.join(',') + '\n';
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `leaderboard_${Date.now()}.csv`;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // ===== INIT =====
+    document.addEventListener('DOMContentLoaded', () => {
+        updateCompareCount();
+    });
+
+    console.log('leaderboard.js loaded');
+</script>
+
+{% endblock %}

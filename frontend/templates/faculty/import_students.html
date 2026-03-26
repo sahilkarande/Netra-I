@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Import Students{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="import-card">
+    <h2><i class="bi bi-upload"></i> Import Student List</h2>
+    <p>Upload a CSV or Excel file containing student data. Ensure it includes columns like:</p>
+    <pre>Full Name | Email | PRN Number | Roll ID | Batch | Department | Gender | Phone | Verified</pre>
+
+    <form method="POST" enctype="multipart/form-data" class="upload-form mt-3">
+      <input type="file" name="file" class="file-input" accept=".csv, .xlsx" required>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-cloud-upload"></i> Upload & Import
+        </button>
+        <a href="{{ url_for('faculty_student_list') }}" class="btn btn-outline">
+          <i class="bi bi-arrow-left"></i> Cancel
+        </a>
+      </div>
+    </form>
+
+    <div class="mt-4">
+      <p><strong>💡 Tip:</strong> You can export a template to match the required structure.</p>
+      <a href="{{ url_for('faculty_export_students') }}" class="btn btn-outline btn-sm">
+        <i class="bi bi-download"></i> Download Template
+      </a>
+    </div>
+  </div>
+</div>
+
+<style>
+.import-card {
+  background: rgba(255,255,255,0.03);
+  padding: 2rem 2.5rem;
+  border-radius: 16px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.import-card h2 {
+  color: #fff;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+.import-card pre {
+  background: rgba(255,255,255,0.06);
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  color: #93c5fd;
+  font-size: 0.9rem;
+}
+.file-input {
+  display: block;
+  background: rgba(255,255,255,0.07);
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 1rem;
+  color: #cbd5e1;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+.file-input:hover {
+  background: rgba(255,255,255,0.1);
+}
+</style>
+{% endblock %}

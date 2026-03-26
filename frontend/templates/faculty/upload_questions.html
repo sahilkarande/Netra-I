@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Questions - {{ exam.title }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div style="max-width: 1000px; margin: 2rem auto;">
+        <div style="margin-bottom: 1rem;">
+            <h1>📤 Upload Questions</h1>
+            <p style="color:var(--text-secondary)">For: <strong>{{ exam.title }}</strong></p>
+        </div>
+
+        {% if exam.access_key %}
+        <div style="display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem;
+                    background:rgba(245,158,11,0.08); border:2px solid rgba(245,158,11,0.35);
+                    border-radius:12px; margin-bottom:1.25rem; flex-wrap:wrap;">
+            <i class="bi bi-key-fill" style="font-size:1.4rem; color:#f59e0b;"></i>
+            <div style="flex:1;">
+                <div
+                    style="font-weight:700; color:#f59e0b; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:2px;">
+                    Exam Access Key — share this with students
+                </div>
+                <div
+                    style="font-family:monospace; font-size:1.9rem; font-weight:800; letter-spacing:0.35em; color:#f59e0b;">
+                    {{ exam.access_key }}
+                </div>
+            </div>
+            <button
+                onclick="navigator.clipboard.writeText('{{ exam.access_key }}').then(()=>this.textContent='✅ Copied!').catch(()=>prompt('Copy Key:','{{ exam.access_key }}'))"
+                class="btn btn-outline" style="border-color:#f59e0b; color:#f59e0b; white-space:nowrap;">
+                <i class="bi bi-clipboard"></i> Copy Key
+            </button>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Upload Question File</h2>
+            </div>
+
+            <div class="card-body" style="padding:1.25rem;">
+                <div class="alert alert-info" style="margin-bottom:1rem;">
+                    <strong>📋 File Format Requirements:</strong>
+                    <ul style="margin:0.5rem 0 0 1.25rem;">
+                        <li>Supported: <strong>CSV, Excel (.xlsx/.xls), JSON</strong></li>
+                        <li>Required fields: <code>question</code>, <code>option_a</code>, <code>option_b</code>,
+                            <code>correct_answer</code></li>
+                        <li>Optional fields: <code>option_c</code>, <code>option_d</code>, <code>points</code></li>
+                        <li><code>correct_answer</code> should be one of <strong>A/B/C/D</strong></li>
+                    </ul>
+                </div>
+
+                <!-- Form submits to server for real upload -->
+                <form id="uploadForm" method="POST" enctype="multipart/form-data"
+                    action="{{ url_for('upload_questions', exam_id=exam.id) }}">
+                    <div class="form-group">
+                        <label class="form-label">📁 Select File <span
+                                style="color:var(--danger-color)">*</span></label>
+                        <input id="fileInput" type="file" name="file" class="form-input" accept=".csv,.xlsx,.xls,.json"
+                            required>
+                        <small style="color:var(--text-secondary); display:block; margin-top:0.4rem;">Max recommended
+                            rows: 10k. Use server preview for large files.</small>
+                    </div>
+
+                    <div style="display:flex; gap:0.75rem; margin-top:0.75rem;">
+                        <button type="button" id="previewClientBtn" class="btn btn-outline">👀 Preview (Client)</button>
+                        <button type="button" id="previewServerBtn" class="btn btn-outline">🔍 Preview (Server)</button>
+                        <button type="button" id="clearBtn" class="btn btn-outline">🧹 Clear</button>
+                    </div>
+
+                    <div id="previewContainer" style="display:none; margin-top:1.25rem;">
+                        <h4>📊 Preview</h4>
+                        <div id="previewTable"
+                            style="overflow-x:auto; border:1px solid var(--border-color); border-radius:8px; padding:0.5rem;">
+                        </div>
+                        <p id="previewNote" style="color:var(--text-secondary); margin-top:0.5rem;"></p>
+                    </div>
+
+                    <div style="margin-top:1.25rem;">
+                        <label class="form-check">
+                            <input type="checkbox" name="enhance_with_ai" id="enhanceAI">
+                            <span>🤖 Enhance questions with AI (optional)</span>
+                        </label>
+                        <small style="display:block;color:var(--text-secondary);">Requires ANTHROPIC_API_KEY set
+                            server-side.</small>
+                    </div>
+
+                    <div style="display:flex; gap:1rem; margin-top:1.25rem;">
+                        <button type="submit" id="submitBtn" class="btn btn-primary" style="flex:1;">⬆️ Upload
+                            Questions</button>
+                        <a href="{{ url_for('faculty_dashboard') }}" class="btn btn-outline"
+                            style="flex:1; text-align:center;">↩️ Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sample Downloads -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3 class="card-title">📥 Download Sample Files</h3>
+            </div>
+            <div style="padding:1rem;">
+                <button id="downloadCSV" class="btn btn-success">📄 CSV Sample</button>
+                <button id="downloadJSON" class="btn btn-success" style="margin-left:.5rem;">📋 JSON Sample</button>
+            </div>
+        </div>
+
+        <!-- HTML sample format / tips -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3 class="card-title">📝 Sample Format & Tips</h3>
+            </div>
+            <div style="padding:1rem;">
+                <div style="overflow-x:auto;">
+                    <table class="table" style="font-size:0.9rem;">
+                        <thead>
+                            <tr>
+                                <th>question</th>
+                                <th>option_a</th>
+                                <th>option_b</th>
+                                <th>option_c</th>
+                                <th>option_d</th>
+                                <th>correct_answer</th>
+                                <th>points</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>What is 2+2?</td>
+                                <td>3</td>
+                                <td>4</td>
+                                <td>5</td>
+                                <td>6</td>
+                                <td><strong>B</strong></td>
+                                <td>1.0</td>
+                            </tr>
+                            <tr>
+                                <td>Capital of France?</td>
+                                <td>London</td>
+                                <td>Paris</td>
+                                <td>Berlin</td>
+                                <td>Rome</td>
+                                <td><strong>B</strong></td>
+                                <td>1.0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p style="color:var(--text-secondary)">Tip: keep consistent headers, and test with a small batch first.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- External libs for client parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js" integrity
+    crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity
+    crossorigin="anonymous"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const fileInput = document.getElementById("fileInput");
+        const previewClientBtn = document.getElementById("previewClientBtn");
+        const previewServerBtn = document.getElementById("previewServerBtn");
+        const clearBtn = document.getElementById("clearBtn");
+        const previewContainer = document.getElementById("previewContainer");
+        const previewTable = document.getElementById("previewTable");
+        const previewNote = document.getElementById("previewNote");
+        const uploadForm = document.getElementById("uploadForm");
+        const submitBtn = document.getElementById("submitBtn");
+
+        function renderPreview(data) {
+            if (!Array.isArray(data) || data.length === 0) {
+                previewTable.innerHTML = "<div style='padding:1rem;color:var(--text-secondary)'>No data to preview.</div>";
+                previewNote.textContent = "";
+                previewContainer.style.display = "block";
+                return;
+            }
+            const headers = Object.keys(data[0]);
+            let html = "<table class='table' style='width:100%; border-collapse:collapse;'>";
+            html += "<thead><tr style='background:var(--primary-color); color:white;'>";
+            headers.forEach(h => html += `<th style='padding:.5rem; text-transform:capitalize;'>${h}</th>`);
+            html += "</tr></thead><tbody>";
+            data.slice(0, 10).forEach(row => {
+                html += "<tr>";
+                headers.forEach(h => html += `<td style='padding:.5rem; border-bottom:1px solid #eee;'>${(row[h] ?? "").toString().replace(/</g, '&lt;')}</td>`);
+                html += "</tr>";
+            });
+            html += "</tbody></table>";
+            previewTable.innerHTML = html;
+            previewNote.textContent = data.length > 10 ? `Showing first 10 of ${data.length} rows.` : `Showing ${data.length} rows.`;
+            previewContainer.style.display = "block";
+        }
+
+        // Client-side preview (fast, local)
+        previewClientBtn.addEventListener("click", async () => {
+            const file = fileInput.files[0];
+            if (!file) { alert("Please select a file first."); return; }
+            const ext = file.name.split('.').pop().toLowerCase();
+            try {
+                if (ext === 'csv') {
+                    const text = await file.text();
+                    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+                    renderPreview(parsed.data || []);
+                } else if (ext === 'json') {
+                    const text = await file.text();
+                    const parsed = JSON.parse(text);
+                    renderPreview(Array.isArray(parsed) ? parsed : []);
+                } else if (ext === 'xlsx' || ext === 'xls') {
+                    const ab = await file.arrayBuffer();
+                    const wb = XLSX.read(ab, { type: 'array' });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+                    renderPreview(data);
+                } else {
+                    alert("Unsupported format. Use CSV, Excel, or JSON.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error parsing file for preview. Try server preview for large files.");
+            }
+        });
+
+        // Server-side preview (safe for large files, validation on server)
+        previewServerBtn.addEventListener("click", async () => {
+            const file = fileInput.files[0];
+            if (!file) { alert("Please select a file first."); return; }
+            const form = new FormData();
+            form.append("file", file);
+            // optional: include flag for server validation
+            form.append("server_preview", "1");
+
+            previewServerBtn.disabled = true;
+            previewServerBtn.textContent = "🔍 Previewing...";
+
+            try {
+                const resp = await fetch("{{ url_for('preview_questions', exam_id=exam.id) }}", {
+                    method: "POST",
+                    body: form,
+                    credentials: "same-origin"
+                });
+                const payload = await resp.json();
+                if (!resp.ok) throw new Error(payload.error || "Server preview failed");
+                renderPreview(payload.rows || []);
+            } catch (err) {
+                console.error(err);
+                alert("Server preview failed: " + (err.message || err));
+            } finally {
+                previewServerBtn.disabled = false;
+                previewServerBtn.textContent = "🔍 Preview (Server)";
+            }
+        });
+
+        clearBtn.addEventListener("click", () => {
+            fileInput.value = "";
+            previewTable.innerHTML = "";
+            previewContainer.style.display = "none";
+        });
+
+        // UX: show loading state on real upload
+        uploadForm.addEventListener("submit", () => {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "⏳ Uploading...";
+        });
+
+        // Download sample files
+        document.getElementById("downloadCSV").addEventListener("click", () => {
+            const csv = `question,option_a,option_b,option_c,option_d,correct_answer,points
+What is 2+2?,3,4,5,6,B,1.0
+Capital of France?,London,Paris,Berlin,Rome,B,1.0`;
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = "sample_questions.csv"; a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        document.getElementById("downloadJSON").addEventListener("click", () => {
+            const json = JSON.stringify([
+                { question: "What is 2+2?", option_a: "3", option_b: "4", option_c: "5", option_d: "6", correct_answer: "B", points: 1.0 }
+            ], null, 2);
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = "sample_questions.json"; a.click();
+            URL.revokeObjectURL(url);
+        });
+    });
+</script>
+{% endblock %}

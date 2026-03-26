@@ -1,0 +1,182 @@
+[
+  {
+    "question": "What will be the output of the command?\n\necho \"Hello\" > file.txt\necho \"World\" >> file.txt",
+    "option_a": "Hello",
+    "option_b": "World",
+    "option_c": "Hello World (same line)",
+    "option_d": "Hello (new line) World",
+    "correct_answer": "D",
+    "points": 1
+  },
+  {
+    "question": "What will happen if you run chmod 000 file.txt?",
+    "option_a": "File is deleted",
+    "option_b": "No one can read, write, or execute",
+    "option_c": "Only root can read",
+    "option_d": "File becomes hidden",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which command will display only directories in the current path?",
+    "option_a": "ls -l",
+    "option_b": "ls -d */",
+    "option_c": "ls -a",
+    "option_d": "find . -type f",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What will df -h show?",
+    "option_a": "Memory usage",
+    "option_b": "Disk usage in human-readable format",
+    "option_c": "CPU usage",
+    "option_d": "File permissions",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which command will find all .log files in current directory and subdirectories?",
+    "option_a": "find . -name \"*.log\"",
+    "option_b": "locate *.log",
+    "option_c": "grep \".log\"",
+    "option_d": "ls .log",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "What does && operator do in Linux?",
+    "option_a": "Runs both commands simultaneously",
+    "option_b": "Runs second command only if first succeeds",
+    "option_c": "Runs second command only if first fails",
+    "option_d": "Combines outputs",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What is the default port for SSH?",
+    "option_a": "21",
+    "option_b": "22",
+    "option_c": "80",
+    "option_d": "443",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "In AWS, what happens when an EC2 instance is stopped?",
+    "option_a": "Data is lost",
+    "option_b": "Instance is deleted",
+    "option_c": "EBS-backed data persists",
+    "option_d": "Instance cannot be restarted",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "What is the purpose of Security Groups in AWS?",
+    "option_a": "Monitor billing",
+    "option_b": "Act as firewall for instances",
+    "option_c": "Store logs",
+    "option_d": "Manage IAM users",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What does an S3 object consist of?",
+    "option_a": "File only",
+    "option_b": "File + metadata + key",
+    "option_c": "File + bucket name",
+    "option_d": "Only metadata",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which AWS IAM feature allows temporary access to resources?",
+    "option_a": "IAM Users",
+    "option_b": "IAM Roles",
+    "option_c": "IAM Groups",
+    "option_d": "IAM Policies",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which IAM entity is used to assign permissions to multiple users at once?",
+    "option_a": "User",
+    "option_b": "Role",
+    "option_c": "Group",
+    "option_d": "Policy",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "Which command is used to compare two files line by line?",
+    "option_a": "cmp",
+    "option_b": "diff",
+    "option_c": "compare",
+    "option_d": "comm",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which S3 feature helps recover accidentally deleted objects?",
+    "option_a": "Encryption",
+    "option_b": "Versioning",
+    "option_c": "Replication",
+    "option_d": "Lifecycle",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What is the default access level of a newly created S3 bucket?",
+    "option_a": "Public",
+    "option_b": "Private",
+    "option_c": "Protected",
+    "option_d": "Shared",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What does mkdir -p dir1/dir2 do?",
+    "option_a": "Creates only dir1",
+    "option_b": "Creates only dir2",
+    "option_c": "Creates nested directories if they don’t exist",
+    "option_d": "Deletes directories",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "Which command is used to display system information like kernel version?",
+    "option_a": "system",
+    "option_b": "uname",
+    "option_c": "version",
+    "option_d": "info",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What is a bucket in Amazon S3?",
+    "option_a": "A virtual machine",
+    "option_b": "A storage container for objects",
+    "option_c": "A database table",
+    "option_d": "A network service",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is required to uniquely identify an S3 object?",
+    "option_a": "Bucket name only",
+    "option_b": "Object size",
+    "option_c": "Bucket name + object key",
+    "option_d": "File type",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "What is the purpose of IAM policy?",
+    "option_a": "Store data",
+    "option_b": "Define permissions",
+    "option_c": "Create users",
+    "option_d": "Launch instances",
+    "correct_answer": "B",
+    "points": 1
+  }
+]

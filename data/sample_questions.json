@@ -1,0 +1,418 @@
+[
+  {
+    "question": "What does SQL stand for?",
+    "option_a": "Structured Query Language",
+    "option_b": "Simple Query Language",
+    "option_c": "Standard Query Language",
+    "option_d": "System Query Language",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is used to fetch data from a database?",
+    "option_a": "INSERT",
+    "option_b": "DELETE",
+    "option_c": "SELECT",
+    "option_d": "UPDATE",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "What does the 'GROUP BY' clause do in SQL?",
+    "option_a": "Groups rows that have the same values into summary rows",
+    "option_b": "Sorts rows by ascending order",
+    "option_c": "Removes duplicate rows from the result",
+    "option_d": "Sets the order of rows",
+    "correct_answer": "A",
+    "points": 1.5
+  },
+  {
+    "question": "Which SQL keyword is used to sort the result-set?",
+    "option_a": "ORDER BY",
+    "option_b": "SORT BY",
+    "option_c": "GROUP BY",
+    "option_d": "FILTER",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which SQL statement is used to delete data from a table?",
+    "option_a": "REMOVE",
+    "option_b": "DELETE",
+    "option_c": "DROP",
+    "option_d": "CLEAR",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is used to insert new data into a database table?",
+    "option_a": "INSERT INTO",
+    "option_b": "ADD DATA",
+    "option_c": "PUT",
+    "option_d": "INSERT",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "What is the correct SQL statement to update a data in a table?",
+    "option_a": "UPDATE SET",
+    "option_b": "MODIFY",
+    "option_c": "UPDATE",
+    "option_d": "CHANGE",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "Which SQL function is used to count the number of rows in a result?",
+    "option_a": "COUNT()",
+    "option_b": "SUM()",
+    "option_c": "NUM()",
+    "option_d": "ROWS()",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which SQL clause is used to filter the records?",
+    "option_a": "FILTER",
+    "option_b": "WHERE",
+    "option_c": "HAVING",
+    "option_d": "ORDER",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is true about the 'HAVING' clause?",
+    "option_a": "It is used to filter records after GROUP BY",
+    "option_b": "It filters the records before the GROUP BY clause",
+    "option_c": "It works the same as the WHERE clause",
+    "option_d": "It is used for ordering records",
+    "correct_answer": "A",
+    "points": 1.5
+  },
+  {
+    "question": "Which operator is used to check for NULL values in SQL?",
+    "option_a": "IS NULL",
+    "option_b": "IS NOT NULL",
+    "option_c": "NULL CHECK",
+    "option_d": "ISEMPTY",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "What is the purpose of the 'DISTINCT' keyword in SQL?",
+    "option_a": "Returns all rows including duplicates",
+    "option_b": "Returns the first occurrence of each distinct value",
+    "option_c": "Removes duplicate rows from the result",
+    "option_d": "Changes the data type of a column",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "Which SQL command is used to remove a table from a database?",
+    "option_a": "DELETE TABLE",
+    "option_b": "REMOVE TABLE",
+    "option_c": "DROP TABLE",
+    "option_d": "CLEAR TABLE",
+    "correct_answer": "C",
+    "points": 1
+  },
+  {
+    "question": "What does the 'JOIN' operation do in SQL?",
+    "option_a": "Combines two tables based on a related column",
+    "option_b": "Removes duplicate rows from two tables",
+    "option_c": "Updates values in two tables at the same time",
+    "option_d": "Duplicates rows between two tables",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "Which SQL function is used to find the maximum value in a column?",
+    "option_a": "MAX()",
+    "option_b": "MIN()",
+    "option_c": "COUNT()",
+    "option_d": "SUM()",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is the correct syntax for a LEFT JOIN?",
+    "option_a": "SELECT * FROM table1 LEFT JOIN table2 ON table1.id = table2.id",
+    "option_b": "SELECT * LEFT JOIN table1 ON table1.id = table2.id",
+    "option_c": "LEFT JOIN table1, table2 WHERE table1.id = table2.id",
+    "option_d": "SELECT * FROM table1 RIGHT JOIN table2",
+    "correct_answer": "A",
+    "points": 1.5
+  },
+  {
+    "question": "What is the purpose of the 'ALTER' command in SQL?",
+    "option_a": "To add, delete, or modify columns in a table",
+    "option_b": "To drop a table from a database",
+    "option_c": "To create a new table",
+    "option_d": "To query data from a database",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which clause in SQL is used to combine rows from two or more tables based on a related column?",
+    "option_a": "INNER JOIN",
+    "option_b": "CROSS JOIN",
+    "option_c": "LEFT JOIN",
+    "option_d": "RIGHT JOIN",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which of the following SQL functions can be used to combine multiple rows into a single row?",
+    "option_a": "GROUP_CONCAT()",
+    "option_b": "JOIN()",
+    "option_c": "SUM()",
+    "option_d": "MERGE()",
+    "correct_answer": "A",
+    "points": 1.5
+  },
+  {
+    "question": "Which of the following is the correct syntax for creating a new table?",
+    "option_a": "CREATE NEW TABLE table_name",
+    "option_b": "CREATE TABLE table_name",
+    "option_c": "TABLE CREATE table_name",
+    "option_d": "CREATE DATABASE table_name",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What is a primary key in a database?",
+    "option_a": "A unique identifier for each record in a table",
+    "option_b": "A key used to link two tables",
+    "option_c": "A key that can accept NULL values",
+    "option_d": "A key for encryption purposes",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which function in SQL is used to get the current date?",
+    "option_a": "CURRENT_DATE()",
+    "option_b": "NOW()",
+    "option_c": "GETDATE()",
+    "option_d": "DATE()",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which SQL clause is used to specify the conditions for filtering records?",
+    "option_a": "WHERE",
+    "option_b": "HAVING",
+    "option_c": "GROUP BY",
+    "option_d": "ORDER BY",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "What is the default sorting order used by the 'ORDER BY' clause?",
+    "option_a": "Descending",
+    "option_b": "Ascending",
+    "option_c": "Random",
+    "option_d": "By NULL",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which SQL keyword is used to prevent duplicate rows in a SELECT query?",
+    "option_a": "DISTINCT",
+    "option_b": "UNIQUE",
+    "option_c": "NO_DUPLICATES",
+    "option_d": "NONE",
+    "correct_answer": "A",
+    "points": 1
+  },
+    {
+    "question": "Which SQL clause is used to specify conditions on grouped records?",
+    "option_a": "HAVING",
+    "option_b": "WHERE",
+    "option_c": "GROUP BY",
+    "option_d": "ORDER BY",
+    "correct_answer": "A",
+    "points": 1.5
+  },
+  {
+    "question": "What is the purpose of the 'UNION' operator in SQL?",
+    "option_a": "Combines the result of two queries into a single result set",
+    "option_b": "Deletes records from two tables",
+    "option_c": "Joins two tables based on a related column",
+    "option_d": "Filters the results of two queries",
+    "correct_answer": "A",
+    "points": 1.5
+  },
+  {
+    "question": "Which SQL statement is used to create a new database?",
+    "option_a": "CREATE DATABASE",
+    "option_b": "NEW DATABASE",
+    "option_c": "MAKE DATABASE",
+    "option_d": "ADD DATABASE",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which SQL function is used to find the smallest value in a column?",
+    "option_a": "MAX()",
+    "option_b": "MIN()",
+    "option_c": "COUNT()",
+    "option_d": "SUM()",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which SQL keyword is used to restrict the result of a query to a certain number of rows?",
+    "option_a": "LIMIT",
+    "option_b": "TOP",
+    "option_c": "FETCH",
+    "option_d": "WHERE",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which of the following statements is used to modify the structure of an existing table?",
+    "option_a": "UPDATE",
+    "option_b": "ALTER",
+    "option_c": "CHANGE",
+    "option_d": "MODIFY",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "What does the 'INNER JOIN' do in SQL?",
+    "option_a": "Returns all rows from both tables if there is a match",
+    "option_b": "Returns only matching rows from both tables",
+    "option_c": "Returns all rows from the first table",
+    "option_d": "Returns only non-matching rows from both tables",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which clause is used to group rows that have the same values in SQL?",
+    "option_a": "GROUP BY",
+    "option_b": "ORDER BY",
+    "option_c": "JOIN",
+    "option_d": "WHERE",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "What does the 'LIKE' operator do in SQL?",
+    "option_a": "Matches an exact pattern in a string",
+    "option_b": "Searches for a specified pattern in a column",
+    "option_c": "Inserts a new record into the table",
+    "option_d": "Deletes records that match the condition",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which SQL function is used to get the total sum of a numeric column?",
+    "option_a": "COUNT()",
+    "option_b": "SUM()",
+    "option_c": "TOTAL()",
+    "option_d": "GROUP()",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is used to modify a column in an existing table?",
+    "option_a": "MODIFY COLUMN",
+    "option_b": "ALTER COLUMN",
+    "option_c": "CHANGE COLUMN",
+    "option_d": "UPDATE COLUMN",
+    "correct_answer": "B",
+    "points": 1.5
+  },
+  {
+    "question": "What is a foreign key in SQL?",
+    "option_a": "A field that uniquely identifies a record within its own table",
+    "option_b": "A field that links two tables together",
+    "option_c": "A field used to store binary data",
+    "option_d": "A key for sorting records",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is a valid SQL statement to remove a column from a table?",
+    "option_a": "ALTER TABLE table_name DROP COLUMN column_name",
+    "option_b": "DROP TABLE column_name",
+    "option_c": "REMOVE COLUMN table_name",
+    "option_d": "DELETE COLUMN table_name",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "What does the 'TRUNCATE' command do in SQL?",
+    "option_a": "Deletes all rows in a table without removing the structure",
+    "option_b": "Deletes a table completely from the database",
+    "option_c": "Deletes rows based on a condition",
+    "option_d": "Deletes specific columns from a table",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which SQL statement is used to retrieve all columns from a table?",
+    "option_a": "SELECT * FROM table_name",
+    "option_b": "SELECT ALL FROM table_name",
+    "option_c": "GET ALL FROM table_name",
+    "option_d": "FETCH * FROM table_name",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which of the following SQL clauses is used to limit the number of rows returned by a query?",
+    "option_a": "LIMIT",
+    "option_b": "RANGE",
+    "option_c": "TOP",
+    "option_d": "FETCH",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which keyword is used to change the existing data in a table?",
+    "option_a": "UPDATE",
+    "option_b": "MODIFY",
+    "option_c": "INSERT",
+    "option_d": "CHANGE",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which of the following SQL statements is used to create an index on a column?",
+    "option_a": "CREATE INDEX",
+    "option_b": "CREATE KEY",
+    "option_c": "ADD INDEX",
+    "option_d": "SET INDEX",
+    "correct_answer": "A",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is true about the 'RIGHT JOIN'?",
+    "option_a": "It returns all rows from the right table and matched rows from the left table",
+    "option_b": "It returns only the rows that match between two tables",
+    "option_c": "It returns all rows from both tables regardless of a match",
+    "option_d": "It returns all rows from the left table",
+    "correct_answer": "A",
+    "points": 1.5
+  },
+  {
+    "question": "What does the 'IS NOT NULL' condition check in SQL?",
+    "option_a": "If a column contains a NULL value",
+    "option_b": "If a column does not contain a NULL value",
+    "option_c": "If a column contains an empty string",
+    "option_d": "If a column contains any non-null value",
+    "correct_answer": "B",
+    "points": 1
+  },
+  {
+    "question": "Which SQL statement is used to create a new record in a table?",
+    "option_a": "INSERT INTO",
+    "option_b": "ADD INTO",
+    "option_c": "INSERT RECORD",
+    "option_d": "ADD RECORD",
+    "correct_answer": "A",
+    "points": 1
+  }
+]
+
+   

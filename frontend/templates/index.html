@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+{% block title %}Netra-I – CDAC Proctored Exam Platform{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ────────────────────────────────────────
+       SHARED SECTION UTILITIES
+    ──────────────────────────────────────── */
+    .section-wrap {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 48px;
+    }
+    .section-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--F-body);
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--teal);
+        margin-bottom: 14px;
+    }
+    .section-eyebrow::before {
+        content: '';
+        display: block;
+        width: 18px; height: 1.5px;
+        background: var(--teal);
+    }
+    .section-heading {
+        font-family: var(--F-head);
+        font-size: clamp(26px, 3.2vw, 38px);
+        font-weight: 700;
+        color: var(--txt);
+        line-height: 1.22;
+        margin-bottom: 44px;
+    }
+
+    /* ────────────────────────────────────────
+       HERO
+    ──────────────────────────────────────── */
+    .hero {
+        min-height: calc(100vh - 76px);
+        background: var(--bg);
+        display: flex;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+        padding: 80px 0 60px;
+    }
+    /* Subtle radial glow on right */
+    .hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(ellipse 65% 70% at 75% 50%, rgba(0,60,100,0.38) 0%, transparent 70%),
+            radial-gradient(ellipse 35% 50% at 18% 28%, rgba(0,50,80,0.22) 0%, transparent 65%);
+        pointer-events: none;
+    }
+    /* Dot grid */
+    .hero::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+        background-size: 36px 36px;
+        pointer-events: none;
+        mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 30%, transparent 100%);
+        -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 30%, transparent 100%);
+    }
+
+    .hero-grid {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 48px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 64px;
+        align-items: center;
+        position: relative;
+        z-index: 1;
+        width: 100%;
+    }
+
+    /* ── Hero Left ── */
+    .hero-left { display: flex; flex-direction: column; gap: 26px; }
+
+    .hero-logos {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+    }
+    .hero-logos img { height: 48px; object-fit: contain; }
+    .hero-logos-sep {
+        width: 1px; height: 38px;
+        background: var(--border);
+    }
+
+    .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        background: var(--teal-dim);
+        border: 1px solid rgba(0,207,194,0.22);
+        border-radius: 100px;
+        font-family: var(--F-body);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--teal);
+        letter-spacing: 0.04em;
+        width: fit-content;
+    }
+    .badge-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--teal);
+        animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink {
+        0%,100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+
+    .hero-title {
+        font-family: var(--F-head);
+        font-size: clamp(58px, 7.5vw, 88px);
+        font-weight: 800;
+        line-height: 1.0;
+        color: var(--txt);
+        letter-spacing: -0.025em;
+    }
+    .hero-title em {
+        color: var(--teal);
+        font-style: normal;
+    }
+
+    .hero-sub {
+        font-family: var(--F-body);
+        font-size: 17.5px;
+        font-weight: 300;
+        line-height: 1.7;
+        color: var(--txt-2);
+        max-width: 460px;
+    }
+    .hero-sub strong { color: var(--txt); font-weight: 500; }
+
+    .hero-actions {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+    .btn-primary {
+        display: inline-flex; align-items: center; gap: 8px;
+        font-family: var(--F-body); font-size: 15px; font-weight: 600;
+        color: #060f1c; background: var(--teal);
+        padding: 13px 28px; border-radius: 10px;
+        text-decoration: none; border: none; cursor: pointer;
+        transition: all 0.22s;
+        box-shadow: 0 4px 20px var(--teal-glow);
+    }
+    .btn-primary:hover {
+        filter: brightness(1.09); color: #060f1c;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px var(--teal-glow);
+    }
+    .btn-ghost {
+        display: inline-flex; align-items: center; gap: 10px;
+        font-family: var(--F-body); font-size: 15px; font-weight: 500;
+        color: var(--txt); background: rgba(255,255,255,0.05);
+        padding: 13px 24px; border-radius: 10px;
+        text-decoration: none;
+        border: 1px solid var(--border);
+        cursor: pointer; transition: all 0.22s;
+    }
+    .btn-ghost:hover {
+        background: rgba(255,255,255,0.09);
+        border-color: rgba(255,255,255,0.14);
+        color: var(--txt);
+    }
+    .play-circle {
+        width: 28px; height: 28px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px;
+    }
+
+    /* ── Hero Right – Globe ── */
+    .hero-right {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .globe-stage {
+        position: relative;
+        width: 400px; height: 400px;
+    }
+    .globe-ring {
+        position: absolute;
+        border-radius: 50%;
+        border: 1px solid rgba(0,207,194,0.07);
+        animation: ring-breathe 4s ease-in-out infinite;
+    }
+    .globe-ring:nth-child(1) { inset: -28px; animation-delay: 0s; }
+    .globe-ring:nth-child(2) { inset: -58px; animation-delay: 0.8s; }
+    @keyframes ring-breathe {
+        0%,100% { opacity: 0.25; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(1.012); }
+    }
+    .globe-sphere {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: radial-gradient(circle at 38% 33%, rgba(0,100,150,0.55) 0%, rgba(0,45,75,0.4) 45%, rgba(5,14,30,0.85) 75%);
+        border: 1px solid rgba(0,207,194,0.13);
+        box-shadow:
+            0 0 70px rgba(0,90,150,0.4),
+            0 0 140px rgba(0,70,120,0.18),
+            inset 0 0 50px rgba(0,90,150,0.18);
+        overflow: hidden;
+    }
+    .globe-grid-lines {
+        position: absolute; inset: 0;
+        background:
+            repeating-linear-gradient(0deg, transparent, transparent 26px, rgba(0,207,194,0.055) 26px, rgba(0,207,194,0.055) 27px),
+            repeating-linear-gradient(90deg, transparent, transparent 26px, rgba(0,207,194,0.055) 26px, rgba(0,207,194,0.055) 27px);
+        border-radius: 50%;
+        mask-image: radial-gradient(circle, black 75%, transparent 100%);
+        -webkit-mask-image: radial-gradient(circle, black 75%, transparent 100%);
+    }
+    .globe-shine {
+        position: absolute;
+        top: 14%; left: 19%;
+        width: 32%; height: 32%;
+        background: radial-gradient(circle, rgba(255,255,255,0.11) 0%, transparent 70%);
+        border-radius: 50%;
+    }
+    .globe-lock {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%,-50%);
+        width: 68px; height: 68px;
+        background: rgba(0,207,194,0.1);
+        border: 1px solid rgba(0,207,194,0.28);
+        border-radius: 16px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 30px;
+        backdrop-filter: blur(6px);
+        animation: levitate 4s ease-in-out infinite;
+    }
+    @keyframes levitate {
+        0%,100% { transform: translate(-50%,-50%) translateY(0); }
+        50% { transform: translate(-50%,-50%) translateY(-8px); }
+    }
+    .orbit {
+        position: absolute;
+        width: 42px; height: 42px;
+        background: rgba(8,18,34,0.82);
+        border: 1px solid rgba(0,207,194,0.18);
+        border-radius: 11px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 17px;
+        backdrop-filter: blur(6px);
+        animation: orb-float 5.5s ease-in-out infinite;
+    }
+    .orbit:nth-child(4)  { top:  8%; right: 16%; animation-delay: 0s; }
+    .orbit:nth-child(5)  { top: 38%; right: -4%; animation-delay: 0.9s; }
+    .orbit:nth-child(6)  { bottom: 18%; right: 14%; animation-delay: 1.8s; }
+    .orbit:nth-child(7)  { bottom:  9%; left: 16%; animation-delay: 1.3s; }
+    .orbit:nth-child(8)  { top: 13%; left: 13%; animation-delay: 0.4s; }
+    @keyframes orb-float {
+        0%,100% { transform: translateY(0); }
+        50% { transform: translateY(-6px); }
+    }
+
+    /* ────────────────────────────────────────
+       FEATURES SECTION
+    ──────────────────────────────────────── */
+    .features-section {
+        padding: 84px 0;
+        background: var(--bg-alt);
+        position: relative;
+    }
+    .features-section::before {
+        content: '';
+        position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--teal), transparent);
+        opacity: 0.25;
+    }
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+    }
+    .feat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 28px 26px;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.28s, border-color 0.28s, box-shadow 0.28s;
+        cursor: default;
+    }
+    .feat-card::after {
+        content: '';
+        position: absolute; inset: 0;
+        background: radial-gradient(circle at 0% 0%, rgba(0,207,194,0.07) 0%, transparent 55%);
+        opacity: 0; transition: opacity 0.28s;
+    }
+    .feat-card:hover {
+        transform: translateY(-3px);
+        border-color: rgba(0,207,194,0.22);
+        box-shadow: 0 10px 36px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,207,194,0.08);
+    }
+    .feat-card:hover::after { opacity: 1; }
+    .feat-icon {
+        width: 52px; height: 52px;
+        border-radius: 13px;
+        background: var(--teal-dim);
+        border: 1px solid rgba(0,207,194,0.15);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px;
+        margin-bottom: 18px;
+        position: relative; z-index: 1;
+        transition: background 0.28s, border-color 0.28s;
+    }
+    .feat-card:hover .feat-icon {
+        background: rgba(0,207,194,0.18);
+        border-color: rgba(0,207,194,0.3);
+    }
+    .feat-card h3 {
+        font-family: var(--F-head);
+        font-size: 16px; font-weight: 600;
+        color: var(--txt); margin-bottom: 9px;
+        position: relative; z-index: 1;
+    }
+    .feat-card p {
+        font-family: var(--F-body);
+        font-size: 14px; line-height: 1.6;
+        color: var(--txt-2);
+        position: relative; z-index: 1;
+    }
+
+    /* ────────────────────────────────────────
+       AUDIENCE SECTION
+    ──────────────────────────────────────── */
+    .audience-section { padding: 84px 0; background: var(--bg); }
+    .audience-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+    }
+    .aud-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 36px 32px;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 0.28s, box-shadow 0.28s;
+    }
+    .aud-card::after {
+        content: '';
+        position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+        background: linear-gradient(90deg, var(--teal), transparent);
+        opacity: 0; transition: opacity 0.28s;
+    }
+    .aud-card:hover {
+        border-color: rgba(0,207,194,0.18);
+        box-shadow: 0 0 40px rgba(0,207,194,0.08);
+    }
+    .aud-card:hover::after { opacity: 1; }
+    .aud-icon {
+        width: 46px; height: 46px;
+        border-radius: 12px;
+        background: var(--teal-dim);
+        border: 1px solid rgba(0,207,194,0.18);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 20px;
+        margin-bottom: 18px;
+    }
+    .aud-card h3 {
+        font-family: var(--F-head);
+        font-size: 21px; font-weight: 700;
+        color: var(--txt); margin-bottom: 18px;
+    }
+    .aud-card ul { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+    .aud-card ul li {
+        display: flex; align-items: center; gap: 10px;
+        font-family: var(--F-body); font-size: 14px; color: var(--txt-2);
+    }
+    .aud-card ul li::before {
+        content: '';
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--teal);
+        flex-shrink: 0;
+    }
+
+    /* ────────────────────────────────────────
+       RESPONSIVE
+    ──────────────────────────────────────── */
+    @media (max-width: 960px) {
+        .hero-grid { grid-template-columns: 1fr; }
+        .hero-right { display: none; }
+        .features-grid { grid-template-columns: repeat(2,1fr); }
+        .audience-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 580px) {
+        .section-wrap, .hero-grid { padding-left: 20px; padding-right: 20px; }
+        .features-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Entrance animations ── */
+    @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(22px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .hero-badge   { animation: fadeUp 0.5s 0.05s both; }
+    .hero-title   { animation: fadeUp 0.5s 0.13s both; }
+    .hero-sub     { animation: fadeUp 0.5s 0.21s both; }
+    .hero-actions { animation: fadeUp 0.5s 0.29s both; }
+    .hero-right   { animation: fadeUp 0.6s 0.18s both; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── HERO ── -->
+<section class="hero">
+    <div class="hero-grid">
+
+        <!-- Left -->
+        <div class="hero-left">
+            <div class="hero-logos">
+                <img id="cdacLogo" src="static/images/Lite_Theme_logo.png" alt="CDAC">
+                <div class="hero-logos-sep"></div>
+                <img src="static/images/applogo.png" alt="Netra-I App">
+            </div>
+
+            <div class="hero-badge">
+                <div class="badge-dot"></div>
+                AI-Powered Exam Platform
+            </div>
+
+            <h1 class="hero-title">Netra<em>-I</em></h1>
+
+            <p class="hero-sub">
+                Secure Digital Education with <strong>AI-Powered</strong> Integrity.
+                Real-time monitoring, smart analytics, and seamless exam delivery.
+            </p>
+
+            <div class="hero-actions">
+                <a href="{{ url_for('login') }}" class="btn-primary">
+                    Login <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+        <!-- Right – Globe -->
+        <div class="hero-right">
+            <div class="globe-stage">
+                <div class="globe-ring"></div>
+                <div class="globe-ring"></div>
+                <div class="globe-sphere">
+                    <div class="globe-grid-lines"></div>
+                    <div class="globe-shine"></div>
+                    <div class="globe-lock">🔒</div>
+                </div>
+                <div class="orbit">✉️</div>
+                <div class="orbit">🔐</div>
+                <div class="orbit">📡</div>
+                <div class="orbit">☁️</div>
+                <div class="orbit">🛡️</div>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- ── FEATURES ── -->
+<section class="features-section" id="features">
+    <div class="section-wrap">
+        <div class="section-eyebrow">Platform Capabilities</div>
+        <h2 class="section-heading">Everything you need for secure exams</h2>
+
+        <div class="features-grid">
+            <div class="feat-card">
+                <div class="feat-icon">🤖</div>
+                <h3>Smart Question Refinement</h3>
+                <p>Leverage AI for optimal question quality and formatting.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon">👁️</div>
+                <h3>Comprehensive Live Proctoring</h3>
+                <p>Real-time audio, video, and screen monitoring for total integrity.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon">📊</div>
+                <h3>Actionable Insights & Reporting</h3>
+                <p>Detailed performance metrics and anomaly dashboards.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon">⚡</div>
+                <h3>Accelerated Evaluation</h3>
+                <p>Immediate automated grading and comprehensive reporting.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon">🌐</div>
+                <h3>Robust & Scalable Infrastructure</h3>
+                <p>High-uptime, global-scale cloud access for any exam size.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon">📱</div>
+                <h3>Cross-Device Optimization</h3>
+                <p>Seamless exam experience across all modern devices.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── AUDIENCE ── -->
+<section class="audience-section">
+    <div class="section-wrap">
+        <div class="section-eyebrow">Who It's For</div>
+        <h2 class="section-heading">Built for educators and students</h2>
+
+        <div class="audience-grid">
+            <div class="aud-card">
+                <div class="aud-icon">🎓</div>
+                <h3>Faculty</h3>
+                <ul>
+                    <li>AI-assisted exam creation</li>
+                    <li>Malpractice detection &amp; alerts</li>
+                    <li>Exportable performance reports</li>
+                    <li>Live monitoring dashboard</li>
+                </ul>
+            </div>
+            <div class="aud-card">
+                <div class="aud-icon">👨‍🎓</div>
+                <h3>Students</h3>
+                <ul>
+                    <li>Clean, distraction-free exam interface</li>
+                    <li>Auto-saved answers and progress</li>
+                    <li>Instant results after submission</li>
+                    <li>Performance comparison and insights</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function syncCdacLogo(theme) {
+        var logo = document.getElementById('cdacLogo');
+        if (!logo) return;
+        logo.src = theme === 'dark'
+            ? 'static/images/Dark_Theme_logo.png'
+            : 'static/images/Lite_Theme_logo.png';
+    }
+    /* Initial sync */
+    syncCdacLogo(document.documentElement.getAttribute('data-theme') || 'dark');
+    /* Watch theme attribute */
+    new MutationObserver(function() {
+        syncCdacLogo(document.documentElement.getAttribute('data-theme') || 'dark');
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+</script>
+{% endblock %}

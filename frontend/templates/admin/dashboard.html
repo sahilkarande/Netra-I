@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard - ProctoGuard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-wrap {
+        max-width: 1100px;
+        margin: 2rem auto;
+        padding: 0rem 1rem;
+    }
+
+    /* ── Admin Sidebar Nav ── */
+    .admin-nav {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        padding: 0.75rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+    }
+
+    .admin-nav a {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 1rem;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+
+    .admin-nav a:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .admin-nav a.active {
+        background: var(--primary-color);
+        color: #fff;
+        border-color: var(--primary-color);
+    }
+
+    /* ── Header ── */
+    .admin-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .admin-header h1 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0 0 0.25rem;
+    }
+
+    .admin-header p {
+        color: var(--text-secondary);
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    /* ── Stats Grid ── */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-box {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.25rem;
+        text-align: center;
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .stat-box:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .stat-box .icon {
+        font-size: 1.5rem;
+        margin-bottom: 0.3rem;
+    }
+
+    .stat-box .value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary-color);
+        line-height: 1.1;
+    }
+
+    .stat-box .label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-top: 0.2rem;
+    }
+
+    .stat-box.green .value {
+        color: #10b981;
+    }
+
+    .stat-box.blue .value {
+        color: #3b82f6;
+    }
+
+    .stat-box.purple .value {
+        color: #8b5cf6;
+    }
+
+    .stat-box.orange .value {
+        color: #f59e0b;
+    }
+
+    .stat-box.red .value {
+        color: #ef4444;
+    }
+
+    .stat-box.cyan .value {
+        color: #06b6d4;
+    }
+
+    /* ── Section Cards ── */
+    .section-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+
+    .section-card .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .section-card .section-header h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .section-card .section-header .view-all {
+        font-size: 0.8rem;
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    /* ── Tables ── */
+    .admin-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .admin-table th {
+        background: var(--bg-secondary);
+        padding: 0.65rem 1rem;
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+    }
+
+    .admin-table td {
+        padding: 0.7rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.88rem;
+        color: var(--text-primary);
+    }
+
+    .admin-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .admin-table tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .name-cell {
+        font-weight: 600;
+    }
+
+    .sub-text {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+    }
+
+    .badge-sm {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .badge-green {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-blue {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .badge-orange {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .badge-red {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .badge-purple {
+        background: #ede9fe;
+        color: #5b21b6;
+    }
+
+    .score-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .score-bar .bar {
+        flex: 1;
+        height: 6px;
+        background: var(--bg-secondary);
+        border-radius: 3px;
+        overflow: hidden;
+        max-width: 80px;
+    }
+
+    .score-bar .bar .fill {
+        height: 100%;
+        border-radius: 3px;
+        background: var(--primary-color);
+    }
+
+    .empty-row {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
+    }
+
+    .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .two-col {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+    <!-- Admin Navigation -->
+    <div class="admin-nav">
+        <a href="{{ url_for('admin_dashboard') }}" class="active"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="{{ url_for('admin_manage_faculty') }}"><i class="bi bi-person-badge"></i> Manage Faculty</a>
+        <a href="{{ url_for('admin_student_list') }}"><i class="bi bi-people"></i> All Students</a>
+        <a href="{{ url_for('admin_all_exams') }}"><i class="bi bi-journal-text"></i> All Exams</a>
+        <a href="{{ url_for('global_leaderboard') }}"><i class="bi bi-trophy"></i> Leaderboard</a>
+        <a href="{{ url_for('admin_sql_console') }}"><i class="bi bi-terminal"></i> SQL Console</a>
+    </div>
+
+    <!-- Header -->
+    <div class="admin-header">
+        <h1><i class="bi bi-shield-check"></i> Admin Dashboard</h1>
+        <p>Global overview of all faculty, students, exams, and performance</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-box blue">
+            <div class="icon"><i class="bi bi-person-badge"></i></div>
+            <div class="value">{{ total_faculty }}</div>
+            <div class="label">Faculty</div>
+        </div>
+        <div class="stat-box green">
+            <div class="icon"><i class="bi bi-people"></i></div>
+            <div class="value">{{ total_students }}</div>
+            <div class="label">Students</div>
+        </div>
+        <div class="stat-box purple">
+            <div class="icon"><i class="bi bi-journal-text"></i></div>
+            <div class="value">{{ total_exams }}</div>
+            <div class="label">Total Exams</div>
+        </div>
+        <div class="stat-box cyan">
+            <div class="icon"><i class="bi bi-lightning"></i></div>
+            <div class="value">{{ active_exams }}</div>
+            <div class="label">Active Exams</div>
+        </div>
+        <div class="stat-box orange">
+            <div class="icon"><i class="bi bi-pencil-square"></i></div>
+            <div class="value">{{ total_attempts }}</div>
+            <div class="label">Total Attempts</div>
+        </div>
+        <div class="stat-box green">
+            <div class="icon"><i class="bi bi-check-circle"></i></div>
+            <div class="value">{{ submitted_attempts }}</div>
+            <div class="label">Submitted</div>
+        </div>
+    </div>
+
+    <!-- Two-column sections -->
+    <div class="two-col">
+
+        <!-- Faculty-wise Performance -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2><i class="bi bi-person-badge"></i> Faculty Performance</h2>
+                <a href="{{ url_for('admin_manage_faculty') }}" class="view-all">Manage →</a>
+            </div>
+            {% if faculty_stats %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Faculty</th>
+                        <th>Exams</th>
+                        <th>Students</th>
+                        <th>Avg Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in faculty_stats %}
+                    <tr>
+                        <td>
+                            <div class="name-cell">{{ f.user.full_name or f.user.username }}</div>
+                            <div class="sub-text">{{ f.department }}</div>
+                        </td>
+                        <td><span class="badge-sm badge-purple">{{ f.exam_count }}</span></td>
+                        <td>{{ f.student_count }}</td>
+                        <td>
+                            <div class="score-bar">
+                                <span>{{ f.avg_score }}%</span>
+                                <div class="bar">
+                                    <div class="fill" style="width:{{ f.avg_score }}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-row">No faculty created yet</div>
+            {% endif %}
+        </div>
+
+        <!-- Course/Department Analytics -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2><i class="bi bi-mortarboard"></i> Course Analytics</h2>
+            </div>
+            {% if course_stats %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Course / Department</th>
+                        <th>Faculty</th>
+                        <th>Exams</th>
+                        <th>Avg Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in course_stats %}
+                    <tr>
+                        <td class="name-cell">{{ c.department }}</td>
+                        <td>{{ c.faculty_count }}</td>
+                        <td><span class="badge-sm badge-blue">{{ c.exam_count }}</span></td>
+                        <td>
+                            <div class="score-bar">
+                                <span>{{ c.avg_score }}%</span>
+                                <div class="bar">
+                                    <div class="fill" style="width:{{ c.avg_score }}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-row">No courses yet — assign departments to faculty</div>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <!-- Recent Exams -->
+    <div class="section-card">
+        <div class="section-header">
+            <h2><i class="bi bi-clock-history"></i> Recent Exams</h2>
+            <a href="{{ url_for('admin_all_exams') }}" class="view-all">View All Exams →</a>
+        </div>
+        {% if recent_exams_data %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Exam</th>
+                    <th>Created By</th>
+                    <th>Status</th>
+                    <th>Attempts</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in recent_exams_data %}
+                <tr>
+                    <td class="name-cell">{{ item.exam.title }}</td>
+                    <td>
+                        <div>{{ item.creator.full_name if item.creator else 'Unknown' }}</div>
+                        <div class="sub-text">{{ item.creator.department if item.creator else '' }}</div>
+                    </td>
+                    <td>
+                        {% if item.exam.is_active %}
+                        <span class="badge-sm badge-green">Active</span>
+                        {% elif item.exam.force_ended is defined and item.exam.force_ended %}
+                        <span class="badge-sm badge-red">Force Ended</span>
+                        {% else %}
+                        <span class="badge-sm badge-orange">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.attempt_count }}</td>
+                    <td class="sub-text">{{ item.exam.created_at.strftime('%d %b %Y') if item.exam.created_at else '—'
+                        }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-row">No exams created yet</div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

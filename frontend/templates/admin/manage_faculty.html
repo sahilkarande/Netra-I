@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+{% block title %}Manage Faculty - Admin Panel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-panel {
+        max-width: 1100px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .admin-header h1 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .admin-header .badge {
+        background: var(--primary-color);
+        color: #fff;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    /* Stats row */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.25rem;
+        text-align: center;
+    }
+
+    .stat-card .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary-color);
+    }
+
+    .stat-card .stat-label {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-top: 0.25rem;
+    }
+
+    /* Create form card */
+    .create-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .create-card h2 {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--text-primary);
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+    }
+
+    .form-grid .form-group {
+        margin-bottom: 0;
+    }
+
+    .form-grid label {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 0.3rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-grid input,
+    .form-grid select {
+        width: 100%;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+    }
+
+    .form-grid input:focus,
+    .form-grid select:focus {
+        border-color: var(--primary-color);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 99, 102, 241), 0.15);
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 1rem;
+        gap: 0.75rem;
+    }
+
+    .btn-create {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff;
+        border: none;
+        padding: 0.65rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-create:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    /* Faculty table */
+    .faculty-table-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .faculty-table-card h2 {
+        font-size: 1.2rem;
+        font-weight: 600;
+        padding: 1.25rem 1.5rem 0.75rem;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .faculty-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .faculty-table th {
+        background: var(--bg-secondary);
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .faculty-table td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.9rem;
+        color: var(--text-primary);
+    }
+
+    .faculty-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .faculty-table tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .faculty-name {
+        font-weight: 600;
+    }
+
+    .faculty-meta {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+
+    .badge-active {
+        background: #dcfce7;
+        color: #166534;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .btn-delete-faculty {
+        background: none;
+        border: 1px solid #ef4444;
+        color: #ef4444;
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-delete-faculty:hover {
+        background: #ef4444;
+        color: #fff;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--text-secondary);
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: 0.75rem;
+        opacity: 0.5;
+    }
+
+    .nav-links-admin {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .nav-links-admin a {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .nav-links-admin a:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+    }
+
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .admin-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-panel">
+
+    <!-- Admin Nav -->
+    <div class="admin-nav"
+        style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;padding:0.75rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;">
+        <a href="{{ url_for('admin_dashboard') }}"
+            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
+                class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="{{ url_for('admin_manage_faculty') }}"
+            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;background:var(--primary-color);color:#fff;text-decoration:none;font-size:0.85rem;font-weight:500;"><i
+                class="bi bi-person-badge"></i> Manage Faculty</a>
+        <a href="{{ url_for('admin_student_list') }}"
+            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
+                class="bi bi-people"></i> All Students</a>
+        <a href="{{ url_for('admin_all_exams') }}"
+            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
+                class="bi bi-journal-text"></i> All Exams</a>
+        <a href="{{ url_for('global_leaderboard') }}"
+            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
+                class="bi bi-trophy"></i> Leaderboard</a>
+        <a href="{{ url_for('admin_sql_console') }}"
+            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
+                class="bi bi-terminal"></i> SQL Console</a>
+    </div>
+
+    <!-- Header -->
+    <div class="admin-header">
+        <div>
+            <h1><i class="bi bi-shield-lock"></i> Faculty Management</h1>
+            <p style="color: var(--text-secondary); margin: 0.25rem 0 0;">Create and manage faculty accounts</p>
+        </div>
+        <span class="badge">{{ faculty_data | length }} Faculty</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-value">{{ faculty_data | length }}</div>
+            <div class="stat-label">Total Faculty</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ faculty_data | sum(attribute='exam_count') }}</div>
+            <div class="stat-label">Total Exams</div>
+        </div>
+    </div>
+
+    <!-- Create Faculty Form -->
+    <div class="create-card">
+        <h2><i class="bi bi-person-plus"></i> Create New Faculty</h2>
+        <form method="POST" action="{{ url_for('admin_create_faculty') }}">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="full_name">Full Name *</label>
+                    <input type="text" id="full_name" name="full_name" placeholder="Sahil Karande" required>
+                </div>
+                <div class="form-group">
+                    <label for="username">Username *</label>
+                    <input type="text" id="username" name="username" placeholder="sahil" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email *</label>
+                    <input type="email" id="email" name="email" placeholder="sahil@cdac.in" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password *</label>
+                    <input type="password" id="password" name="password" placeholder="Strong password" required
+                        minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="employee_id">Employee ID</label>
+                    <input type="text" id="employee_id" name="employee_id" placeholder="EMP-001">
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone</label>
+                    <input type="tel" id="phone" name="phone" placeholder="+91 9876543210">
+                </div>
+                <div class="form-group">
+                    <label for="department">Department</label>
+                    <input type="text" id="department" name="department" value="PGCP-BDA"
+                        placeholder="Department name">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-create">
+                    <i class="bi bi-plus-circle"></i> Create Faculty
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Faculty List -->
+    <div class="faculty-table-card">
+        <h2><i class="bi bi-people"></i> Existing Faculty</h2>
+
+        {% if faculty_data %}
+        <table class="faculty-table">
+            <thead>
+                <tr>
+                    <th>Faculty</th>
+                    <th>Email</th>
+                    <th>Employee ID</th>
+                    <th>Department</th>
+                    <th>Exams</th>
+                    <th>Created</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in faculty_data %}
+                <tr id="faculty-row-{{ item.user.id }}">
+                    <td>
+                        <div class="faculty-name">{{ item.user.full_name or item.user.username }}</div>
+                        <div class="faculty-meta">@{{ item.user.username }}</div>
+                    </td>
+                    <td>{{ item.user.email }}</td>
+                    <td>{{ item.user.employee_id or '—' }}</td>
+                    <td>{{ item.user.department or '—' }}</td>
+                    <td><span class="badge-active">{{ item.exam_count }} exams</span></td>
+                    <td class="faculty-meta">{{ item.user.created_at.strftime('%d %b %Y') if item.user.created_at else
+                        '—' }}</td>
+                    <td>
+                        <button class="btn-delete-faculty"
+                            onclick="deleteFaculty({{ item.user.id }}, '{{ item.user.full_name or item.user.username }}')">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-people"></i>
+            <p>No faculty accounts yet. Create one above.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    async function deleteFaculty(id, name) {
+        if (!confirm(`Are you sure you want to delete faculty "${name}"?\n\nThis will also delete ALL their exams and related data. This cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const resp = await fetch(`/admin/delete-faculty/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+                document.getElementById(`faculty-row-${id}`)?.remove();
+                alert(data.message);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        } catch (err) {
+            alert('Network error: ' + err.message);
+        }
+    }
+</script>
+{% endblock %}

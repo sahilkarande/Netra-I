@@ -1,0 +1,1629 @@
+{% extends "base.html" %}
+{% block title %}Student Report | Faculty{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/student_report.css') }}">
+<style>
+  /* ============================================================
+   ADDITIONS ON TOP OF YOUR EXISTING student_report.css
+   All new classes are prefixed sr-edit- or sr-adv- to avoid
+   collisions with your existing sr- classes.
+============================================================ */
+
+  /* ── EDIT MODE BANNER ── */
+  .sr-edit-banner {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, .08), rgba(239, 68, 68, .06));
+    border: 1px solid #f59e0b;
+    border-radius: 12px;
+    padding: 12px 18px;
+    margin-bottom: 18px;
+    animation: sr-fadein .25s ease;
+  }
+
+  .sr-edit-banner.active {
+    display: flex;
+  }
+
+  .sr-edit-banner i {
+    font-size: 18px;
+    color: #f59e0b;
+    flex-shrink: 0;
+  }
+
+  .sr-edit-banner-body {
+    flex: 1;
+  }
+
+  .sr-edit-banner-body strong {
+    display: block;
+    font-weight: 700;
+    color: #f59e0b;
+    font-size: 13px;
+  }
+
+  .sr-edit-banner-body span {
+    font-size: 12px;
+    color: rgba(245, 158, 11, .7);
+  }
+
+  /* ── EDIT TOGGLE BUTTON ── */
+  .sr-edit-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--sr-border, #e2e8f0);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--sr-text-muted, #64748b);
+    transition: all .15s;
+    font-family: inherit;
+  }
+
+  .sr-edit-toggle:hover {
+    border-color: #f59e0b;
+    color: #f59e0b;
+  }
+
+  .sr-edit-toggle.active {
+    background: rgba(245, 158, 11, .1);
+    border-color: #f59e0b;
+    color: #f59e0b;
+  }
+
+  .sr-toggle-track {
+    width: 28px;
+    height: 16px;
+    background: #cbd5e1;
+    border-radius: 999px;
+    position: relative;
+    transition: background .2s;
+    flex-shrink: 0;
+  }
+
+  .sr-toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    transition: left .2s;
+  }
+
+  .sr-edit-toggle.active .sr-toggle-track {
+    background: #f59e0b;
+  }
+
+  .sr-edit-toggle.active .sr-toggle-thumb {
+    left: 14px;
+  }
+
+  /* ── CHANGES PANEL (floating) ── */
+  .sr-changes-panel {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 300px;
+    background: var(--sr-surface, #fff);
+    border: 1px solid #f59e0b;
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .18);
+    z-index: 1050;
+    transform: translateY(120px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), opacity .3s;
+  }
+
+  .sr-changes-panel.visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .sr-changes-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .sr-changes-panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f59e0b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sr-changes-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(245, 158, 11, .15);
+    border: 1px solid #f59e0b;
+    color: #f59e0b;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: .05em;
+  }
+
+  .sr-changes-badge .dot {
+    width: 5px;
+    height: 5px;
+    background: #f59e0b;
+    border-radius: 50%;
+    animation: sr-pulse 1.2s infinite;
+  }
+
+  @keyframes sr-pulse {
+
+    0%,
+    100% {
+      opacity: 1
+    }
+
+    50% {
+      opacity: .2
+    }
+  }
+
+  .sr-changes-list {
+    max-height: 140px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    font-size: 11px;
+  }
+
+  .sr-change-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--sr-border, #e2e8f0);
+  }
+
+  .sr-change-item:last-child {
+    border: none;
+  }
+
+  .sr-change-label {
+    color: var(--sr-text-muted, #64748b);
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sr-change-val {
+    font-weight: 700;
+    color: #f59e0b;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .sr-changes-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* ── COLUMN RENAME INPUT (in th) ── */
+  .sr-col-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sr-col-name-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed transparent;
+    color: inherit;
+    font: inherit;
+    padding: 1px 0;
+    min-width: 40px;
+    max-width: 140px;
+    outline: none;
+    cursor: default;
+    transition: border-color .15s;
+  }
+
+  .sr-col-note-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed transparent;
+    color: var(--sr-text-muted, #94a3b8);
+    font-family: inherit;
+    font-size: 10px;
+    font-style: italic;
+    padding: 1px 0;
+    width: 100%;
+    outline: none;
+    cursor: default;
+    transition: border-color .15s;
+  }
+
+  .sr-edit-active .sr-col-name-input {
+    cursor: text;
+    border-bottom-color: rgba(245, 158, 11, .5);
+  }
+
+  .sr-edit-active .sr-col-note-input {
+    cursor: text;
+    border-bottom-color: rgba(100, 116, 139, .35);
+  }
+
+  .sr-edit-active .sr-col-name-input:focus,
+  .sr-edit-active .sr-col-note-input:focus {
+    border-bottom-color: #2563eb;
+  }
+
+  .sr-col-edit-icon {
+    font-size: 9px;
+    color: #f59e0b;
+    opacity: 0;
+    transition: opacity .15s;
+    margin-left: 3px;
+  }
+
+  .sr-edit-active th:hover .sr-col-edit-icon {
+    opacity: 1;
+  }
+
+  /* ── MARKS EDITABLE INPUT ── */
+  .sr-marks-input {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    width: 58px;
+    text-align: center;
+    padding: 3px 4px;
+    border-radius: 5px;
+    outline: none;
+    cursor: default;
+    transition: all .15s;
+  }
+
+  .sr-edit-active .sr-marks-input {
+    cursor: text;
+    background: rgba(0, 0, 0, .03);
+    border: 1px solid #e2e8f0;
+  }
+
+  .sr-edit-active .sr-marks-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, .12);
+    background: #fff;
+  }
+
+  .sr-marks-input.sr-changed {
+    border-color: #f59e0b !important;
+  }
+
+  /* ── ROW EDITED ── */
+  .sr-row-edited {
+    background: rgba(245, 158, 11, .04) !important;
+  }
+
+  /* ── UNDO ROW BUTTON ── */
+  .sr-undo-btn {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #f59e0b;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all .15s;
+    font-family: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .sr-undo-btn:hover {
+    background: rgba(245, 158, 11, .1);
+    border-color: #f59e0b;
+  }
+
+  .sr-row-edited .sr-undo-btn {
+    display: inline-flex;
+  }
+
+  /* ── FILTER ACTIVE TAGS ── */
+  .sr-filter-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    min-height: 0;
+  }
+
+  .sr-filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(99, 102, 241, .08);
+    border: 1px solid rgba(99, 102, 241, .35);
+    color: #6366f1;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+  }
+
+  .sr-filter-tag:hover {
+    background: rgba(99, 102, 241, .18);
+  }
+
+  .sr-filter-tag i {
+    font-size: 10px;
+  }
+
+  /* ── FIND & REPLACE PANEL ── */
+  .sr-fnr-panel {
+   
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    animation: sr-fadein .2s ease;
+  }
+
+  .sr-fnr-panel.active {
+    display: flex;
+  }
+
+  .sr-fnr-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .sr-fnr-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sr-text-muted, #64748b);
+    min-width: 54px;
+  }
+
+  .sr-fnr-input {
+    flex: 1;
+    min-width: 140px;
+    max-width: 280px;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--sr-surface, #fff);
+    color: black;
+    outline: none;
+    transition: border-color .15s;
+  }
+
+  .sr-fnr-input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, .12);
+  }
+
+  .sr-fnr-scope {
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-family: inherit;
+   
+    cursor: pointer;
+    outline: none;
+  }
+
+  .sr-fnr-status {
+    font-size: 11px;
+    color: var(--sr-text-muted, #94a3b8);
+    margin-left: auto;
+  }
+
+  .sr-fnr-highlight {
+    outline: 2px solid #f59e0b !important;
+    outline-offset: 1px;
+    background: rgba(245, 158, 11, .15) !important;
+    border-radius: 4px;
+    transition: outline .1s;
+  }
+
+  .sr-fnr-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    border: 1px solid var(--sr-border, #e2e8f0);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--sr-text-muted, #64748b);
+    transition: all .15s;
+    font-family: inherit;
+  }
+
+  .sr-fnr-toggle:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+  }
+
+  .sr-fnr-toggle.active {
+    background: rgba(99, 102, 241, .08);
+    border-color: #6366f1;
+    color: #6366f1;
+  }
+
+  /* ── PDF OPTIONS MODAL ── */
+  .sr-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .4);
+    backdrop-filter: blur(3px);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+  }
+
+  .sr-modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .sr-modal {
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px;
+    width: 430px;
+    max-width: 92vw;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .2);
+    transform: scale(.95);
+    transition: transform .2s;
+  }
+
+  .sr-modal-overlay.open .sr-modal {
+    transform: scale(1);
+  }
+
+  .sr-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 4px;
+  }
+
+  .sr-modal-sub {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 18px;
+  }
+
+  .sr-pdf-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 11px 13px;
+    border-radius: 9px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+
+  .sr-pdf-option:hover {
+    border-color: #2563eb;
+    background: #eff6ff;
+  }
+
+  .sr-pdf-option input[type=checkbox] {
+    margin-top: 2px;
+    accent-color: #2563eb;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  .sr-pdf-option-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  .sr-pdf-option-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 2px;
+  }
+
+  .sr-modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
+  }
+
+  @keyframes sr-fadein {
+    from {
+      opacity: 0;
+      transform: translateY(8px)
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0)
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sr-container">
+
+  <!-- ===== HEADER (original, unchanged) ===== -->
+  <div class="sr-header">
+    <div class="sr-header-left">
+      <div class="sr-header-icon">
+        <i class="bi bi-clipboard-data"></i>
+      </div>
+      <div>
+        <h1 class="sr-title">Student Report</h1>
+        <p class="sr-subtitle">Generate and analyze academic performance reports</p>
+      </div>
+    </div>
+    {% if report_data %}
+    <div class="sr-header-actions">
+      <button class="sr-btn sr-btn-outline" onclick="openPdfModal()">
+        <i class="bi bi-file-earmark-pdf"></i> Download PDF
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ===== BATCH & EXAM SELECTOR (original, unchanged) ===== -->
+  <div class="sr-selector-card sr-animate-in">
+    <div class="sr-selector-title">
+      <i class="bi bi-funnel"></i> Select Report Parameters
+    </div>
+    <form method="GET" action="{{ url_for('faculty_student_report') }}">
+      <div class="sr-selector-grid">
+        <div class="sr-field-group">
+          <label class="sr-field-label" for="batch">Batch</label>
+          <select name="batch" id="batch" class="sr-select" required>
+            <option value="">-- Select Batch --</option>
+            {% for batch in batches %}
+            <option value="{{ batch }}" {% if batch==selected_batch %}selected{% endif %}>{{ batch }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="sr-field-group">
+          <label class="sr-field-label" for="exam">Exam(s)</label>
+          <select name="exam_ids" id="exam" class="sr-select" multiple required>
+            {% for exam in exams %}
+            <option value="{{ exam.id }}" {% if exam.id in selected_exam_ids %}selected{% endif %}>
+              {{ exam.title }}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="sr-hint">Hold <strong>Ctrl</strong> / <strong>Cmd</strong> to select multiple</span>
+        </div>
+
+        <div class="sr-field-group">
+          <label class="sr-field-label">&nbsp;</label>
+          <button type="submit" class="sr-btn sr-btn-primary">
+            <i class="bi bi-bar-chart-fill"></i> Generate Report
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {% if report_data %}
+
+  <!-- ===== SUMMARY METRICS (original, unchanged) ===== -->
+  <div class="sr-summary-grid">
+    <div class="sr-metric-card sr-metric-blue sr-animate-in sr-delay-1">
+      <div class="sr-metric-header">
+        <div class="sr-metric-icon"><i class="bi bi-people-fill"></i></div>
+      </div>
+      <div class="sr-metric-value">{{ summary.total_students }}</div>
+      <div class="sr-metric-label">Total Students</div>
+    </div>
+    <div class="sr-metric-card sr-metric-cyan sr-animate-in sr-delay-2">
+      <div class="sr-metric-header">
+        <div class="sr-metric-icon"><i class="bi bi-person-check-fill"></i></div>
+      </div>
+      <div class="sr-metric-value">{{ summary.appeared }}</div>
+      <div class="sr-metric-label">Appeared</div>
+    </div>
+    <div class="sr-metric-card sr-metric-green sr-animate-in sr-delay-3">
+      <div class="sr-metric-header">
+        <div class="sr-metric-icon"><i class="bi bi-check-circle-fill"></i></div>
+      </div>
+      <div class="sr-metric-value" id="live-passed">{{ summary.passed }}</div>
+      <div class="sr-metric-label">Passed</div>
+    </div>
+    <div class="sr-metric-card sr-metric-red sr-animate-in sr-delay-4">
+      <div class="sr-metric-header">
+        <div class="sr-metric-icon"><i class="bi bi-x-circle-fill"></i></div>
+      </div>
+      <div class="sr-metric-value" id="live-failed">{{ summary.failed }}</div>
+      <div class="sr-metric-label">Failed</div>
+    </div>
+    <div class="sr-metric-card sr-metric-amber sr-animate-in sr-delay-5">
+      <div class="sr-metric-header">
+        <div class="sr-metric-icon"><i class="bi bi-dash-circle-fill"></i></div>
+      </div>
+      <div class="sr-metric-value">{{ summary.absent }}</div>
+      <div class="sr-metric-label">Absent</div>
+    </div>
+    <div class="sr-metric-card sr-metric-purple sr-animate-in sr-delay-6">
+      <div class="sr-metric-header">
+        <div class="sr-metric-icon"><i class="bi bi-graph-up"></i></div>
+      </div>
+      <div class="sr-metric-value" id="live-avg">{{ "%.1f"|format(summary.average_marks) }}</div>
+      <div class="sr-metric-label">Avg. Marks</div>
+    </div>
+    <div class="sr-metric-card sr-metric-green sr-animate-in sr-delay-6" style="grid-column: span 1;">
+      <div class="sr-metric-header">
+        <div class="sr-metric-icon"><i class="bi bi-trophy-fill"></i></div>
+      </div>
+      <div class="sr-metric-value" id="live-passpct">{{ "%.1f"|format(summary.pass_percentage) }}%</div>
+      <div class="sr-metric-label">Pass Rate</div>
+      <div class="sr-pass-bar-wrap">
+        <div class="sr-pass-bar-track">
+          <div class="sr-pass-bar-fill" id="live-passbar" style="width: {{ summary.pass_percentage }}%;"></div>
+        </div>
+        <div class="sr-pass-bar-label"><span>0%</span><span>100%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== EDIT MODE BANNER (NEW) ===== -->
+  <div class="sr-edit-banner" id="sr-edit-banner">
+    <i class="bi bi-pencil-fill"></i>
+    <div class="sr-edit-banner-body">
+      <strong>Edit Mode Active</strong>
+      <span>Click any marks cell to edit · Click column headers to rename · All changes tracked in the panel</span>
+    </div>
+    <button class="sr-btn sr-btn-ghost sr-btn-sm" onclick="revertAllChanges()">
+      <i class="bi bi-arrow-counterclockwise"></i> Revert All
+    </button>
+  </div>
+
+  <!-- ===== FILTER BAR (original fields + new filter tags row) ===== -->
+  <div class="sr-filter-card sr-animate-in">
+    <div class="sr-filter-header">
+      <div class="sr-filter-title">
+        <i class="bi bi-funnel"></i> Filter Results
+      </div>
+      <div class="sr-filter-actions">
+        <span class="sr-result-count" id="result-count">
+          Showing <strong id="visible-rows">0</strong> of <strong id="total-rows">0</strong>
+        </span>
+        <button type="button" class="sr-btn sr-btn-ghost sr-btn-sm" onclick="clearAllFilters()">
+          <i class="bi bi-arrow-counterclockwise"></i> Reset
+        </button>
+        <button type="button" class="sr-btn sr-btn-success sr-btn-sm" onclick="exportFilteredData()">
+          <i class="bi bi-download"></i> Export CSV
+        </button>
+      </div>
+    </div>
+
+    <div class="sr-filter-grid">
+      <div class="sr-filter-item">
+        <label for="filter-prn">PRN Number</label>
+        <input type="text" id="filter-prn" class="sr-filter-input" placeholder="Search PRN...">
+      </div>
+      <div class="sr-filter-item">
+        <label for="filter-name">Student Name</label>
+        <input type="text" id="filter-name" class="sr-filter-input" placeholder="Search name...">
+      </div>
+      <div class="sr-filter-item">
+        <label for="filter-min-total">Min Total</label>
+        <input type="number" id="filter-min-total" class="sr-filter-input" placeholder="Min marks..." step="0.01">
+      </div>
+      <div class="sr-filter-item">
+        <label for="filter-max-total">Max Total</label>
+        <input type="number" id="filter-max-total" class="sr-filter-input" placeholder="Max marks..." step="0.01">
+      </div>
+      <div class="sr-filter-item">
+        <label for="filter-min-percentage">Min %</label>
+        <input type="number" id="filter-min-percentage" class="sr-filter-input" placeholder="Min %..." step="0.01">
+      </div>
+      <div class="sr-filter-item">
+        <label for="filter-status">Status</label>
+        <select id="filter-status" class="sr-filter-input">
+          <option value="">All</option>
+          <option value="pass">Passed</option>
+          <option value="fail">Failed</option>
+          <option value="absent">Absent</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- active filter pill tags -->
+    <div class="sr-filter-tags" id="sr-filter-tags"></div>
+  </div>
+
+  <!-- ===== FIND & REPLACE PANEL (NEW) ===== -->
+  <div class="sr-fnr-panel" id="sr-fnr-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:13px;font-weight:700;color:#6366f1;"><i class="bi bi-search"></i> Find &amp; Replace</span>
+      <span class="sr-fnr-status" id="sr-fnr-status"></span>
+    </div>
+    <div class="sr-fnr-row">
+      <span class="sr-fnr-label">Find</span>
+      <input class="sr-fnr-input" id="sr-fnr-find" placeholder="Search text or value…" autocomplete="off">
+      <select class="sr-fnr-scope" id="sr-fnr-scope">
+        <option value="marks">Marks only</option>
+        <option value="all">All cells</option>
+      </select>
+    </div>
+    <div class="sr-fnr-row">
+      <span class="sr-fnr-label">Replace</span>
+      <input class="sr-fnr-input" id="sr-fnr-replace" placeholder="Replacement value…" autocomplete="off">
+      <button class="sr-btn sr-btn-ghost sr-btn-sm" onclick="fnrFindNext()" title="Find Next">
+        <i class="bi bi-chevron-down"></i> Find Next
+      </button>
+      <button class="sr-btn sr-btn-outline sr-btn-sm" onclick="fnrReplace()">
+        <i class="bi bi-pencil"></i> Replace
+      </button>
+      <button class="sr-btn sr-btn-primary sr-btn-sm" onclick="fnrReplaceAll()">
+        <i class="bi bi-pencil-fill"></i> Replace All
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== DATA TABLE ===== -->
+  <div class="sr-table-card sr-animate-in">
+    <div class="sr-table-toolbar">
+      <div class="sr-table-title">
+        <i class="bi bi-table"></i>
+        {{ selected_batch }} — Exam Report
+      </div>
+      <div class="sr-toolbar-actions">
+        <!-- Find & Replace toggle -->
+        <button class="sr-fnr-toggle" id="sr-fnr-toggle-btn" onclick="toggleFnR()">
+          <i class="bi bi-search"></i> Find &amp; Replace
+        </button>
+        <!-- Edit Mode toggle -->
+        <button class="sr-edit-toggle" id="sr-edit-toggle-btn" onclick="toggleEditMode()">
+          <div class="sr-toggle-track">
+            <div class="sr-toggle-thumb"></div>
+          </div>
+          <span>Edit Mode</span>
+        </button>
+        <!-- PDF opens modal -->
+        <button class="sr-btn sr-btn-danger sr-btn-sm" onclick="openPdfModal()">
+          <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="sr-table-wrap">
+      <table class="sr-table" id="report-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-column="0">#</th>
+            <th class="sortable" data-column="1">PRN Number</th>
+            <th class="sortable" data-column="2">Student Name</th>
+
+            {% for exam_title in exam_titles %}
+            <th class="sortable" data-column="{{ loop.index + 2 }}">
+              <div class="sr-col-wrap">
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <input class="sr-col-name-input" data-colidx="{{ loop.index0 }}" data-orig="{{ exam_title }}"
+                    value="{{ exam_title }}" readonly onclick="event.stopPropagation()"
+                    onchange="renameColumn({{ loop.index0 }}, this.value)" title="Enable Edit Mode to rename">
+                  <i class="bi bi-pencil sr-col-edit-icon"></i>
+                </div>
+                <input class="sr-col-note-input" data-noteidx="{{ loop.index0 }}" value="" readonly
+                  placeholder="Add note..." onclick="event.stopPropagation()"
+                  onchange="updateColNote({{ loop.index0 }}, this.value)">
+              </div>
+            </th>
+            {% endfor %}
+
+            <th class="sortable" data-column="{{ exam_titles|length + 3 }}">Total</th>
+            <th class="sortable" data-column="{{ exam_titles|length + 4 }}">Percentage</th>
+            <th>Status</th>
+            <th style="width:70px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for student in report_data %}
+          <tr data-si="{{ loop.index0 }}" data-prn="{{ student.prn_number or '' }}"
+            data-name="{{ student.full_name or 'Unnamed' }}" data-total="{{ student.total_marks }}"
+            data-percentage="{{ student.percentage }}"
+            data-status="{{ 'pass' if student.percentage >= 50 else 'fail' if student.total_marks > 0 else 'absent' }}">
+
+            <td style="color: var(--sr-text-muted); font-size: 0.85rem;">{{ loop.index }}</td>
+
+            <td><span class="sr-mono">{{ student.prn_number or '—' }}</span></td>
+
+            <td>
+              <div class="sr-student-cell">
+                <div class="sr-avatar"
+                  style="background: linear-gradient(135deg, {{ ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#06b6d4']|random }}, {{ ['#4f46e5','#7c3aed','#db2777','#d97706','#059669','#0891b2']|random }});">
+                  {{ (student.full_name or 'U')[0]|upper }}
+                </div>
+                <span class="sr-student-name">{{ student.full_name or 'Unnamed' }}</span>
+              </div>
+            </td>
+
+            {% set si = loop.index0 %}
+            {% for marks in student.exam_marks %}
+            <td
+              class="sr-marks {% if marks == 'Absent' %}sr-marks-absent{% elif marks|float >= 50 %}sr-marks-pass{% else %}sr-marks-fail{% endif %}">
+              <input class="sr-marks-input" data-si="{{ si }}" data-mi="{{ loop.index0 }}" data-orig="{{ marks }}"
+                value="{{ marks }}" readonly onchange="editMark(this)" onfocus="if(this.value==='Absent')this.select()">
+            </td>
+            {% endfor %}
+
+            <td class="sr-total" id="sr-total-{{ si }}">{{ "%.2f"|format(student.total_marks) }}</td>
+
+            <td>
+              <div class="sr-pct-cell">
+                <div class="sr-pct-bar">
+                  <div
+                    class="sr-pct-fill {% if student.percentage >= 50 %}sr-pct-fill-pass{% else %}sr-pct-fill-fail{% endif %}"
+                    id="sr-pctbar-{{ si }}" style="width: {{ [student.percentage, 100]|min }}%;"></div>
+                </div>
+                <span class="sr-pct-value {% if student.percentage >= 50 %}sr-pct-pass{% else %}sr-pct-fail{% endif %}"
+                  id="sr-pctval-{{ si }}">
+                  {{ "%.1f"|format(student.percentage) }}%
+                </span>
+              </div>
+            </td>
+
+            <td id="sr-badge-{{ si }}">
+              {% if student.percentage >= 50 %}
+              <span class="sr-badge sr-badge-pass">Pass</span>
+              {% elif student.total_marks > 0 %}
+              <span class="sr-badge sr-badge-fail">Fail</span>
+              {% else %}
+              <span class="sr-badge sr-badge-absent">Absent</span>
+              {% endif %}
+            </td>
+
+            <!-- per-row undo (hidden until row is edited) -->
+            <td>
+              <button class="sr-undo-btn" data-si="{{ si }}" onclick="undoRow(this)">
+                <i class="bi bi-arrow-counterclockwise"></i> Undo
+              </button>
+            </td>
+
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sr-table-footer">
+      <span>Showing <strong id="footer-visible">{{ report_data|length }}</strong> of
+        <strong>{{ report_data|length }}</strong> students</span>
+      <span style="color: var(--sr-text-muted); font-size: 0.85rem;">
+        Click column headers to sort &nbsp;·&nbsp;
+        <span style="color: #f59e0b; font-weight: 600;">Edit Mode</span> to modify marks &amp; rename columns
+      </span>
+    </div>
+  </div>
+
+  {% elif selected_batch %}
+  <div class="sr-empty sr-animate-in">
+    <div class="sr-empty-icon"><i class="bi bi-exclamation-triangle"></i></div>
+    <h3>No Data Available</h3>
+    <p>No report data found for the selected batch and exams. Try a different selection.</p>
+  </div>
+  {% else %}
+  <div class="sr-empty sr-animate-in">
+    <div class="sr-empty-icon"><i class="bi bi-clipboard-data"></i></div>
+    <h3>Generate a Report</h3>
+    <p>Select a batch and one or more exams above to generate a detailed student performance report.</p>
+  </div>
+  {% endif %}
+
+</div><!-- /.sr-container -->
+
+
+<!-- ===== FLOATING CHANGES PANEL (NEW) ===== -->
+<div class="sr-changes-panel" id="sr-changes-panel">
+  <div class="sr-changes-panel-header">
+    <div class="sr-changes-panel-title">
+      <i class="bi bi-pencil-square"></i> Unsaved Changes
+    </div>
+    <div class="sr-changes-badge">
+      <div class="dot"></div> LIVE
+    </div>
+  </div>
+  <div class="sr-changes-list" id="sr-changes-list"></div>
+  <div class="sr-changes-actions">
+    <button class="sr-btn sr-btn-ghost sr-btn-sm" onclick="revertAllChanges()" style="flex:1;">
+      <i class="bi bi-arrow-counterclockwise"></i> Revert
+    </button>
+    <button class="sr-btn sr-btn-danger sr-btn-sm" onclick="openPdfModal()" style="flex:1;">
+      <i class="bi bi-file-earmark-pdf"></i> Export PDF
+    </button>
+  </div>
+</div>
+
+
+<!-- ===== PDF EXPORT MODAL (NEW) ===== -->
+<div class="sr-modal-overlay" id="sr-pdf-modal">
+  <div class="sr-modal">
+    <div class="sr-modal-title"><i class="bi bi-file-earmark-pdf" style="color:#ef4444;margin-right:6px;"></i>Export PDF
+      Report</div>
+    <div class="sr-modal-sub">Choose what the exported PDF will include</div>
+
+    <label class="sr-pdf-option">
+      <input type="checkbox" id="pdf-opt-filters" checked>
+      <div>
+        <div class="sr-pdf-option-label">Apply current filters</div>
+        <div class="sr-pdf-option-desc">Only rows visible after filtering appear in the PDF</div>
+      </div>
+    </label>
+    <label class="sr-pdf-option">
+      <input type="checkbox" id="pdf-opt-sort" checked>
+      <div>
+        <div class="sr-pdf-option-label">Apply current sort order</div>
+        <div class="sr-pdf-option-desc">PDF follows the same column sort currently displayed</div>
+      </div>
+    </label>
+    <label class="sr-pdf-option">
+      <input type="checkbox" id="pdf-opt-edits" checked>
+      <div>
+        <div class="sr-pdf-option-label">Include edited marks</div>
+        <div class="sr-pdf-option-desc">Reflect manually changed marks and recalculated totals</div>
+      </div>
+    </label>
+    <label class="sr-pdf-option">
+      <input type="checkbox" id="pdf-opt-colnames" checked>
+      <div>
+        <div class="sr-pdf-option-label">Use renamed column headers</div>
+        <div class="sr-pdf-option-desc">Custom names replace the original exam titles in the PDF</div>
+      </div>
+    </label>
+    <label class="sr-pdf-option">
+      <input type="checkbox" id="pdf-opt-notes">
+      <div>
+        <div class="sr-pdf-option-label">Include column notes</div>
+        <div class="sr-pdf-option-desc">Show italic subtitle notes under each exam column header</div>
+      </div>
+    </label>
+
+    <div class="sr-modal-footer">
+      <button class="sr-btn sr-btn-ghost" onclick="closePdfModal()">Cancel</button>
+      {% if report_data %}
+      <button id="sr-pdf-btn" class="sr-btn sr-btn-danger" data-batch="{{ selected_batch }}"
+        data-examids="{{ selected_exam_ids|join(',') }}" onclick="handlePdfExport()">
+        <i class="bi bi-file-earmark-arrow-down"></i> Generate PDF
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+
+<script>
+  // ============================================================================
+  // STATE
+  // ============================================================================
+  const STATE = {
+    editMode: false,
+    changes: [],
+    colNotes: {},
+  };
+
+  // ============================================================================
+  // INIT
+  // ============================================================================
+  document.addEventListener('DOMContentLoaded', function () {
+    updateRowCounts();
+    attachSortListeners();
+    attachFilterListeners();
+  });
+
+  // ============================================================================
+  // EDIT MODE
+  // ============================================================================
+  function toggleEditMode() {
+    STATE.editMode = !STATE.editMode;
+    const table = document.getElementById('report-table');
+    const btn = document.getElementById('sr-edit-toggle-btn');
+    const banner = document.getElementById('sr-edit-banner');
+    if (!table) return;
+
+    table.classList.toggle('sr-edit-active', STATE.editMode);
+    btn.classList.toggle('active', STATE.editMode);
+    if (banner) banner.classList.toggle('active', STATE.editMode);
+
+    table.querySelectorAll('.sr-marks-input').forEach(inp => { inp.readOnly = !STATE.editMode; });
+    table.querySelectorAll('.sr-col-name-input').forEach(inp => { inp.readOnly = !STATE.editMode; });
+    table.querySelectorAll('.sr-col-note-input').forEach(inp => { inp.readOnly = !STATE.editMode; });
+  }
+
+  // ============================================================================
+  // MARK EDITING
+  // ============================================================================
+  function editMark(inp) {
+    const si = parseInt(inp.dataset.si);
+    const mi = parseInt(inp.dataset.mi);
+    const orig = inp.dataset.orig;
+    const raw = inp.value.trim();
+    const val = (raw.toLowerCase() === 'absent' || raw === '' || raw === '-') ? 'Absent' : raw;
+    inp.value = val;
+    inp.classList.add('sr-changed');
+
+    // Re-style parent td
+    const td = inp.closest('td');
+    if (td) {
+      const n = parseFloat(val);
+      td.className = 'sr-marks ' + (val === 'Absent' ? 'sr-marks-absent' : n >= 50 ? 'sr-marks-pass' : 'sr-marks-fail');
+    }
+
+    const row = inp.closest('tr');
+    if (row) row.classList.add('sr-row-edited');
+
+    recalcRow(row);
+
+    // Label for the change log
+    const colInp = document.querySelector(`.sr-col-name-input[data-colidx="${mi}"]`);
+    const colName = colInp ? colInp.value : `Exam ${mi + 1}`;
+    logChange(`${row?.dataset.name || ''} — ${colName}`, `${orig} → ${val}`);
+    updateChangesPanel();
+    updateLiveMetrics();
+  }
+
+  function recalcRow(row) {
+    if (!row) return;
+    const si = row.dataset.si;
+    const inputs = row.querySelectorAll('.sr-marks-input');
+    let total = 0, allAbsent = true;
+
+    inputs.forEach(inp => {
+      const n = parseFloat(inp.value);
+      if (!isNaN(n)) { total += n; allAbsent = false; }
+    });
+
+    const maxTotal = getMaxTotal();
+    const pct = (allAbsent || maxTotal === 0) ? 0 : (total / maxTotal) * 100;
+    const status = allAbsent ? 'absent' : (pct >= 50 ? 'pass' : 'fail');
+
+    const totalEl = document.getElementById(`sr-total-${si}`);
+    const pctBarEl = document.getElementById(`sr-pctbar-${si}`);
+    const pctValEl = document.getElementById(`sr-pctval-${si}`);
+    const badgeEl = document.getElementById(`sr-badge-${si}`);
+
+    if (totalEl) totalEl.textContent = allAbsent ? '—' : total.toFixed(2);
+    if (pctBarEl) {
+      pctBarEl.style.width = Math.min(pct, 100) + '%';
+      pctBarEl.className = 'sr-pct-fill ' + (pct >= 50 ? 'sr-pct-fill-pass' : 'sr-pct-fill-fail');
+    }
+    if (pctValEl) {
+      pctValEl.textContent = allAbsent ? '—' : pct.toFixed(1) + '%';
+      pctValEl.className = 'sr-pct-value ' + (pct >= 50 ? 'sr-pct-pass' : 'sr-pct-fail');
+    }
+    if (badgeEl) {
+      const label = status === 'pass' ? 'Pass' : status === 'fail' ? 'Fail' : 'Absent';
+      badgeEl.innerHTML = `<span class="sr-badge sr-badge-${status}">${label}</span>`;
+    }
+
+    row.dataset.total = allAbsent ? 0 : total;
+    row.dataset.percentage = allAbsent ? 0 : pct.toFixed(2);
+    row.dataset.status = status;
+  }
+
+  function getMaxTotal() {
+    // Try to read from table header "Total (/X)"
+    const headers = document.querySelectorAll('.sr-table thead th');
+    for (const th of headers) {
+      const txt = th.textContent;
+      const m = txt.match(/\/(\d+(\.\d+)?)/);
+      if (m) return parseFloat(m[1]);
+    }
+    // Fallback: back-calculate from first non-absent row
+    const firstRow = document.querySelector('.sr-table tbody tr:not([data-status="absent"])');
+    if (firstRow) {
+      const t = parseFloat(firstRow.dataset.total) || 0;
+      const p = parseFloat(firstRow.dataset.percentage) || 0;
+      if (p > 0) return Math.round(t / p * 100);
+    }
+    return 100;
+  }
+
+  // ============================================================================
+  // UNDO ROW
+  // ============================================================================
+  function undoRow(btn) {
+    const si = btn.dataset.si;
+    const row = document.querySelector(`tr[data-si="${si}"]`);
+    if (!row) return;
+
+    row.querySelectorAll('.sr-marks-input').forEach(inp => {
+      inp.value = inp.dataset.orig;
+      inp.classList.remove('sr-changed');
+      const td = inp.closest('td');
+      const n = parseFloat(inp.value);
+      if (td) td.className = 'sr-marks ' + (inp.value === 'Absent' ? 'sr-marks-absent' : n >= 50 ? 'sr-marks-pass' : 'sr-marks-fail');
+    });
+    row.classList.remove('sr-row-edited');
+    recalcRow(row);
+
+    const name = row.dataset.name || '';
+    STATE.changes = STATE.changes.filter(c => !c.label.startsWith(name));
+    updateChangesPanel();
+    updateLiveMetrics();
+  }
+
+  // ============================================================================
+  // REVERT ALL
+  // ============================================================================
+  function revertAllChanges() {
+    document.querySelectorAll('.sr-marks-input').forEach(inp => {
+      inp.value = inp.dataset.orig;
+      inp.classList.remove('sr-changed');
+      const td = inp.closest('td');
+      const n = parseFloat(inp.value);
+      if (td) td.className = 'sr-marks ' + (inp.value === 'Absent' ? 'sr-marks-absent' : n >= 50 ? 'sr-marks-pass' : 'sr-marks-fail');
+    });
+    document.querySelectorAll('.sr-col-name-input').forEach(inp => {
+      inp.value = inp.dataset.orig || inp.value;
+    });
+    document.querySelectorAll('.sr-table tbody tr').forEach(row => {
+      row.classList.remove('sr-row-edited');
+      recalcRow(row);
+    });
+    STATE.changes = [];
+    updateChangesPanel();
+    updateLiveMetrics();
+  }
+
+  // ============================================================================
+  // COLUMN RENAME
+  // ============================================================================
+  function renameColumn(idx, newName) {
+    const inp = document.querySelector(`.sr-col-name-input[data-colidx="${idx}"]`);
+    const old = inp?.dataset.orig || '';
+    logChange(`Column renamed`, `"${old}" → "${newName}"`);
+    updateChangesPanel();
+  }
+
+  function updateColNote(idx, note) {
+    STATE.colNotes[idx] = note;
+  }
+
+  // ============================================================================
+  // CHANGES PANEL
+  // ============================================================================
+  function logChange(label, val) {
+    STATE.changes = STATE.changes.filter(c => c.label !== label);
+    STATE.changes.unshift({ label, val });
+    if (STATE.changes.length > 25) STATE.changes.length = 25;
+  }
+
+  function updateChangesPanel() {
+    const panel = document.getElementById('sr-changes-panel');
+    const list = document.getElementById('sr-changes-list');
+    if (!panel) return;
+    if (STATE.changes.length === 0) { panel.classList.remove('visible'); return; }
+    panel.classList.add('visible');
+    list.innerHTML = STATE.changes.map(c => `
+    <div class="sr-change-item">
+      <span class="sr-change-label">${c.label}</span>
+      <span class="sr-change-val">${c.val}</span>
+    </div>`).join('');
+  }
+
+  // ============================================================================
+  // LIVE METRICS
+  // ============================================================================
+  function updateLiveMetrics() {
+    let passed = 0, failed = 0, sumMarks = 0, appeared = 0;
+    document.querySelectorAll('.sr-table tbody tr').forEach(row => {
+      const status = row.dataset.status;
+      const total = parseFloat(row.dataset.total) || 0;
+      if (status === 'absent') return;
+      appeared++;
+      sumMarks += total;
+      if (status === 'pass') passed++; else failed++;
+    });
+    const passPct = appeared ? (passed / appeared * 100) : 0;
+    const upd = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    upd('live-passed', passed);
+    upd('live-failed', failed);
+    upd('live-avg', appeared ? (sumMarks / appeared).toFixed(1) : '0.0');
+    upd('live-passpct', passPct.toFixed(1) + '%');
+    const bar = document.getElementById('live-passbar');
+    if (bar) bar.style.width = passPct + '%';
+  }
+
+  // ============================================================================
+  // SORTING (original logic, unchanged)
+  // ============================================================================
+  let currentSort = { column: null, direction: 'asc' };
+
+  function attachSortListeners() {
+    document.querySelectorAll('.sr-table th.sortable').forEach(th => {
+      th.addEventListener('click', function () { sortTable(parseInt(this.dataset.column)); });
+    });
+  }
+
+  function sortTable(columnIndex) {
+    const table = document.getElementById('report-table');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr:not(.filtered-out)'));
+
+    currentSort.direction = (currentSort.column === columnIndex)
+      ? (currentSort.direction === 'asc' ? 'desc' : 'asc') : 'asc';
+    currentSort.column = columnIndex;
+
+    rows.sort((a, b) => {
+      let av = a.cells[columnIndex]?.textContent.trim() || '';
+      let bv = b.cells[columnIndex]?.textContent.trim() || '';
+      if (columnIndex === 0 || columnIndex >= 3) {
+        const an = parseFloat(av.replace(/[^0-9.-]/g, '')) || 0;
+        const bn = parseFloat(bv.replace(/[^0-9.-]/g, '')) || 0;
+        return currentSort.direction === 'asc' ? an - bn : bn - an;
+      }
+      return currentSort.direction === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+
+    rows.forEach(r => tbody.appendChild(r));
+    updateSortIndicators(columnIndex);
+  }
+
+  function updateSortIndicators(activeColumn) {
+    document.querySelectorAll('.sr-table th.sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (parseInt(th.dataset.column) === activeColumn)
+        th.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+    });
+  }
+
+  // ============================================================================
+  // FILTERING (original logic + tags)
+  // ============================================================================
+  function attachFilterListeners() {
+    document.querySelectorAll('.sr-filter-input').forEach(inp => {
+      inp.addEventListener('input', applyFilters);
+      inp.addEventListener('change', applyFilters);
+    });
+  }
+
+  function applyFilters() {
+    const fPRN = document.getElementById('filter-prn')?.value.toLowerCase() || '';
+    const fName = document.getElementById('filter-name')?.value.toLowerCase() || '';
+    const fMinT = parseFloat(document.getElementById('filter-min-total')?.value) || -Infinity;
+    const fMaxT = parseFloat(document.getElementById('filter-max-total')?.value) || Infinity;
+    const fMinPct = parseFloat(document.getElementById('filter-min-percentage')?.value) || -Infinity;
+    const fStatus = document.getElementById('filter-status')?.value || '';
+
+    document.querySelectorAll('.sr-table tbody tr').forEach(row => {
+      const match =
+        (!fPRN || (row.dataset.prn || '').includes(fPRN)) &&
+        (!fName || (row.dataset.name || '').includes(fName)) &&
+        (parseFloat(row.dataset.total) || 0) >= fMinT &&
+        (parseFloat(row.dataset.total) || 0) <= fMaxT &&
+        (parseFloat(row.dataset.percentage) || 0) >= fMinPct &&
+        (!fStatus || row.dataset.status === fStatus);
+      row.classList.toggle('filtered-out', !match);
+    });
+
+    updateRowCounts();
+    renderFilterTags();
+  }
+
+  function clearAllFilters() {
+    ['filter-prn', 'filter-name', 'filter-min-total', 'filter-max-total', 'filter-min-percentage', 'filter-status']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.querySelectorAll('.sr-table tbody tr').forEach(r => r.classList.remove('filtered-out'));
+    updateRowCounts();
+    renderFilterTags();
+  }
+
+  function clearSingleFilter(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+    applyFilters();
+  }
+
+  function renderFilterTags() {
+    const wrap = document.getElementById('sr-filter-tags');
+    if (!wrap) return;
+    const v = id => document.getElementById(id)?.value || '';
+    const items = [];
+    if (v('filter-prn')) items.push({ label: 'PRN: ' + v('filter-prn'), id: 'filter-prn' });
+    if (v('filter-name')) items.push({ label: 'Name: ' + v('filter-name'), id: 'filter-name' });
+    if (v('filter-min-total')) items.push({ label: 'Min: ' + v('filter-min-total'), id: 'filter-min-total' });
+    if (v('filter-max-total')) items.push({ label: 'Max: ' + v('filter-max-total'), id: 'filter-max-total' });
+    if (v('filter-min-percentage')) items.push({ label: 'Min %: ' + v('filter-min-percentage') + '%', id: 'filter-min-percentage' });
+    if (v('filter-status')) items.push({ label: 'Status: ' + v('filter-status'), id: 'filter-status' });
+    wrap.innerHTML = items.map(it =>
+      `<span class="sr-filter-tag" onclick="clearSingleFilter('${it.id}')"><i class="bi bi-x-circle"></i>${it.label}</span>`
+    ).join('');
+  }
+
+  function updateRowCounts() {
+    const total = document.querySelectorAll('.sr-table tbody tr').length;
+    const visible = document.querySelectorAll('.sr-table tbody tr:not(.filtered-out)').length;
+    ['visible-rows', 'footer-visible'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = visible; });
+    const te = document.getElementById('total-rows'); if (te) te.textContent = total;
+  }
+
+  // ============================================================================
+  // CSV EXPORT (original logic — uses edited values + respects filter/sort)
+  // ============================================================================
+  function exportFilteredData() {
+    const table = document.getElementById('report-table');
+    if (!table) return;
+
+    const headers = Array.from(table.querySelectorAll('thead th')).map(th => {
+      const inp = th.querySelector('.sr-col-name-input');
+      return inp ? inp.value : th.textContent.trim();
+    });
+
+    const rows = Array.from(table.querySelectorAll('tbody tr:not(.filtered-out)'));
+    let csv = headers.join(',') + '\n';
+    rows.forEach(row => {
+      const cells = Array.from(row.cells).map(cell => {
+        let text = cell.querySelector('.sr-marks-input')?.value || cell.textContent.trim();
+        if (text.includes(',') || text.includes('"')) text = '"' + text.replace(/"/g, '""') + '"';
+        return text;
+      });
+      csv += cells.join(',') + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `student_report_${new Date().getTime()}.csv`;
+    a.style.visibility = 'hidden';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // ============================================================================
+  // PDF MODAL
+  // ============================================================================
+  function openPdfModal() { document.getElementById('sr-pdf-modal').classList.add('open'); }
+  function closePdfModal() { document.getElementById('sr-pdf-modal').classList.remove('open'); }
+  document.getElementById('sr-pdf-modal').addEventListener('click', function (e) {
+    if (e.target === this) closePdfModal();
+  });
+
+  async function handlePdfExport() {
+    const applyFilters = document.getElementById('pdf-opt-filters').checked;
+    const applySort = document.getElementById('pdf-opt-sort').checked;
+    const inclEdits = document.getElementById('pdf-opt-edits').checked;
+    const useColNames = document.getElementById('pdf-opt-colnames').checked;
+    const useNotes = document.getElementById('pdf-opt-notes').checked;
+
+    const btn = document.getElementById('sr-pdf-btn');
+    const batchName = btn.dataset.batch;
+    // exam_ids sent as an array of ints
+    const examIds = btn.dataset.examids.split(',').map(x => parseInt(x.trim())).filter(n => !isNaN(n));
+
+    // Visible PRN order (filtered + sorted)
+    const prnOrder = (applyFilters || applySort)
+      ? Array.from(document.querySelectorAll('.sr-table tbody tr:not(.filtered-out)')).map(r => r.dataset.prn)
+      : [];
+
+    // Hand-edited marks { "si_mi": value }
+    const markEdits = {};
+    if (inclEdits) {
+      document.querySelectorAll('.sr-marks-input.sr-changed').forEach(inp => {
+        markEdits[`${inp.dataset.si}_${inp.dataset.mi}`] = inp.value;
+      });
+    }
+
+    // Column names
+    const colNames = useColNames
+      ? Array.from(document.querySelectorAll('.sr-col-name-input')).map(i => i.value)
+      : [];
+
+    // Column notes
+    const colNotes = useNotes
+      ? Array.from(document.querySelectorAll('.sr-col-note-input')).map(i => i.value)
+      : [];
+
+    const payload = {
+      batch_name: batchName,
+      exam_ids: examIds,
+      prn_order: prnOrder,
+      mark_edits: markEdits,
+      col_names: colNames,
+      col_notes: colNotes,
+    };
+
+    // Show loading state
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating…';
+    closePdfModal();
+
+    try {
+      const resp = await fetch('/faculty/student_report/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Unknown error' }));
+        alert('PDF generation failed: ' + (err.error || resp.statusText));
+        return;
+      }
+
+      const data = await resp.json();
+      // Decode base64 PDF and trigger download
+      const bytes = Uint8Array.from(atob(data.pdf_b64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.filename || 'student_report.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Network error while generating PDF: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+
+  // ============================================================================
+  // FIND & REPLACE
+  // ============================================================================
+  const FNR = {
+    matches: [],   // list of {inp, origVal}
+    cursor: -1,
+  };
+
+  function toggleFnR() {
+    const panel = document.getElementById('sr-fnr-panel');
+    const btn = document.getElementById('sr-fnr-toggle-btn');
+    const open = panel.classList.toggle('active');
+    btn.classList.toggle('active', open);
+    if (open) document.getElementById('sr-fnr-find')?.focus();
+    else fnrClearHighlights();
+  }
+
+  // Collect all matching inputs
+  function fnrCollect() {
+    fnrClearHighlights();
+    FNR.matches = [];
+    FNR.cursor = -1;
+
+    const needle = (document.getElementById('sr-fnr-find')?.value || '').toLowerCase().trim();
+    const scope = document.getElementById('sr-fnr-scope')?.value || 'marks';
+    if (!needle) { fnrStatus(''); return; }
+
+    const selector = scope === 'marks'
+      ? '.sr-table tbody tr:not(.filtered-out) .sr-marks-input'
+      : '.sr-table tbody tr:not(.filtered-out) td';
+
+    document.querySelectorAll(selector).forEach(el => {
+      const inp = el.tagName === 'INPUT' ? el : el.querySelector('.sr-marks-input') ?? el;
+      const text = (inp.value !== undefined ? inp.value : inp.textContent).trim().toLowerCase();
+      if (text.includes(needle)) {
+        FNR.matches.push(inp);
+        inp.classList.add('sr-fnr-highlight');
+      }
+    });
+
+    fnrStatus(FNR.matches.length ? `${FNR.matches.length} match(es) found` : 'No matches');
+  }
+
+  function fnrFindNext() {
+    fnrCollect();
+    if (!FNR.matches.length) return;
+    FNR.cursor = (FNR.cursor + 1) % FNR.matches.length;
+    const target = FNR.matches[FNR.cursor];
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.focus();
+    fnrStatus(`Match ${FNR.cursor + 1} of ${FNR.matches.length}`);
+  }
+
+  function fnrReplace() {
+    if (!FNR.matches.length) fnrCollect();
+    if (!FNR.matches.length) return;
+    if (FNR.cursor < 0) FNR.cursor = 0;
+    const inp = FNR.matches[FNR.cursor];
+    const replVal = document.getElementById('sr-fnr-replace')?.value ?? '';
+    _fnrApplyValue(inp, replVal);
+    // Move to next
+    FNR.matches.splice(FNR.cursor, 1);
+    inp.classList.remove('sr-fnr-highlight');
+    if (FNR.matches.length) {
+      FNR.cursor = FNR.cursor % FNR.matches.length;
+      FNR.matches[FNR.cursor]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    fnrStatus(FNR.matches.length ? `${FNR.matches.length} remaining` : 'All done');
+  }
+
+  function fnrReplaceAll() {
+    fnrCollect();
+    if (!FNR.matches.length) return;
+    const replVal = document.getElementById('sr-fnr-replace')?.value ?? '';
+    const count = FNR.matches.length;
+    FNR.matches.forEach(inp => {
+      _fnrApplyValue(inp, replVal);
+      inp.classList.remove('sr-fnr-highlight');
+    });
+    FNR.matches = [];
+    FNR.cursor = -1;
+    fnrStatus(`Replaced ${count} cell(s)`);
+    updateLiveMetrics();
+  }
+
+  function _fnrApplyValue(inp, val) {
+    if (inp.tagName !== 'INPUT') return;  // readonly text cells
+    if (inp.readOnly) return;             // not in edit mode — skip
+    inp.value = val;
+    // Reuse existing editMark logic if it's a marks input
+    if (inp.classList.contains('sr-marks-input')) {
+      editMark(inp);
+    }
+  }
+
+  function fnrClearHighlights() {
+    document.querySelectorAll('.sr-fnr-highlight').forEach(el => el.classList.remove('sr-fnr-highlight'));
+  }
+
+  function fnrStatus(msg) {
+    const el = document.getElementById('sr-fnr-status');
+    if (el) el.textContent = msg;
+  }
+
+  // Live update on find input change
+  document.addEventListener('DOMContentLoaded', function () {
+    const findInp = document.getElementById('sr-fnr-find');
+    if (findInp) {
+      findInp.addEventListener('input', () => { FNR.cursor = -1; fnrCollect(); });
+      findInp.addEventListener('keydown', e => { if (e.key === 'Enter') fnrFindNext(); });
+    }
+    const replInp = document.getElementById('sr-fnr-replace');
+    if (replInp) {
+      replInp.addEventListener('keydown', e => { if (e.key === 'Enter') fnrReplaceAll(); });
+    }
+  });
+</script>
+
+{% endblock %}

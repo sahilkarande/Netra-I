@@ -1,0 +1,182 @@
+[
+  {
+    "question": "What does the SQL SELECT statement do?",
+    "option_a": "Deletes data from a table",
+    "option_b": "Retrieves data from a database",
+    "option_c": "Updates existing records",
+    "option_d": "Creates a new table",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which SQL clause is used to filter rows?",
+    "option_a": "ORDER BY",
+    "option_b": "GROUP BY",
+    "option_c": "WHERE",
+    "option_d": "HAVING",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What will this query do?\nSELECT * FROM employees;",
+    "option_a": "Delete all rows from employees",
+    "option_b": "Display all rows and columns from employees",
+    "option_c": "Display only employee names",
+    "option_d": "Update all rows in employees",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which keyword is used to remove duplicate rows?",
+    "option_a": "UNIQUE",
+    "option_b": "DISTINCT",
+    "option_c": "REMOVE",
+    "option_d": "FILTER",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does the following query do?\nSELECT COUNT(*) FROM orders;",
+    "option_a": "Counts total orders",
+    "option_b": "Counts total customers",
+    "option_c": "Sums order values",
+    "option_d": "Displays order details",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "Which operator is used for pattern matching?",
+    "option_a": "=",
+    "option_b": "LIKE",
+    "option_c": "BETWEEN",
+    "option_d": "IN",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which SQL statement is used to insert new data?",
+    "option_a": "ADD",
+    "option_b": "INSERT INTO",
+    "option_c": "UPDATE",
+    "option_d": "CREATE",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which keyword sorts the result set?",
+    "option_a": "SORT",
+    "option_b": "ORDER BY",
+    "option_c": "GROUP BY",
+    "option_d": "FILTER BY",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What will the query return?\nSELECT AVG(salary) FROM employees;",
+    "option_a": "Highest salary",
+    "option_b": "Lowest salary",
+    "option_c": "Average salary",
+    "option_d": "Total salary",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which join returns matching rows from both tables?",
+    "option_a": "LEFT JOIN",
+    "option_b": "RIGHT JOIN",
+    "option_c": "INNER JOIN",
+    "option_d": "FULL JOIN",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which clause groups rows with same values?",
+    "option_a": "ORDER BY",
+    "option_b": "GROUP BY",
+    "option_c": "HAVING",
+    "option_d": "DISTINCT",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does this query output?\nSELECT MAX(price) FROM products;",
+    "option_a": "Minimum price",
+    "option_b": "Total price",
+    "option_c": "Highest price",
+    "option_d": "Average price",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which keyword creates a new table?",
+    "option_a": "NEW",
+    "option_b": "CREATE TABLE",
+    "option_c": "ADD TABLE",
+    "option_d": "MAKE TABLE",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does UPDATE do?",
+    "option_a": "Deletes table",
+    "option_b": "Changes existing data",
+    "option_c": "Creates new database",
+    "option_d": "Retrieves rows",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which constraint ensures unique values?",
+    "option_a": "PRIMARY KEY",
+    "option_b": "NOT NULL",
+    "option_c": "DEFAULT",
+    "option_d": "CHECK",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "Which clause is used with aggregate functions to filter groups?",
+    "option_a": "WHERE",
+    "option_b": "ORDER BY",
+    "option_c": "HAVING",
+    "option_d": "LIMIT",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which statement removes all rows but keeps the table structure?",
+    "option_a": "DROP",
+    "option_b": "TRUNCATE",
+    "option_c": "DELETE",
+    "option_d": "REMOVE",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does DELETE do?",
+    "option_a": "Removes table structure",
+    "option_b": "Removes selected rows",
+    "option_c": "Renames table",
+    "option_d": "Duplicates rows",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which SQL command removes a table completely?",
+    "option_a": "DROP TABLE",
+    "option_b": "DELETE TABLE",
+    "option_c": "TRUNCATE TABLE",
+    "option_d": "CLEAR TABLE",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "What will the following return?\nSELECT department_id, COUNT(*) FROM employees GROUP BY department_id;",
+    "option_a": "Employee names",
+    "option_b": "Salary totals by department",
+    "option_c": "Number of employees per department",
+    "option_d": "Departments without employees",
+    "correct_answer": "C",
+    "points": 2
+  }
+]

@@ -1,0 +1,182 @@
+[
+  {
+    "question": "Which library is primarily used for numerical computations in Python?",
+    "option_a": "Pandas",
+    "option_b": "NumPy",
+    "option_c": "Matplotlib",
+    "option_d": "Seaborn",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which library is mainly used for data manipulation and analysis?",
+    "option_a": "NumPy",
+    "option_b": "SciPy",
+    "option_c": "Pandas",
+    "option_d": "TensorFlow",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What is the core data structure of Pandas?",
+    "option_a": "Array",
+    "option_b": "Matrix",
+    "option_c": "DataFrame",
+    "option_d": "Tensor",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What is the one-dimensional data structure in Pandas?",
+    "option_a": "Series",
+    "option_b": "DataFrame",
+    "option_c": "Panel",
+    "option_d": "Array",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "Which NumPy function creates an array of zeros?",
+    "option_a": "np.empty()",
+    "option_b": "np.zeros()",
+    "option_c": "np.ones()",
+    "option_d": "np.null()",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does np.ones() return?",
+    "option_a": "Array of zeros",
+    "option_b": "Array of random values",
+    "option_c": "Array of ones",
+    "option_d": "Empty array",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which function reads a CSV file in Pandas?",
+    "option_a": "read_file()",
+    "option_b": "load_csv()",
+    "option_c": "read_csv()",
+    "option_d": "import_csv()",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "What does df.head() display?",
+    "option_a": "Last 5 rows",
+    "option_b": "First 5 rows",
+    "option_c": "Middle rows",
+    "option_d": "Random rows",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which method shows summary statistics?",
+    "option_a": "df.info()",
+    "option_b": "df.describe()",
+    "option_c": "df.summary()",
+    "option_d": "df.stats()",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which attribute gives array dimensions in NumPy?",
+    "option_a": "size",
+    "option_b": "length",
+    "option_c": "shape",
+    "option_d": "dim",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which attribute returns total elements in an array?",
+    "option_a": "shape",
+    "option_b": "size",
+    "option_c": "ndim",
+    "option_d": "dtype",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does df.tail() show?",
+    "option_a": "First 10 rows",
+    "option_b": "Last 5 rows",
+    "option_c": "Random rows",
+    "option_d": "Column names",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which NumPy function generates random values?",
+    "option_a": "np.random.rand()",
+    "option_b": "np.zeros()",
+    "option_c": "np.arange()",
+    "option_d": "np.array()",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "What does np.arange(1,5) produce?",
+    "option_a": "[1,2,3,4,5]",
+    "option_b": "[1,2,3,4]",
+    "option_c": "[0,1,2,3]",
+    "option_d": "[5,4,3,2]",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which function reshapes arrays in NumPy?",
+    "option_a": "resize()",
+    "option_b": "reshape()",
+    "option_c": "modify()",
+    "option_d": "transform()",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "Which Pandas method removes null values?",
+    "option_a": "dropna()",
+    "option_b": "clean()",
+    "option_c": "removenull()",
+    "option_d": "fillmissing()",
+    "correct_answer": "A",
+    "points": 2
+  },
+  {
+    "question": "Which method fills missing values?",
+    "option_a": "dropna()",
+    "option_b": "fillna()",
+    "option_c": "replace()",
+    "option_d": "update()",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does df.shape return?",
+    "option_a": "Total values",
+    "option_b": "Number of rows",
+    "option_c": "Rows and columns count",
+    "option_d": "Column names",
+    "correct_answer": "C",
+    "points": 2
+  },
+  {
+    "question": "Which NumPy function calculates mean?",
+    "option_a": "np.avg()",
+    "option_b": "np.mean()",
+    "option_c": "np.sum()",
+    "option_d": "np.median()",
+    "correct_answer": "B",
+    "points": 2
+  },
+  {
+    "question": "What does df.columns return?",
+    "option_a": "Row values",
+    "option_b": "Index values",
+    "option_c": "Column names",
+    "option_d": "Data types",
+    "correct_answer": "C",
+    "points": 2
+  }
+]

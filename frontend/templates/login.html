@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Login - ExamPro{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div style="max-width: 450px; margin: 3rem auto;">
+        <div class="card login-card">
+            <div class="card-header text-center">
+                <div style="font-size: 3rem; margin-bottom: 1rem;"></div>
+                <h1 class="card-title">Welcome Back</h1>
+                <p class="card-subtitle">Enter your credentials to access the platform</p>
+            </div>
+
+            <form method="POST">
+                <div class="form-group">
+                    <label class="form-label" for="username">Username / PRN Number</label>
+                    <input type="text" id="username" name="username" class="form-input"
+                        placeholder="Enter your username or PRN Number" required autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+
+                    <div style="position: relative;">
+                        <input type="password" id="password" name="password" class="form-input"
+                            placeholder="Enter your password" required style="padding-right:40px;">
+
+                        <i class="bi bi-eye" id="togglePassword"
+                            style="position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:18px; color:#666;">
+                        </i>
+                    </div>
+
+                </div>
+
+                <div class="form-check" style="margin-bottom: 1.5rem;">
+                    <input type="checkbox" id="remember" name="remember" style="width: 18px; height: 18px;">
+                    <label for="remember" style="margin: 0; color: var(--text-secondary); cursor: pointer;">Remember
+                        me</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.875rem;">
+                    Login to Platform
+                </button>
+            </form>
+        </div>
+
+        <!-- Security Info -->
+        <div
+            style="margin-top: 2rem; padding: 1.5rem; background-color: rgba(16, 185, 129, 0.1); border-radius: 10px; border-left: 4px solid var(--success-color);">
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+                <strong style="color: var(--success-color);">Secure Connection:</strong> Your login credentials are
+                encrypted and transmitted securely.
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    const togglePassword = document.querySelector("#togglePassword");
+    const password = document.querySelector("#password");
+
+    togglePassword.addEventListener("click", function () {
+
+        const type = password.getAttribute("type") === "password" ? "text" : "password";
+        password.setAttribute("type", type);
+
+        this.classList.toggle("bi-eye");
+        this.classList.toggle("bi-eye-slash");
+    });
+</script>
+
+{% endblock %}

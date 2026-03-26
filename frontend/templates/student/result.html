@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Exam Results – {{ exam.title }}{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+  {% set percentage = student_exam.percentage | default(0) %}
+
+  <!-- ═══════════════ HEADER ═══════════════ -->
+  <div class="result-header">
+
+    <!-- Score Hero Card -->
+    <div class="result-hero">
+      <h3 style="font-size:1.1rem; font-weight:700; margin:0; opacity:.9;">{{ exam.title }}</h3>
+
+      <div class="result-progress-ring">
+        <svg width="130" height="130">
+          <circle cx="65" cy="65" r="55" stroke="rgba(255,255,255,0.2)" stroke-width="8" fill="none" />
+          <circle cx="65" cy="65" r="55"
+            stroke="{% if percentage<50 %}#f05454{% elif percentage<75 %}#f7b731{% else %}#30d49e{% endif %}"
+            stroke-width="8" fill="none" stroke-dasharray="345" stroke-dashoffset="{{ 345-(345*percentage/100) }}"
+            stroke-linecap="round" />
+        </svg>
+        <div class="result-progress-text">{{ percentage|round(0)|int }}%</div>
+      </div>
+
+      <div style="font-size:1.4rem; font-weight:800; letter-spacing:.5px;">
+        {{ student_exam.score }} / {{ student_exam.total_points }}
+      </div>
+
+      <div class="result-status-badge {% if student_exam.passed %}pass{% else %}fail{% endif %}">
+        <i class="bi {% if student_exam.passed %}bi-check-circle-fill{% else %}bi-x-circle-fill{% endif %}"></i>
+        {% if student_exam.passed %}Passed{% else %}Failed{% endif %}
+      </div>
+
+      <div class="result-motivation" id="motivation"></div>
+    </div>
+
+    <!-- Exam Details Card -->
+    <div class="result-info-card">
+      <div class="result-info-title">
+        <i class="bi bi-info-circle" style="color:var(--primary-color);"></i>
+        Exam Details
+      </div>
+
+      <div class="result-info-grid">
+
+        <div class="result-info-item">
+          <div class="result-info-icon"><i class="bi bi-clock"></i></div>
+          <div>
+            <div class="result-info-label">Duration</div>
+            <div class="result-info-value">{{ exam.duration_minutes }} mins</div>
+          </div>
+        </div>
+
+        <div class="result-info-item">
+          <div class="result-info-icon"><i class="bi bi-trophy"></i></div>
+          <div>
+            <div class="result-info-label">Passing Score</div>
+            <div class="result-info-value">{{ exam.passing_score }}%</div>
+          </div>
+        </div>
+
+        <div class="result-info-item">
+          <div class="result-info-icon"><i class="bi bi-calendar-check"></i></div>
+          <div>
+            <div class="result-info-label">Submitted</div>
+            <div class="result-info-value">{{ student_exam.submitted_at }}</div>
+          </div>
+        </div>
+
+        <div class="result-info-item">
+          <div class="result-info-icon"><i class="bi bi-hourglass-split"></i></div>
+          <div>
+            <div class="result-info-label">Time Taken</div>
+            <div class="result-info-value">{{ student_exam.time_taken_minutes }} mins</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /result-header -->
+
+  <!-- ═══════════════ STATS ═══════════════ -->
+  <div class="result-stats-grid">
+
+    <div class="result-stat-card">
+      <div class="result-stat-icon"><i class="bi bi-bar-chart-fill"></i></div>
+      <div class="result-stat-value">{{ student_exam.score }}</div>
+      <div class="result-stat-label">Score</div>
+    </div>
+
+    <div class="result-stat-card">
+      <div class="result-stat-icon"><i class="bi bi-percent"></i></div>
+      <div class="result-stat-value">{{ percentage|round(1) }}%</div>
+      <div class="result-stat-label">Percentage</div>
+    </div>
+
+    <div class="result-stat-card">
+      <div class="result-stat-icon">
+        <i
+          class="bi {% if student_exam.passed %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i>
+      </div>
+      <div class="result-stat-value">{{ 'Passed' if student_exam.passed else 'Failed' }}</div>
+      <div class="result-stat-label">Result</div>
+    </div>
+
+    <div class="result-stat-card">
+      <div class="result-stat-icon"><i class="bi bi-question-circle-fill"></i></div>
+      <div class="result-stat-value">{{ answers_with_questions | length }}</div>
+      <div class="result-stat-label">Total Questions</div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ FILTER ═══════════════ -->
+  <div class="result-filter-bar">
+    <button class="result-filter-btn active" onclick="filterQ(event,'all')">
+      <i class="bi bi-list-ul"></i> All
+    </button>
+    <button class="result-filter-btn" onclick="filterQ(event,'correct')">
+      <i class="bi bi-check2-circle"></i> Correct
+    </button>
+    <button class="result-filter-btn" onclick="filterQ(event,'incorrect')">
+      <i class="bi bi-x-circle"></i> Incorrect
+    </button>
+  </div>
+
+  <!-- ═══════════════ QUESTIONS ═══════════════ -->
+  {% for item in answers_with_questions %}
+  <div class="result-question {% if item.answer.is_correct %}correct-q{% else %}incorrect-q{% endif %}">
+
+    <div class="result-question-header" onclick="toggleQ(this)">
+      <span style="flex:1; line-height:1.5;">
+        <span style="font-size:0.75rem; font-family:monospace; opacity:0.65; margin-right:6px;">Q{{ loop.index }}</span>
+        {{ item.question.question_text }}
+      </span>
+      <i class="bi {% if item.answer.is_correct %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"
+        style="flex-shrink:0; font-size:1.1rem;"></i>
+    </div>
+
+    <div class="result-question-body">
+      <ul>
+        <li
+          class="{% if item.question.correct_answer=='A' %}result-correct-opt{% elif item.answer.selected_answer=='A' %}result-incorrect-opt{% endif %}">
+          <strong>A)</strong> {{ item.question.option_a }}
+        </li>
+        <li
+          class="{% if item.question.correct_answer=='B' %}result-correct-opt{% elif item.answer.selected_answer=='B' %}result-incorrect-opt{% endif %}">
+          <strong>B)</strong> {{ item.question.option_b }}
+        </li>
+        {% if item.question.option_c %}
+        <li
+          class="{% if item.question.correct_answer=='C' %}result-correct-opt{% elif item.answer.selected_answer=='C' %}result-incorrect-opt{% endif %}">
+          <strong>C)</strong> {{ item.question.option_c }}
+        </li>
+        {% endif %}
+        {% if item.question.option_d %}
+        <li
+          class="{% if item.question.correct_answer=='D' %}result-correct-opt{% elif item.answer.selected_answer=='D' %}result-incorrect-opt{% endif %}">
+          <strong>D)</strong> {{ item.question.option_d }}
+        </li>
+        {% endif %}
+      </ul>
+
+      <div
+        style="display:flex; gap:1.5rem; flex-wrap:wrap; font-size:0.88rem; padding-top:0.5rem; border-top:1px solid var(--border);">
+        <span>
+          <i class="bi bi-cursor-fill" style="color:var(--primary-color);"></i>
+          <strong>Your Answer:</strong>
+          <span
+            style="color:{% if item.answer.is_correct %}#10b981{% else %}var(--danger-color){% endif %}; font-weight:600; margin-left:4px;">
+            {{ item.answer.selected_answer or 'Not answered' }}
+          </span>
+        </span>
+        {% if not item.answer.is_correct %}
+        <span>
+          <i class="bi bi-check2" style="color:#10b981;"></i>
+          <strong>Correct Answer:</strong>
+          <span style="color:#10b981; font-weight:600; margin-left:4px;">{{ item.question.correct_answer }}</span>
+        </span>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+  {% endfor %}
+
+</div><!-- /container -->
+
+<script>
+  const passed = {{ 'true' if student_exam.passed else 'false' }};
+  const passMsg = ["Great performance!", "Strong result!", "Well done!", "Excellent work!"];
+  const failMsg = ["Keep practicing.", "You will improve.", "Try again soon.", "Don't give up!"];
+  document.getElementById('motivation').textContent =
+    passed ? passMsg[Math.floor(Math.random() * passMsg.length)]
+      : failMsg[Math.floor(Math.random() * failMsg.length)];
+
+  function toggleQ(el) {
+    const body = el.nextElementSibling;
+    const isOpen = body.style.display === 'block';
+    body.style.display = isOpen ? 'none' : 'block';
+    const icon = el.querySelector('.bi-chevron-down, .bi-chevron-up');
+    if (icon) icon.className = icon.className.replace(isOpen ? 'bi-chevron-up' : 'bi-chevron-down', isOpen ? 'bi-chevron-down' : 'bi-chevron-up');
+  }
+
+  function filterQ(e, type) {
+    document.querySelectorAll('.result-filter-btn').forEach(b => b.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+    document.querySelectorAll('.result-question').forEach(q => {
+      if (type === 'all') q.style.display = 'block';
+      else if (type === 'correct') q.style.display = q.classList.contains('correct-q') ? 'block' : 'none';
+      else q.style.display = q.classList.contains('incorrect-q') ? 'block' : 'none';
+    });
+  }
+</script>
+
+{% endblock %}
