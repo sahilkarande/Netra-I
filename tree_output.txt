@@ -1,0 +1,132 @@
+.
+├── app.py
+├── backend
+│   ├── database.py
+│   ├── __init__.py
+│   ├── __pycache__
+│   │   ├── database.cpython-312.pyc
+│   │   ├── __init__.cpython-312.pyc
+│   │   └── routes.cpython-312.pyc
+│   ├── routes.py
+│   ├── services
+│   │   ├── pdf_generator.py
+│   │   ├── proctor_vision
+│   │   │   ├── __init__.py
+│   │   │   ├── openvino_vision.py
+│   │   │   └── __pycache__
+│   │   │       ├── __init__.cpython-312.pyc
+│   │   │       └── openvino_vision.cpython-312.pyc
+│   │   └── __pycache__
+│   │       └── pdf_generator.cpython-312.pyc
+│   └── utils
+│       ├── create_db.py
+│       ├── email_utils.py
+│       ├── __init__.py
+│       ├── __pycache__
+│       │   ├── email_utils.cpython-312.pyc
+│       │   └── __init__.cpython-312.pyc
+│       └── view_users.py
+├── cert.pem
+├── create_admin.py
+├── data
+│   ├── BDA Feb @026 Batch
+│   │   └── students_clean_v2.json
+│   ├── Demo Question papers
+│   │   ├── Numpy_pandas_Set1.json
+│   │   ├── Python_Set1.json
+│   │   └── SQL_Set1.json
+│   ├── Linux & cloud F26
+│   │   ├── Linux&Cloud_set1.json
+│   │   └── Linux&Cloud_set2.json
+│   ├── sample_questions.csv
+│   ├── sample_questions.json
+│   ├── sample_questions.xlsx
+│   ├── sql_queries_exam.json
+│   ├── student_data_aug_2025.json
+│   └── Student_information_data_aug_2025.csv
+├── frontend
+│   ├── static
+│   │   ├── css
+│   │   │   ├── exam.css
+│   │   │   ├── leaderboard.css
+│   │   │   ├── student_management.css
+│   │   │   ├── student_report.css
+│   │   │   └── style.css
+│   │   ├── images
+│   │   │   ├── applogo.png
+│   │   │   ├── CDAC_Logo_org.png
+│   │   │   ├── Dark_Theme_logo.png
+│   │   │   ├── Female.png
+│   │   │   ├── Lite_Theme_logo.png
+│   │   │   └── Male.png
+│   │   ├── js
+│   │   │   ├── analytics.js
+│   │   │   ├── exam.js
+│   │   │   ├── socket.io.min.js
+│   │   │   ├── student_management.js
+│   │   │   ├── theme.js
+│   │   │   └── view_exam.js
+│   │   └── violations
+│   └── templates
+│       ├── admin
+│       │   ├── all_exams.html
+│       │   ├── dashboard.html
+│       │   ├── manage_faculty.html
+│       │   └── students.html
+│       ├── base.html
+│       ├── change_password.html
+│       ├── faculty
+│       │   ├── analytics.html
+│       │   ├── create_exam.html
+│       │   ├── dashboard.html
+│       │   ├── edit_student.html
+│       │   ├── import_students.html
+│       │   ├── manage_students.html
+│       │   ├── student_report.html
+│       │   ├── upload_questions.html
+│       │   └── view_exam.html
+│       ├── index.html
+│       ├── leaderboard.html
+│       ├── login.html
+│       ├── register.html
+│       ├── student
+│       │   ├── dashboard.html
+│       │   ├── result.html
+│       │   ├── student_profile.html
+│       │   └── take_exam.html
+│       └── verify_otp.html
+├── instance
+│   ├── exam_platform.db
+│   ├── exam_platform.db-shm
+│   └── exam_platform.db-wal
+├── key.pem
+├── LAN_DEPLOYMENT_GUIDE.md
+├── models
+│   ├── face-detection-adas-0001.bin
+│   ├── face-detection-adas-0001.xml
+│   ├── head-pose-estimation-adas-0001.bin
+│   └── head-pose-estimation-adas-0001.xml
+├── models.py
+├── __pycache__
+│   ├── app.cpython-312.pyc
+│   └── models.cpython-312.pyc
+├── README.md
+├── requirements.txt
+├── scripts
+│   ├── create_admin.py
+│   ├── docs
+│   │   ├── PROJECT_OVERVIEW.md
+│   │   └── Project_title_update
+│   ├── generate_lan_cert.sh
+│   ├── sql_tools
+│   │   ├── db_patch.py
+│   │   ├── db_query_tool.py
+│   │   ├── final_fix.py
+│   │   ├── insert_students.py
+│   │   ├── repair_database.py
+│   │   └── truncate_db.py
+│   └── start_lan_exam.sh
+├── tree_output.txt
+└── tree.py
+
+29 directories, 101 files

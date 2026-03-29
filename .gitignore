@@ -1,0 +1,40 @@
+# ===== Python bytecode and caches =====
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ===== Virtual environments =====
+venv/
+env/
+ENV/
+
+# ===== Databases =====
+instance/*.db
+instance/*.db-shm
+instance/*.db-wal
+
+# ===== Certificates and keys =====
+*.pem
+
+# ===== Environment files =====
+.env
+
+# ===== IDE / OS files =====
+.DS_Store
+Thumbs.db
+
+# ===== Compiled models (if you want to exclude heavy binaries) =====
+models/*.bin
+models/*.xml
+
+# ===== Logs / temporary files =====
+*.log
+*.tmp
+
+# ===== Sensitive student or user data =====
+# Only if these contain real personal info
+data/
+
+data/BDA\ Feb\ @026\ Batch/students_clean_v2.json
+data/Student_information_data_aug_2025.csv
+data/student_data_aug_2025.json
