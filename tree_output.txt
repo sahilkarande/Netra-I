@@ -3,10 +3,6 @@
 ├── backend
 │   ├── database.py
 │   ├── __init__.py
-│   ├── __pycache__
-│   │   ├── database.cpython-312.pyc
-│   │   ├── __init__.cpython-312.pyc
-│   │   └── routes.cpython-312.pyc
 │   ├── routes.py
 │   ├── services
 │   │   ├── pdf_generator.py
@@ -22,9 +18,6 @@
 │       ├── create_db.py
 │       ├── email_utils.py
 │       ├── __init__.py
-│       ├── __pycache__
-│       │   ├── email_utils.cpython-312.pyc
-│       │   └── __init__.cpython-312.pyc
 │       └── view_users.py
 ├── cert.pem
 ├── create_admin.py
@@ -59,14 +52,13 @@
 │   │   │   ├── Female.png
 │   │   │   ├── Lite_Theme_logo.png
 │   │   │   └── Male.png
-│   │   ├── js
-│   │   │   ├── analytics.js
-│   │   │   ├── exam.js
-│   │   │   ├── socket.io.min.js
-│   │   │   ├── student_management.js
-│   │   │   ├── theme.js
-│   │   │   └── view_exam.js
-│   │   └── violations
+│   │   └── js
+│   │       ├── analytics.js
+│   │       ├── exam.js
+│   │       ├── socket.io.min.js
+│   │       ├── student_management.js
+│   │       ├── theme.js
+│   │       └── view_exam.js
 │   └── templates
 │       ├── admin
 │       │   ├── all_exams.html
@@ -107,9 +99,6 @@
 │   ├── head-pose-estimation-adas-0001.bin
 │   └── head-pose-estimation-adas-0001.xml
 ├── models.py
-├── __pycache__
-│   ├── app.cpython-312.pyc
-│   └── models.cpython-312.pyc
 ├── README.md
 ├── requirements.txt
 ├── scripts
@@ -126,7 +115,6 @@
 │   │   ├── repair_database.py
 │   │   └── truncate_db.py
 │   └── start_lan_exam.sh
-├── tree_output.txt
 └── tree.py
 
-29 directories, 101 files
+25 directories, 93 files
