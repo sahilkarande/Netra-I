@@ -9,9 +9,10 @@ env/
 ENV/
 
 # ===== Databases =====
-instance/*.db
-instance/*.db-shm
-instance/*.db-wal
+instance/
+*.db
+*.db-shm
+*.db-wal
 
 # ===== Certificates and keys =====
 *.pem
@@ -22,8 +23,10 @@ instance/*.db-wal
 # ===== IDE / OS files =====
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
 
-# ===== Compiled models (if you want to exclude heavy binaries) =====
+# ===== Compiled models / heavy binaries =====
 models/*.bin
 models/*.xml
 
@@ -32,9 +35,12 @@ models/*.xml
 *.tmp
 
 # ===== Sensitive student or user data =====
-# Only if these contain real personal info
 data/
+# Optional: specify certain sensitive files if needed
+# data/BDA Feb @026 Batch/students_clean_v2.json
+# data/Student_information_data_aug_2025.csv
+# data/student_data_aug_2025.json
 
-data/BDA\ Feb\ @026\ Batch/students_clean_v2.json
-data/Student_information_data_aug_2025.csv
-data/student_data_aug_2025.json
+# ===== Scripts containing sensitive info =====
+create_admin.py
+scripts/create_admin.py
