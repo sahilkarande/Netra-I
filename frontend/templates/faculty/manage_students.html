@@ -12,7 +12,7 @@
     <div class="sm-header">
         <div class="sm-header-left">
             <div class="sm-header-icon">
-                <i class="bi bi-people-fill" colo></i>
+                <i class="bi bi-people-fill"></i>
             </div>
             <div>
                 <h1 class="sm-title">Student Management</h1>
@@ -161,7 +161,7 @@
                         <th>PRN</th>
                         <th>Roll</th>
                         <th>Batch</th>
-                        <th>Dept</th>
+                        <th style="width: 1%; white-space: nowrap; padding-right: 2rem;">Dept</th>
                         <th>Contact</th>
                         <th>Status</th>
                         <th>Actions</th>
@@ -219,15 +219,15 @@
                             <div class="sm-actions">
                                 <a href="{{ url_for('student_profile', student_id=student.id) }}"
                                     class="sm-action-btn sm-action-view" title="View Profile">
-                                    <i class="bi bi-eye-fill"></i>
+                                    <i class="bi bi-eye-fill"></i> View
                                 </a>
                                 <a href="{{ url_for('faculty_edit_student', student_id=student.id) }}"
                                     class="sm-action-btn sm-action-edit" title="Edit Student">
-                                    <i class="bi bi-pencil-fill"></i>
+                                    <i class="bi bi-pencil-fill"></i> Edit
                                 </a>
                                 <button class="sm-action-btn sm-action-delete" onclick="deleteStudent({{ student.id }})"
                                     title="Delete Student">
-                                    <i class="bi bi-trash-fill"></i>
+                                    <i class="bi bi-trash-fill"></i> Delete
                                 </button>
                             </div>
                         </td>

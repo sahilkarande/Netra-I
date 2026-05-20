@@ -6,12 +6,12 @@ A comprehensive, enterprise-grade Python-based web application for conducting se
 
 ### Advanced AI Vision Proctoring
 
-- **Real-time Face Detection**: Uses OpenVINO and OpenCV for high-performance face detection
-- **Head Pose Estimation**: Monitors head orientation and detects unusual movements
-- **Calibration System**: Learns student's baseline head position for personalized monitoring
-- **Multi-face Detection**: Automatically flags multiple faces in frame
-- **Fatigue-friendly Design**: Allows natural movements while detecting deliberate cheating
-- **Adaptive Thresholds**: Soft and hard deviation thresholds with cooldown periods
+- **Real-time Face Detection**: Uses OpenVINO and OpenCV for high-performance facial tracking
+- **Continuous Identity Verification**: Utilizes `face-api.js` to extract 128-dimensional face descriptors, ensuring the student's identity matches throughout the exam via periodic background checks.
+- **Unified Pre-Exam System Checks**: Comprehensive environment staging that verifies network stability, camera, microphone, and enforces hardware rules before exam entry.
+- **Hardware Environment Scanning**: Actively monitors and flags unauthorized external displays, virtual cameras, and external communication devices (e.g., Bluetooth headsets).
+- **Screen Sharing & Recording Prevention**: Intercepts browser-level display capture APIs to block malicious screen recording or unauthorized remote sharing.
+- **Adaptive Thresholds**: Soft and hard deviation thresholds with cooldown periods for head pose and background noise.
 
 ### For Faculty Members
 
@@ -46,7 +46,12 @@ A comprehensive, enterprise-grade Python-based web application for conducting se
   - Right-click and context menu blocking
   - Developer tools detection (F12, Ctrl+Shift+I, etc.)
   - Keyboard shortcut blocking
-- **AI Vision Monitoring**: Real-time analysis of student behavior
+- **Hardware Scanning & Enforcement**:
+  - Detection of external/secondary monitors
+  - Blocking of virtual cameras (OBS, Snap Camera, etc.)
+  - Flagging of unauthorized audio devices (Bluetooth/gaming headsets)
+- **Screen Capture Prevention**: Proactive blocking of `getDisplayMedia` to prevent unauthorized screen extensions and recording.
+- **AI Vision & Identity Monitoring**: Real-time analysis of student behavior along with continuous 128-dim face identity comparisons every 30 seconds.
 - **Activity Logging**: Timestamped logging of all suspicious activities
 - **Automatic Flagging System**: Intelligent detection of cheating attempts
 - **Session Security**: Secure session management with proper timeouts
@@ -329,7 +334,7 @@ ProctoGuard/
 │       │   └── student_management.js # Student CRUD operations
 │       └── images/                 # Logos and image assets
 │
-├── models/                         # OpenVINO ML model files
+├── ai_models/                      # OpenVINO ML model files
 │   ├── face-detection-adas-0001.*  # Face detection model
 │   └── head-pose-estimation-adas-0001.* # Head pose estimation model
 │
@@ -374,7 +379,7 @@ ProctoGuard/
 - **`models.py`**: SQLAlchemy ORM models defining database schema
 - **`instance/`**: Runtime-generated files like SQLite database
 - **`data/`**: Sample data and upload storage directory
-- **`models/`**: OpenVINO ML model files for face detection and head pose estimation
+- **`ai_models/`**: OpenVINO ML model files for face detection and head pose estimation
 
 #### **🛠️ Development & Operations**
 
@@ -525,7 +530,10 @@ Potential additions to further enhance the platform:
 
 ### 🔄 Already Implemented Features
 
-- [x] **AI Vision Proctoring**: Real-time face detection and head pose monitoring
+- [x] **AI Vision Proctoring**: Real-time face detection, head pose monitoring, and initial calibration
+- [x] **Continuous Identity Verification**: AI-powered face similarity matching throughout the exam
+- [x] **Strict Hardware Enforcement**: System scans for external displays, virtual cameras, and unauthorized mics
+- [x] **Screen Capture Protection**: Built-in interception to block screen recording extensions
 - [x] **PDF Report Generation**: Professional result reports with detailed analytics
 - [x] **Email Notifications**: OTP verification and result notifications
 - [x] **Multiple File Formats**: CSV, Excel, and JSON support for bulk uploads
@@ -533,8 +541,8 @@ Potential additions to further enhance the platform:
 
 ### 🚀 Planned Enhancements
 
-- [ ] **Live Webcam Proctoring**: Real-time video streaming with cloud processing
-- [ ] **Screen Recording**: Capture and analyze screen activity during exams
+- [ ] **Live Webcam Proctoring**: Real-time video streaming with cloud processing (beyond current edge AI)
+- [ ] **Advanced Device Fingerprinting**: Deeper OS-level application monitoring (where permission allows)
 - [ ] **Additional File Formats**: Word documents and PDF question imports
 - [ ] **Advanced Export Options**: Excel reports, CSV downloads, data visualization
 - [ ] **Scheduled Exams**: Calendar-based exam scheduling with notifications

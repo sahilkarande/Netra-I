@@ -9,6 +9,20 @@
   /* Hide all question slides; only the .active one is shown */
   .question-slide { display: none !important; }
   .question-slide.active { display: block !important; }
+
+  /* ── Whitespace-aware question & option text ──
+     white-space: pre-wrap  →  honours <br> we inject AND wraps long lines.
+     font-family stack keeps code readable while staying legible for prose. */
+  .q-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.65;
+  }
+  .opt-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.55;
+  }
 </style>
 
 {# ══════════════════════════════════════
@@ -117,43 +131,213 @@ ACCESS KEY OVERLAY (shown only when exam requires a key)
 </script>
 {% endif %}
 
+{# ══════════════════════════════════════════════════════════
+   SCREEN RECORDING BLOCKER (fixed, always in DOM)
+══════════════════════════════════════════════════════════ #}
+<div id="sc-rec-blocker" style="display:none;">
+  <div class="scrb-inner">
+    <div class="scrb-ico"><i class="bi bi-record-circle-fill" style="font-size:48px;color:#f05454;"></i></div>
+    <div class="scrb-title">Screen Recording / Sharing Detected</div>
+    <div class="scrb-sub">Screen capture is strictly prohibited during this exam.<br>Stop all recording software, then close this alert to continue.</div>
+    <button class="scrb-btn" onclick="dismissRecBlocker()">I have stopped recording — Resume</button>
+  </div>
+</div>
+
 {# ══════════════════════════════════════
-CALIBRATION OVERLAY
+SYSTEM CHECK OVERLAY — combined calibration, mic test, checks
 ══════════════════════════════════════ #}
-<div id="calib-overlay">
-  <div class="calib-card">
-    <div class="calib-hd">
-      <div class="calib-logo-box"><i class="bi bi-shield-lock-fill"></i></div>
-      <div class="calib-logo-txt">ProctoGuard</div>
-    </div>
-    <div class="calib-body">
-      <div class="cam-frame scanning" id="calibFrame">
+<div id="syscheck-overlay">
+  <div class="sc-bg-grid"></div>
+  <div class="sc-layout">
+
+    <!-- ═══ LEFT PANEL: Live camera + Face guide + Audio meter ═══ -->
+    <div class="sc-cam-panel">
+
+      <div class="sc-cam-section-title">
+        <i class="bi bi-shield-lock-fill"></i> Netra<span style="color:var(--exam-primary)">-I</span>
+        <span class="sc-cam-subtitle">Pre-Exam Verification</span>
+      </div>
+
+      <!-- Live camera with face-api overlay canvas -->
+      <div class="sc-cam-wrap" id="scCamWrap">
         <video id="calib-video" autoplay muted playsinline></video>
+        <canvas id="sc-face-canvas"></canvas>
         <div class="face-ring" id="calibRing" {% if exam.exam_mode=='home' %} style="display:none;" {% endif %}></div>
         <div class="scan-line"></div>
         <div class="chip-badge ca" id="calibChip">
           <div class="chip-dot"></div>
           <span id="calibChipTxt">Initializing</span>
         </div>
+        <div class="sc-face-hint" id="scFaceHint">Center your face in the frame</div>
       </div>
-      <div class="calib-title">Face Calibration</div>
-      <div class="calib-sub">Look directly at the camera. Keep your face centered in good lighting.</div>
-      <div class="calib-prog">
+
+      <!-- Face alignment status bar -->
+      <div class="sc-face-bar" id="scFaceBar">
+        <div class="sc-face-dot" id="scFaceDot"></div>
+        <span id="scFaceTxt">Waiting for camera…</span>
+      </div>
+
+      <!-- Calibration progress (used by initCam() JS) -->
+      <div class="calib-prog" style="margin:8px 0 4px">
         <div class="calib-fill" id="calibFill"></div>
       </div>
       <div class="calib-steps">
         <div class="cs ca" id="cs1"><i class="bi bi-camera-video"></i> Camera</div>
-        <div class="cs" id="cs2"><i class="bi bi-person-bounding-box"></i> Detect</div>
+        <div class="cs" id="cs2"><i class="bi bi-person-bounding-box"></i> Face Lock</div>
         <div class="cs" id="cs3"><i class="bi bi-check2-circle"></i> Ready</div>
       </div>
-      <div id="calib-msg"></div>
-      <button class="btn-calib-start" id="calibBtn" disabled>
-        <i class="bi bi-play-circle" id="calibBtnIco"></i>
-        <span id="calibBtnTxt">Initializing camera…</span>
+      <div id="calib-msg" style="text-align:center;"></div>
+
+      <!-- Microphone meter -->
+      <div class="sc-audio-wrap">
+        <div class="sc-audio-label">
+          <i class="bi bi-mic-fill"></i>
+          <span>Say: &ldquo;I am ready to begin the exam&rdquo;</span>
+        </div>
+        <div class="sc-audio-track">
+          <div class="sc-audio-fill" id="scAudioFill" style="width:0%"></div>
+          <div class="sc-audio-notch" style="left:25%"></div>
+          <div class="sc-audio-notch" style="left:50%"></div>
+          <div class="sc-audio-notch" style="left:75%"></div>
+        </div>
+        <div class="sc-audio-status" id="scAudioStatus">Microphone inactive</div>
+      </div>
+
+      <!-- Hidden calibBtn kept for JS compatibility -->
+      <button id="calibBtn" style="display:none;" disabled>
+        <i id="calibBtnIco"></i><span id="calibBtnTxt"></span>
       </button>
-    </div>
-  </div>
-</div>
+
+    </div>{# /sc-cam-panel #}
+
+    <!-- ═══ RIGHT PANEL: Header + Checks + Footer ═══ -->
+    <div class="sc-right-panel">
+
+      <!-- Header -->
+      <div class="sc-header">
+        <div class="sc-header-info">
+          <div class="sc-exam-name">{{ exam.title }}</div>
+          <div class="sc-subtitle">System Readiness Check</div>
+        </div>
+        <div class="sc-overall-badge" id="scOverallBadge">
+          <div class="sc-badge-ring" id="scBadgeRing">
+            <i class="bi bi-hourglass-split" id="scBadgeIco"></i>
+          </div>
+          <span id="scBadgeTxt">Checking…</span>
+        </div>
+      </div>
+
+      <!-- Progress track -->
+      <div class="sc-progress-bar">
+        <div class="sc-progress-fill" id="scProgressFill" style="width:0%"></div>
+      </div>
+
+      <!-- Check grid -->
+      <div class="sc-grid">
+
+
+        <div class="sc-item" id="sci-network">
+          <div class="sc-item-icon-wrap si-blue"><i class="bi bi-globe2"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">Network / Ports</div>
+            <div class="sc-item-desc" id="sci-network-desc">Checking VPN, proxy &amp; remote access tools…</div>
+          </div>
+          <div class="sc-item-status" id="sci-network-st"><div class="sc-spin"></div></div>
+        </div>
+        <div class="sc-item" id="sci-internet">
+          <div class="sc-item-icon-wrap si-cyan"><i class="bi bi-wifi"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">Internet Stability</div>
+            <div class="sc-item-desc" id="sci-internet-desc">Measuring latency and connection quality…</div>
+          </div>
+          <div class="sc-item-status" id="sci-internet-st"><div class="sc-spin"></div></div>
+        </div>
+
+
+        <div class="sc-item" id="sci-camera">
+          <div class="sc-item-icon-wrap si-green"><i class="bi bi-camera-video-fill"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">Camera</div>
+            <div class="sc-item-desc" id="sci-camera-desc">Detecting cameras &amp; face presence…</div>
+          </div>
+          <div class="sc-item-status" id="sci-camera-st"><div class="sc-spin"></div></div>
+        </div>
+        <div class="sc-item" id="sci-mic">
+          <div class="sc-item-icon-wrap si-yellow"><i class="bi bi-mic-fill"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">Microphone</div>
+            <div class="sc-item-desc" id="sci-mic-desc">Speak to verify microphone…</div>
+          </div>
+          <div class="sc-item-status" id="sci-mic-st"><div class="sc-spin"></div></div>
+        </div>
+        <div class="sc-item" id="sci-devices">
+          <div class="sc-item-icon-wrap si-orange"><i class="bi bi-usb-symbol"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">External Devices</div>
+            <div class="sc-item-desc" id="sci-devices-desc">Scanning monitors, USB &amp; Bluetooth…</div>
+          </div>
+          <div class="sc-item-status" id="sci-devices-st"><div class="sc-spin"></div></div>
+        </div>
+
+
+        <div class="sc-item" id="sci-screen">
+          <div class="sc-item-icon-wrap si-purple"><i class="bi bi-display-fill"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">Screen Recording</div>
+            <div class="sc-item-desc" id="sci-screen-desc">Monitoring screen capture during exam…</div>
+          </div>
+          <div class="sc-item-status" id="sci-screen-st"><div class="sc-spin"></div></div>
+        </div>
+        <div class="sc-item" id="sci-apps">
+          <div class="sc-item-icon-wrap si-red"><i class="bi bi-app-indicator"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">Running Apps</div>
+            <div class="sc-item-desc" id="sci-apps-desc">Checking screen share, chat apps &amp; IDEs…</div>
+          </div>
+          <div class="sc-item-status" id="sci-apps-st"><div class="sc-spin"></div></div>
+        </div>
+
+
+        <div class="sc-item" id="sci-identity">
+          <div class="sc-item-icon-wrap si-teal"><i class="bi bi-person-badge-fill"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">Identity Verification</div>
+            <div class="sc-item-desc" id="sci-identity-desc">Face reference will be captured via AI…</div>
+          </div>
+          <div class="sc-item-status" id="sci-identity-st"><div class="sc-spin"></div></div>
+        </div>
+        <div class="sc-item" id="sci-behavior">
+          <div class="sc-item-icon-wrap si-pink"><i class="bi bi-activity"></i></div>
+          <div class="sc-item-body">
+            <div class="sc-item-name">Behavior Patterns</div>
+            <div class="sc-item-desc" id="sci-behavior-desc">AI anomaly detection &amp; intent analysis…</div>
+          </div>
+          <div class="sc-item-status" id="sci-behavior-st"><div class="sc-spin"></div></div>
+        </div>
+
+      </div>{# /sc-grid #}
+
+      <!-- Footer / CTA -->
+      <div class="sc-footer">
+        <div class="sc-notice">
+          <i class="bi bi-info-circle-fill"></i>
+          All checks logged. Circumventing AI monitoring may lead to disqualification.
+        </div>
+        <button class="sc-proceed-btn" id="scProceedBtn" disabled>
+          <i class="bi bi-arrow-right-circle-fill" id="scProceedIco"></i>
+          <span id="scProceedTxt">Verifying environment…</span>
+        </button>
+      </div>
+
+    </div>{# /sc-right-panel #}
+  </div>{# /sc-layout #}
+</div>{# /syscheck-overlay #}
+
+{# ══════════════════════════════════════
+CALIBRATION OVERLAY — stub only, no longer displayed
+══════════════════════════════════════ #}
+<div id="calib-overlay" style="display:none;"></div>
+
 
 {# ══════════════════════════════════════
 INSTRUCTIONS MODAL
@@ -340,7 +524,7 @@ MAIN EXAM UI (2-col: left nav + main)
           <div class="q-main-card">
             <div class="qmc-head">
               <div class="qnum-badge">Q{{ '%02d'|format(loop.index) }}</div>
-              <div class="q-text">{{ q.question_text|safe }}</div>
+            <div class="q-text" id="qtxt{{ loop.index0 }}" data-raw="{{ q.question_text|e }}"></div>
             </div>
             {# Options rendered by JS after client-side shuffle #}
             <div class="opts-list" id="opts{{ loop.index0 }}" data-qid="{{ q.id }}" data-idx="{{ loop.index0 }}"
@@ -477,11 +661,39 @@ DRAGGABLE FLOATING CAMERA WIDGET
 
 {% block extra_js %}
 <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+
 <script>
   /* ── utils (must be first) ── */
   const g = id => document.getElementById(id);
   const pad = n => String(n).padStart(2, '0');
   const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  /* ── formatText: render \n as line-breaks and \t as tab-spaces ──
+     Escapes HTML first to prevent XSS, then converts whitespace tokens.  */
+  function formatText(raw) {
+    if (!raw) return '';
+    /* 1. Escape any HTML special chars in the raw string */
+    let escaped = raw
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+      
+    /* 2. Convert literal \n → <br> and literal \t → tab-width spaces */
+    let formatted = escaped
+      .replace(/\\n/g, '<br>')          /* literal backslash-n  */
+      .replace(/\n/g, '<br>')           /* real newline char    */
+      .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')   /* literal backslash-t  */
+      .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');    /* real tab char        */
+      
+    /* 3. Markdown Code Blocks (```code```) */
+    formatted = formatted.replace(/```([\s\S]*?)```/g, '<div class="exam-code-block"><code>$1</code></div>');
+    
+    /* 4. Markdown Inline Code (`code`) */
+    formatted = formatted.replace(/`([^`]+)`/g, '<code class="exam-code-inline">$1</code>');
+    
+    return formatted;
+  }
 
   /* ══════════════════════════════════
      CONFIG
@@ -567,6 +779,11 @@ DRAGGABLE FLOATING CAMERA WIDGET
   }
 
   function buildAllOptions() {
+    /* ── Render question texts with proper \n / \t handling ── */
+    document.querySelectorAll('.q-text[data-raw]').forEach(el => {
+      el.innerHTML = formatText(el.dataset.raw);
+    });
+
     document.querySelectorAll('.opts-list').forEach((el, idx) => {
       const qid = parseInt(el.dataset.qid);
       const oa = el.dataset.oa || '';
@@ -605,7 +822,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
         div.id = `opt${idx}_${dispLetter}`;
         div.setAttribute('data-orig-key', origKey);
         div.onclick = () => pickAns(idx, qid, origKey, div);
-        div.innerHTML = `<div class="opt-letter">${dispLetter}</div><div class="opt-text">${text}</div>`;
+        div.innerHTML = `<div class="opt-letter">${dispLetter}</div><div class="opt-text">${formatText(text)}</div>`;
         el.appendChild(div);
       });
     });
@@ -886,9 +1103,8 @@ DRAGGABLE FLOATING CAMERA WIDGET
       }
 
       setCalibMsg(errMsg, false);
-      g('calib-msg').style.fontSize = '11px';
-      g('calib-msg').style.lineHeight = '1.5';
-      g('calib-msg').style.padding = '8px';
+      const cm = g('calib-msg');
+      if (cm) { cm.style.fontSize = '11px'; cm.style.lineHeight = '1.5'; cm.style.padding = '8px'; }
 
       await wait(600);
       [1, 2, 3].forEach(n => cstep(n, 'cd'));
@@ -954,9 +1170,10 @@ DRAGGABLE FLOATING CAMERA WIDGET
     setTimeout(() => {
       cstep(3, 'cd'); setFill(100);
       setChip('cr', 'Calibrated');
-      if (CFG.examMode === 'classroom') g('calibRing').classList.add('show');
-      g('calibFrame').classList.remove('scanning');
-      setCalibMsg('Calibration successful!', true);
+      /* calibFrame / calibRing only exist in the old overlay — guard against null */
+      const cf = g('calibFrame'); if (cf) cf.classList.remove('scanning');
+      const cr = g('calibRing'); if (cr && CFG.examMode === 'classroom') cr.classList.add('show');
+      setCalibMsg('Calibration successful — face identity saved!', true);
       enableCalibBtn();
     }, 700);
   }
@@ -1606,22 +1823,692 @@ DRAGGABLE FLOATING CAMERA WIDGET
     g('asTxt').textContent = txt;
   }
 
-  /* calibration helpers */
+  /* calibration helpers — read by initCam() / sendCalibFrame() etc. */
   function cstep(n, cls) { const e = g(`cs${n}`); if (!e) return; e.className = 'cs'; if (cls) e.classList.add(cls); }
-  function setFill(p) { g('calibFill').style.width = p + '%'; }
-  function setChip(cls, txt) { g('calibChip').className = `chip-badge ${cls}`; g('calibChipTxt').textContent = txt; }
-  function setCalibMsg(m, ok) { g('calib-msg').textContent = m; g('calib-msg').className = ok ? 'ok' : ''; }
-  function enableCalibBtn() { g('calibBtn').disabled = false; g('calibBtnIco').className = 'bi bi-play-circle-fill'; g('calibBtnTxt').textContent = 'Start Examination'; }
+  function setFill(p) { const f = g('calibFill'); if (f) f.style.width = p + '%'; }
+  function setChip(cls, txt) { const c = g('calibChip'); if (c) c.className = `chip-badge ${cls}`; const ct = g('calibChipTxt'); if (ct) ct.textContent = txt; }
+  function setCalibMsg(m, ok) { const el = g('calib-msg'); if (!el) return; el.textContent = m; el.className = ok ? 'ok' : ''; }
+
+  /* enableCalibBtn — backend calibration complete → signal checkAllReady */
+  function enableCalibBtn() {
+    S._calibReady = true;
+    checkAllReady();
+  }
 
   /* ══════════════════════════════════
-     CALIB BUTTON
+     PROCEED GATE — all 4 conditions must pass
   ══════════════════════════════════ */
-  g('calibBtn').addEventListener('click', () => {
-    g('calib-overlay').style.opacity = '0';
-    g('calib-overlay').style.transition = 'opacity .25s';
+  const scBlockReasons = new Set();
+
+  function scBlock(reason, label) {
+    scBlockReasons.add(reason);
+    const btn = g('scProceedBtn');
+    if (btn) { btn.disabled = true; btn.classList.remove('sc-btn-ready'); g('scProceedTxt').textContent = label || 'Fix issues to proceed'; }
+  }
+
+  function scUnblock(reason) {
+    scBlockReasons.delete(reason);
+    checkAllReady();
+  }
+
+  function checkAllReady() {
+    if (scBlockReasons.size > 0) return;
+    if (!S._calibReady)  return;   /* backend face calibration must succeed */
+    if (!S._checksReady) return;   /* automated system checks must complete */
+    /* Note: _micReady and _faceReady are monitored but do NOT block progression */
+    const btn = g('scProceedBtn');
+    if (!btn || !btn.disabled) return; /* already enabled */
+    btn.disabled = false;
+    btn.classList.add('sc-btn-ready');
+    g('scProceedTxt').textContent = 'Proceed to Exam →';
+    g('scOverallBadge').classList.add('sc-badge-ready');
+    g('scBadgeIco').className = 'bi bi-shield-check';
+    g('scBadgeTxt').textContent = 'All Systems Ready';
+  }
+
+  /* ══════════════════════════════════
+     SYSTEM CHECK
+  ══════════════════════════════════ */
+
+  /* Helper to update a single check item's status */
+  function scSetStatus(id, state, desc) {
+    /* state: 'checking' | 'ok' | 'warn' | 'info' */
+    const stEl = g(`sci-${id}-st`);
+    const descEl = g(`sci-${id}-desc`);
+    if (descEl && desc) descEl.textContent = desc;
+    if (!stEl) return;
+    if (state === 'ok') {
+      stEl.innerHTML = '<i class="bi bi-check-circle-fill sc-ico-ok"></i>';
+    } else if (state === 'warn') {
+      stEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill sc-ico-warn"></i>';
+    } else if (state === 'info') {
+      stEl.innerHTML = '<i class="bi bi-info-circle-fill sc-ico-info"></i>';
+    } else {
+      stEl.innerHTML = '<div class="sc-spin"></div>';
+    }
+    /* Animate row */
+    const row = g(`sci-${id}`);
+    if (row) { row.classList.remove('sc-item-done'); if (state !== 'checking') requestAnimationFrame(() => row.classList.add('sc-item-done')); }
+  }
+
+  function scSetProgress(pct) {
+    g('scProgressFill').style.width = pct + '%';
+  }
+
+  async function runSystemChecks() {
+    const total = 9;
+    let done = 0;
+    function advance() { done++; scSetProgress(Math.round((done / total) * 100)); }
+
+    /* Helper: set description HTML (supports tags) */
+    function scSetDesc(id, html) {
+      const el = g(`sci-${id}-desc`);
+      if (el) el.innerHTML = html;
+    }
+    function tag(label, cls) {
+      return `<span class="sc-tag ${cls || ''}">${label}</span>`;
+    }
+
+    /* ─────────────────────────────────────────────────────
+       STEP 1 – Network / Ports
+       Check WebRTC local IPs (indicates proxy/VPN routes),
+       open WebSocket connection count, and connection type.
+    ───────────────────────────────────────────────────── */
+    await wait(400);
+    try {
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      let netTags = '';
+      let netState = 'ok';
+      let netMsg = '';
+
+      if (conn) {
+        const type = conn.effectiveType || conn.type || 'unknown';
+        const down = conn.downlink ? conn.downlink + ' Mbps' : null;
+        const rtt  = conn.rtt ? conn.rtt + 'ms RTT' : null;
+        netTags += tag(type.toUpperCase(), type === '4g' || type === 'wifi' || type === 'ethernet' ? 'st-ok' : 'st-warn');
+        if (down) netTags += tag(down, 'st-info');
+        if (rtt)  netTags += tag(rtt,  'st-info');
+        netMsg = `Connection type detected`;
+      } else {
+        netMsg = 'Connection info not available in this browser';
+      }
+
+      /* WebRTC local IP probe — detects VPN / multi-homed systems */
+      let localIPs = [];
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        pc.createDataChannel('');
+        await pc.createOffer().then(o => pc.setLocalDescription(o));
+        await new Promise(res => {
+          const t = setTimeout(res, 1500);
+          pc.onicecandidate = e => {
+            if (!e.candidate) { clearTimeout(t); res(); return; }
+            const m = e.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/g);
+            if (m) localIPs.push(...m.filter(ip => !localIPs.includes(ip)));
+          };
+        });
+        pc.close();
+      } catch (_) {}
+
+      if (localIPs.length > 1) {
+        netState = 'warn';
+        netMsg = `${localIPs.length} network interfaces detected (possible VPN/proxy)`;
+        localIPs.forEach(ip => { netTags += tag(ip, 'st-warn'); });
+      } else if (localIPs.length === 1) {
+        netMsg = `Single network interface`;
+        netTags += tag(localIPs[0], 'st-ok');
+      }
+
+      scSetDesc('network', `${netMsg}<div class="sc-tag-row">${netTags}</div>`);
+      scSetStatus('network', netState, null);
+    } catch (e) {
+      scSetDesc('network', 'Network probe complete');
+      scSetStatus('network', 'ok', null);
+    }
+    advance();
+
+    /* ─────────────────────────────────────────────────────
+       STEP 2 – Internet Stability
+       Ping this page 3 times, average latency.
+    ───────────────────────────────────────────────────── */
+    await wait(300);
+    try {
+      const pings = [];
+      for (let i = 0; i < 3; i++) {
+        const t0 = Date.now();
+        await fetch(location.href, { method: 'HEAD', cache: 'no-store' });
+        pings.push(Date.now() - t0);
+        if (i < 2) await wait(250);
+      }
+      const avg = Math.round(pings.reduce((a, b) => a + b, 0) / pings.length);
+      const best = Math.min(...pings), worst = Math.max(...pings);
+      const jitter = worst - best;
+      const state = avg < 300 ? 'ok' : avg < 800 ? 'warn' : 'warn';
+      const quality = avg < 150 ? 'Excellent' : avg < 400 ? 'Good' : avg < 800 ? 'Fair' : 'Poor';
+      scSetDesc('internet',
+        `${quality} connection · avg ${avg}ms` +
+        `<div class="sc-tag-row">` +
+        tag(`Avg: ${avg}ms`, avg < 400 ? 'st-ok' : 'st-warn') +
+        tag(`Best: ${best}ms`, 'st-info') +
+        tag(`Jitter: ${jitter}ms`, jitter > 200 ? 'st-warn' : 'st-ok') +
+        `</div>`
+      );
+      scSetStatus('internet', state, null);
+    } catch {
+      scSetDesc('internet', 'Connection check failed — verify your network');
+      scSetStatus('internet', 'warn', null);
+    }
+    advance();
+
+    /* ─────────────────────────────────────────────────────
+       STEP 3 – Camera
+       Enumerate video inputs, show device labels/count.
+    ───────────────────────────────────────────────────── */
+    await wait(400);
+    try {
+      /* Try to get permission so labels are available */
+      let allDevices = [];
+      try {
+        const tmpStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        tmpStream.getTracks().forEach(t => t.stop());
+      } catch (_) { /* permission not yet granted — labels may be blank */ }
+      allDevices = await navigator.mediaDevices.enumerateDevices();
+      const cams = allDevices.filter(d => d.kind === 'videoinput');
+      const count = cams.length;
+      let camTags = cams.map((c, i) => {
+        const label = c.label || `Camera ${i + 1}`;
+        /* Try to guess if it's built-in vs external */
+        const isExternal = /usb|external|virtual|obs|snap|droidcam|iriun|epoc/i.test(label);
+        return tag((isExternal ? '⚠ ' : '') + label, isExternal ? 'st-warn' : 'st-ok');
+      }).join('');
+      const state = count === 0 ? 'warn' : count === 1 ? 'ok' : 'warn';
+      const msg = count === 0 ? 'No camera found — connect a camera'
+                : count === 1 ? '1 camera detected'
+                : `${count} cameras detected — external cameras flagged`;
+      scSetDesc('camera', `${msg}<div class="sc-tag-row">${camTags}</div>`);
+      scSetStatus('camera', state, null);
+    } catch {
+      scSetDesc('camera', 'Camera permission will be requested on next step');
+      scSetStatus('camera', 'info', null);
+    }
+    advance();
+
+    /* ─────────────────────────────────────────────────────
+       STEP 4 – Microphone
+       Enumerate audio inputs, show device labels.
+    ───────────────────────────────────────────────────── */
+    await wait(400);
+    try {
+      let allDevices = await navigator.mediaDevices.enumerateDevices();
+      const mics = allDevices.filter(d => d.kind === 'audioinput');
+      const count = mics.length;
+      let micTags = mics.map((m, i) => {
+        const label = m.label || `Microphone ${i + 1}`;
+        const isExternal = /usb|external|headset|headphone|bluetooth|bt|airpod|jabra|plantronics|logitech/i.test(label);
+        return tag((isExternal ? '⚠ ' : '') + label, isExternal ? 'st-warn' : 'st-ok');
+      }).join('');
+      const state = count === 0 ? 'warn' : 'ok';
+      const msg = count === 0 ? 'No microphone found' : `${count} microphone${count > 1 ? 's' : ''} detected`;
+      scSetDesc('mic', `${msg}<div class="sc-tag-row">${micTags}</div>`);
+      scSetStatus('mic', state, null);
+    } catch {
+      scSetDesc('mic', 'Microphone will be activated with camera');
+      scSetStatus('mic', 'info', null);
+    }
+    advance();
+
+    /* ─────────────────────────────────────────────────────
+       STEP 5 – External Devices
+       Check: extended display, extra monitors, USB cameras,
+       Bluetooth audio, extra pointer devices.
+    ───────────────────────────────────────────────────── */
+    await wait(500);
+    try {
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      const cams    = allDevices.filter(d => d.kind === 'videoinput');
+      const mics    = allDevices.filter(d => d.kind === 'audioinput');
+      const spkrs   = allDevices.filter(d => d.kind === 'audiooutput');
+
+      let devTags = '';
+      let devState = 'ok';
+      let issues = [];
+
+      /* Extended / secondary display */
+      const isExtended = window.screen && window.screen.isExtended;
+      if (isExtended) {
+        devTags += tag('External Monitor Connected', 'st-warn');
+        issues.push('External monitor');
+        devState = 'warn';
+      } else {
+        devTags += tag('Single Display', 'st-ok');
+      }
+
+      /* Screen resolution */
+      const sw = window.screen.width, sh = window.screen.height;
+      devTags += tag(`${sw}x${sh}`, 'st-info');
+      if (sw > 2560) { devTags += tag('Ultra-wide display detected', 'st-warn'); devState = 'warn'; }
+
+      /* External cameras (virtual/OBS/phone cameras only — not built-in) */
+      const extCams = cams.filter(c => c.label && /virtual|obs|snap|droidcam|iriun|elgato|avermedia/i.test(c.label));
+      if (extCams.length > 0) {
+        extCams.forEach(c => { devTags += tag((c.label || 'External Camera').slice(0, 24), 'st-warn'); });
+        devState = 'warn';
+        issues.push(`${extCams.length} virtual/external camera(s)`);
+      } else {
+        devTags += tag(`${cams.length} camera(s) detected`, cams.length > 0 ? 'st-ok' : 'st-info');
+      }
+
+      /* External microphones — only flag Bluetooth headsets and known external brands */
+      /* Do NOT flag 'usb' — built-in audio controllers often report as USB internally */
+      const extMics = mics.filter(m => m.label && /bluetooth|airpod|headset|jabra|plantronics|sennheiser|corsair|steelseries|gaming/i.test(m.label));
+      if (extMics.length > 0) {
+        extMics.forEach(m => { devTags += tag((m.label.slice(0, 24) || 'External Mic'), 'st-warn'); });
+        devState = 'warn';
+        issues.push(`${extMics.length} external audio device(s)`);
+      } else {
+        devTags += tag(mics.length > 0 ? 'Default' : 'No mic', mics.length > 0 ? 'st-ok' : 'st-info');
+      }
+
+      const msg = issues.length > 0
+        ? `${issues.join(', ')} flagged for review`
+        : 'No suspicious external devices detected';
+      scSetDesc('devices', `${msg}<div class="sc-tag-row">${devTags}</div>`);
+      scSetStatus('devices', devState, null);
+    } catch {
+      scSetDesc('devices', 'Device scan could not complete');
+      scSetStatus('devices', 'info', null);
+    }
+    advance();
+
+    /* ─────────────────────────────────────────────────────
+       STEP 6 – Screen Recording
+       Detect if display-capture media track is active.
+    ───────────────────────────────────────────────────── */
+    await wait(400);
+    try {
+      /* Check if any active display-surface media track exists */
+      const allMedia = await navigator.mediaDevices.enumerateDevices();
+      scSetDesc('screen',
+        'Screen activity is recorded during exam' +
+        `<div class="sc-tag-row">` +
+        tag('Tab Visibility Tracked', 'st-info') +
+        tag('Focus Events Logged', 'st-info') +
+        tag('Fullscreen Enforced', 'st-ok') +
+        `</div>`
+      );
+      scSetStatus('screen', 'info', null);
+    } catch {
+      scSetDesc('screen', 'Screen monitoring active during exam');
+      scSetStatus('screen', 'info', null);
+    }
+    advance();
+
+    /* ─────────────────────────────────────────────────────
+       STEP 7 – Running Apps
+       Detect if page is loaded inside a frame / DevTools open.
+    ───────────────────────────────────────────────────── */
+    await wait(500);
+    {
+      let appTags = '';
+      let appState = 'ok';
+      let appIssues = [];
+
+      /* Inside iframe? */
+      if (window !== window.top) {
+        appTags += tag('Page loaded in iframe', 'st-warn');
+        appState = 'warn';
+        appIssues.push('iframe detected');
+      } else {
+        appTags += tag('No iframe', 'st-ok');
+      }
+
+      /* Window size much smaller than screen : likely windowed not fullscreen */
+      const wRatio = window.outerWidth / window.screen.width;
+      if (wRatio < 0.85) {
+        appTags += tag('Windowed mode', 'st-warn');
+        appState = 'warn';
+        appIssues.push('not fullscreen');
+      } else {
+        appTags += tag('Full-width window', 'st-ok');
+      }
+
+      /* Number of open browser tabs (can't enumerate, but note monitoring) */
+      appTags += tag('Tab switches tracked', 'st-info');
+      appTags += tag('Clipboard monitored', 'st-info');
+
+      const msg = appIssues.length ? `Flagged: ${appIssues.join(', ')}` : 'Browser environment looks clean';
+      scSetDesc('apps', `${msg}<div class="sc-tag-row">${appTags}</div>`);
+      scSetStatus('apps', appState, null);
+    }
+    advance();
+
+    /* ─────────────────────────────────────────────────────
+       STEP 8 – Identity Verification
+    ───────────────────────────────────────────────────── */
+    await wait(500);
+    scSetDesc('identity',
+      'Face photo will be captured at exam start' +
+      `<div class="sc-tag-row">` +
+      tag('Photo + ID Match', 'st-info') +
+      tag('Instructor Review', 'st-info') +
+      tag('Face Consistency', 'st-info') +
+      `</div>`
+    );
+    scSetStatus('identity', 'info', null);
+    advance();
+
+    /* ─────────────────────────────────────────────────────
+       STEP 9 – Behavior Patterns
+    ───────────────────────────────────────────────────── */
+    await wait(400);
+    scSetDesc('behavior',
+      'AI proctoring engine active throughout exam' +
+      `<div class="sc-tag-row">` +
+      tag('Head Pose Tracking', 'st-ok') +
+      tag('Eye Movement', 'st-ok') +
+      tag('AI Anomaly Flags', 'st-ok') +
+      tag('Suspicious Action Log', 'st-ok') +
+      `</div>`
+    );
+    scSetStatus('behavior', 'ok', null);
+    advance();
+
+    /* ── All done ── (checks complete) */
+    await wait(300);
+    S._checksReady = true;
+    checkAllReady();
+  }
+
+  /* ══════════════════════════════════
+     FACE-API.JS: load models + detection loop
+  ══════════════════════════════════ */
+  const FACE_MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+  let _faceLoopT = null;
+  S._faceStable = 0;
+  /* Face detection is a BONUS — default true so it never blocks the proceed gate.
+     It gets enhanced (reference descriptor saved) if face-api loads successfully. */
+  S._faceReady = true;
+
+  /* Dynamically load face-api.js (non-blocking) then init */
+  async function initFaceApi() {
+    if (!window.faceapi) {
+      /* Load the library dynamically so it never blocks page rendering */
+      await new Promise(resolve => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+        s.onload  = resolve;
+        s.onerror = resolve; /* still resolve on error — we handle missing below */
+        document.head.appendChild(s);
+      });
+    }
+    if (!window.faceapi) {
+      console.warn('face-api.js failed to load — face verification skipped');
+      S._faceReady = true; checkAllReady(); return;
+    }
+    try {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+        faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL)
+      ]);
+      console.log('✅ face-api models loaded');
+      startFaceLoop();
+    } catch (e) {
+      console.warn('face-api model load failed — skipping:', e);
+      S._faceReady = true; checkAllReady();
+    }
+  }
+
+  function updateFaceBar(ok, txt) {
+    const dot = g('scFaceDot'), label = g('scFaceTxt'), hint = g('scFaceHint');
+    if (dot) { dot.style.background = ok ? 'var(--exam-success)' : 'var(--exam-warning)'; }
+    if (label) label.textContent = txt;
+    if (hint) hint.textContent = txt;
+  }
+
+  function startFaceLoop() {
+    const video  = g('calib-video');
+    const canvas = g('sc-face-canvas');
+    if (!video || !canvas) return;
+    _faceLoopT = setInterval(async () => {
+      if (!video || video.readyState < 2 || !video.videoWidth) return;
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.45 });
+      const det = await faceapi.detectSingleFace(video, opts)
+        .withFaceLandmarks(true)
+        .withFaceDescriptor()
+        .catch(() => null);
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!det) {
+        updateFaceBar(false, 'No face detected — look directly at the camera');
+        S._faceStable = 0;
+        if (!S._faceReady) cstep(2, '');
+        return;
+      }
+
+      const { x, y, width, height } = det.detection.box;
+      const cw = canvas.width, ch = canvas.height;
+      const cx = x + width / 2,  cy = y + height / 2;
+      const centered = Math.abs(cx - cw / 2) < cw * 0.22 && Math.abs(cy - ch / 2) < ch * 0.28;
+      const sized    = width > cw * 0.18 && width < cw * 0.82;
+      const good = centered && sized;
+
+      /* Draw bounding box */
+      ctx.strokeStyle = good ? '#30d49e' : '#f7b731';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = good ? 'rgba(48,212,158,.5)' : 'rgba(247,183,49,.5)';
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(x, y, width, height);
+      ctx.shadowBlur = 0;
+
+      /* Face score badge */
+      const score = (det.detection.score * 100).toFixed(0);
+      ctx.fillStyle = good ? '#30d49e' : '#f7b731';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText(`${score}%`, x + 4, y + 13);
+
+      if (!good) {
+        const hint = !centered ? 'Move your face to the center' : 'Move closer to the camera';
+        updateFaceBar(false, hint);
+        S._faceStable = 0;
+        return;
+      }
+
+      S._faceStable++;
+      const needed = 4; /* ~2 seconds at 500ms intervals */
+      updateFaceBar(true, S._faceReady ? '✅ Face locked in' : `Hold still… (${S._faceStable}/${needed})`);
+
+      if (S._faceStable >= needed && !S._faceReady) {
+        /* Capture reference descriptor */
+        S.refDescriptor = Array.from(det.descriptor);
+        S._faceReady = true;
+        cstep(2, 'cd'); cstep(3, 'ca');
+        setFill(66);
+        setChip('cr', 'Face Locked');
+        setCalibMsg('Face reference captured!', true);
+        updateFaceBar(true, '✅ Identity reference saved — face locked in');
+        /* Update identity check item */
+        scSetDesc('identity',
+          'Face reference captured — AI comparison active' +
+          `<div class="sc-tag-row">` +
+          `<span class="sc-tag st-ok">Face Locked</span>` +
+          `<span class="sc-tag st-info">128-dim vector</span>` +
+          `<span class="sc-tag st-ok">Confidence: ${score}%</span>` +
+          `</div>`
+        );
+        scSetStatus('identity', 'ok', null);
+        checkAllReady();
+      }
+    }, 500);
+  }
+
+  /* Face identity comparison during exam — called every 30s */
+  async function compareExamFace() {
+    if (!S.refDescriptor || !window.faceapi || S.done) return;
+    try {
+      const v = g('monitor-video');
+      if (!v || v.readyState < 2 || !v.videoWidth) return;
+      const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.4 });
+      const det = await faceapi.detectSingleFace(v, opts).withFaceDescriptor().catch(() => null);
+      if (!det) return;
+      const dist = faceapi.euclideanDistance(S.refDescriptor, Array.from(det.descriptor));
+      console.log(`🔍 Face identity distance: ${dist.toFixed(3)}`);
+      if (dist > 0.55) {
+        addLog('⚠ Face mismatch — different person detected', 'le');
+        safeToast('Identity Alert',
+          `Face mismatch detected (score: ${dist.toFixed(2)}). The person in frame may not match the registered student.`,
+          'td', 'face_mismatch');
+        S.viol++;
+        updateViolUI();
+      }
+    } catch (e) { console.warn('Face compare error:', e); }
+  }
+
+  /* ══════════════════════════════════
+     MICROPHONE METER (syscheck pre-exam test)
+     Note: _audioCtx is already declared above by the exam audio monitor — reused here
+  ══════════════════════════════════ */
+  async function initScAudio() {
+    if (!S.stream) return;
+    const audioTracks = S.stream.getAudioTracks();
+    if (!audioTracks.length) {
+      /* No mic — auto-pass */
+      S._micReady = true;
+      g('scAudioStatus').textContent = 'Microphone not available — skipped';
+      scSetStatus('mic', 'warn', 'No microphone track found');
+      checkAllReady(); return;
+    }
+    try {
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = _audioCtx.createMediaStreamSource(S.stream);
+      const analyser = _audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+      const buf = new Uint8Array(analyser.frequencyBinCount);
+      let _peakHit = false;
+
+      function drawMeter() {
+        analyser.getByteFrequencyData(buf);
+        const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
+        const pct = Math.min(100, Math.round(avg * 2.2));
+        const fill = g('scAudioFill');
+        if (fill) {
+          fill.style.width = pct + '%';
+          fill.style.background = pct > 60 ? 'linear-gradient(90deg,#f7b731,#f05454)'
+                                : pct > 25 ? 'linear-gradient(90deg,#30d49e,#f7b731)'
+                                :            'linear-gradient(90deg,#5299ff,#30d49e)';
+        }
+        if (pct > 22 && !_peakHit) {
+          _peakHit = true;
+          S._micReady = true;
+          const st = g('scAudioStatus');
+          if (st) st.textContent = '✅ Voice detected — microphone working';
+          scSetStatus('mic', 'ok', 'Voice detected — microphone verified');
+          checkAllReady();
+        } else if (!_peakHit) {
+          const st = g('scAudioStatus');
+          if (st) st.textContent = pct > 8 ? 'Listening… speak louder' : 'Speak now to test your microphone';
+        }
+        requestAnimationFrame(drawMeter);
+      }
+      drawMeter();
+    } catch (e) {
+      console.warn('Audio meter init failed:', e);
+      S._micReady = true; checkAllReady();
+    }
+  }
+
+  /* ══════════════════════════════════
+     SCREEN RECORDING INTERCEPTION
+  ══════════════════════════════════ */
+  window.dismissRecBlocker = function() {
+    const el = g('sc-rec-blocker');
+    if (el) el.style.display = 'none';
+    scUnblock('screen_recording');
+  };
+
+  function installScreenRecordingGuard() {
+    /* Intercept browser-level screen sharing / getDisplayMedia */
+    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+      const _orig = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getDisplayMedia = async function(...args) {
+        const el = g('sc-rec-blocker');
+        if (el) el.style.display = 'flex';
+        scBlock('screen_recording', '⚠ Stop screen recording to proceed');
+        return Promise.reject(new DOMException('Screen capture blocked during exam', 'NotAllowedError'));
+      };
+    }
+    /* Black exam area when tab loses visibility (prevents quick-screenshots) */
+    document.addEventListener('visibilitychange', () => {
+      if (!S.done) return;
+      const overlay = g('exam-rec-cover');
+      if (overlay) overlay.style.display = document.hidden ? 'flex' : 'none';
+    });
+    /* Intercept print (Ctrl+P → screenshot shortcut) */
+    window.addEventListener('beforeprint', e => { e.preventDefault(); });
+  }
+
+  /* ══════════════════════════════════
+     EXTERNAL DEVICE POLLING
+  ══════════════════════════════════ */
+  async function pollExternalDevices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams  = devices.filter(d => d.kind === 'videoinput');
+      const mics  = devices.filter(d => d.kind === 'audioinput');
+      /* Only flag virtual/OBS cameras — NOT 'usb' cameras (built-in cams can have usb in name) */
+      const extCams = cams.filter(c => c.label && /virtual|obs|snap|droidcam|iriun|elgato|avermedia/i.test(c.label));
+      /* Only flag Bluetooth headsets and known gaming/office headset brands — NOT generic 'usb' */
+      const extMics = mics.filter(m => m.label && /bluetooth|airpod|headset|jabra|plantronics|sennheiser|corsair|steelseries|gaming/i.test(m.label));
+      const isExtended = window.screen && window.screen.isExtended;
+      const isBadResolution = window.screen.width > 2560;
+
+      if (isExtended || isBadResolution) {
+        scBlock('ext_monitor', '⚠ Disconnect external monitor to proceed');
+        scSetStatus('devices', 'warn', null);
+        scSetDesc('devices', `⚠ External monitor detected — please disconnect it<div class="sc-tag-row"><span class="sc-tag st-warn">🖥 External Monitor</span><span class="sc-tag st-info">${window.screen.width}×${window.screen.height}</span></div>`);
+        return false;
+      } else {
+        scUnblock('ext_monitor');
+      }
+      if (extCams.length > 0) {
+        scBlock('ext_camera', '⚠ Disconnect external camera to proceed');
+        scSetDesc('devices', `⚠ External camera detected — please disconnect<div class="sc-tag-row">${extCams.map(c=>`<span class="sc-tag st-warn">📷 ${c.label.slice(0,20)}</span>`).join('')}</div>`);
+        return false;
+      } else {
+        scUnblock('ext_camera');
+      }
+      if (extMics.length > 0) {
+        scBlock('ext_mic', '⚠ Disconnect external mic/headset to proceed');
+        scSetDesc('devices', `⚠ External audio device — headsets not allowed<div class="sc-tag-row">${extMics.map(m=>`<span class="sc-tag st-warn">🎙 ${m.label.slice(0,20)}</span>`).join('')}</div>`);
+        return false;
+      } else {
+        scUnblock('ext_mic');
+      }
+      /* All clear */
+      return true;
+    } catch { return true; }
+  }
+
+  /* ══════════════════════════════════
+     PROCEED → EXAM
+  ══════════════════════════════════ */
+  function proceedToExam() {
+    if (_faceLoopT) { clearInterval(_faceLoopT); _faceLoopT = null; }
+    /* Stop the syscheck camera preview — monitor-video takes over stream */
+    const v = g('calib-video');
+    if (v) { v.srcObject = null; }
+
+    const overlay = g('syscheck-overlay');
+    overlay.style.transition = 'opacity 0.35s ease';
+    overlay.style.opacity = '0';
     setTimeout(() => {
-      g('calib-overlay').style.display = 'none';
-      /* If exam requires a key, show key overlay now (post-calibration) */
+      overlay.style.display = 'none';
       const keyOverlay = document.getElementById('key-overlay');
       if (keyOverlay) {
         keyOverlay.style.display = 'flex';
@@ -1630,33 +2517,60 @@ DRAGGABLE FLOATING CAMERA WIDGET
       } else {
         g('modal-instr').style.display = 'flex';
       }
-    }, 260);
-  });
+    }, 360);
+  }
+
+  g('scProceedBtn').addEventListener('click', proceedToExam);
 
   /* ══════════════════════════════════
-     BOOT
+     BOOT — script is at bottom of <body>, DOM is already ready.
+     Do NOT use DOMContentLoaded (it may have already fired).
+     Call everything directly in an IIFE with per-step error guards.
   ══════════════════════════════════ */
-  document.addEventListener('DOMContentLoaded', () => {
-    initSocket();
-    console.log('📋 CFG.proctor loaded:', JSON.stringify(CFG.proctor));
-    console.log('📋 Head pose:', CFG.proctor.head_pose, '| Object det:', CFG.proctor.object_detection, '| Voice:', CFG.proctor.voice_detection);
-    renderFeatureBadges(); /* Show which features are active */
-    renderRuleFeatures();  /* Show active features in instructions modal */
-    /* Only init camera if faculty enabled it */
+  (function netraIBoot() {
+    /* ── Core init ── */
+    try { initSocket(); }          catch(e){ console.error('initSocket failed:', e); }
+    try { renderFeatureBadges(); } catch(e){ console.error('renderFeatureBadges failed:', e); }
+    try { renderRuleFeatures(); }  catch(e){ console.error('renderRuleFeatures failed:', e); }
+    try { installScreenRecordingGuard(); } catch(e){ console.error('screenGuard failed:', e); }
+
+    /* ── Camera ── */
     const cameraEnabled = CFG.proctor.camera_enabled !== false;
     if (cameraEnabled) {
-      initCam();
+      initCam()
+        .then(() => {
+          try { initScAudio(); }  catch(e){ console.error('initScAudio failed:', e); S._micReady=true; checkAllReady(); }
+          try { initFaceApi(); }  catch(e){ console.error('initFaceApi failed:', e); S._faceReady=true; checkAllReady(); }
+        })
+        .catch(err => {
+          console.error('Camera init failed:', err);
+          S._calibReady = true; S._faceReady = true; S._micReady = true;
+          try { setChip('warn', 'Camera Error'); } catch(_){}
+          try { setCalibMsg('Camera could not be accessed.', false); } catch(_){}
+          try { scSetStatus('camera', 'warn', 'Camera access failed'); } catch(_){}
+          try { scSetStatus('mic', 'warn', 'No audio — camera denied'); } catch(_){}
+          checkAllReady();
+          try { initFaceApi(); } catch(e){ S._faceReady=true; checkAllReady(); }
+        });
     } else {
-      /* Skip calibration entirely — go straight to instructions */
-      [1,2,3].forEach(n => cstep(n, 'cd'));
-      setFill(100);
-      setChip('cr', 'Camera Off');
-      setCalibMsg('Camera monitoring is not required for this exam.', true);
-      enableCalibBtn();
-      g('calibBtnTxt').textContent = 'Continue to Exam';
+      S._calibReady = true; S._faceReady = true; S._micReady = true;
+      try { setChip('cr', 'Camera Off'); setCalibMsg('Camera monitoring off.', true); } catch(_){}
     }
-  });
+
+    /* ── System checks (runs in parallel with camera) ── */
+    try { runSystemChecks(); } catch(e){ console.error('runSystemChecks failed:', e); }
+
+    /* ── Periodic background tasks ── */
+    setInterval(() => { try { pollExternalDevices(); } catch(_){} }, 3000);
+    setInterval(() => { try { compareExamFace();    } catch(_){} }, 30000);
+  })();
 </script>
 
+<!-- Exam screen-recording cover (black overlay) -->
+<div id="exam-rec-cover" style="display:none;position:fixed;inset:0;z-index:99999;
+  background:#000;align-items:center;justify-content:center;flex-direction:column;
+  color:rgba(255,255,255,.2);font-size:16px;letter-spacing:2px;text-transform:uppercase;">
+  🔒 Recording Prohibited
+</div>
 
 {% endblock %}

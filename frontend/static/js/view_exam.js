@@ -261,10 +261,17 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!part) return;
 
             if (part.includes("-")) {
-                let [start, end] = part.split("-").map(Number);
-                for (let i = start; i <= end; i++) out.add(i.toString());
+                let [start, end] = part.split("-").map(s => parseInt(s.trim(), 10));
+                if (!isNaN(start) && !isNaN(end)) {
+                    for (let i = start; i <= end; i++) out.add(i.toString());
+                } else {
+                    out.add(part); // fallback for things like "A-B"
+                }
             } else {
-                out.add(Number(part).toString());
+                // Keep exactly as typed (supports alphanumeric and padded "01")
+                out.add(part);
+                // Also add the numeric version just in case of "01" vs "1" mismatches
+                if (!isNaN(part)) out.add(Number(part).toString());
             }
         });
         return [...out];

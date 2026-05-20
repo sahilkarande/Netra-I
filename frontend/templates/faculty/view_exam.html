@@ -278,14 +278,6 @@
         </div>
     </div>
 
-
-
-    <!-- ======================================================= -->
-    <!-- MODAL: EXAM ACCESS CONTROL -->
-    <!-- ======================================================= -->
-    <!-- ======================================================= -->
-    <!-- MODAL: EXAM ACCESS CONTROL (CLEAN + MODERN + FIXED) -->
-    <!-- ======================================================= -->
     <div id="exam-access-modal" class="custom-modal">
         <div class="modal-content modal-md">
 
@@ -302,26 +294,34 @@
 
                         <label class="access-label">Access Mode:</label>
 
-                        <!-- Stop Access -->
-                        <label class="radio-line">
-                            <input type="radio" name="access_mode" value="stopped" {% if not exam.is_active %}checked{%
-                                endif %} class="access-radio">
-                            <span>Stop Access for all students</span>
-                        </label>
+                        <div class="access-cards-container">
+                            <!-- Stop Access -->
+                            <label class="access-mode-card {% if not exam.is_active %}selected{% endif %}">
+                                <input type="radio" name="access_mode" value="stopped" {% if not exam.is_active %}checked{% endif %} class="access-radio">
+                                <div class="access-card-content">
+                                    <span class="access-card-title"><i class="bi bi-stop-circle" style="color:var(--danger-color, #ef4444);"></i> Stop Access</span>
+                                    <p class="access-card-desc">No students can start or resume this exam.</p>
+                                </div>
+                            </label>
 
-                        <!-- Allow All -->
-                        <label class="radio-line">
-                            <input type="radio" name="access_mode" value="all" {% if exam.allow_all_students %}checked{%
-                                endif %} class="access-radio">
-                            <span>Allow All Students</span>
-                        </label>
+                            <!-- Allow All -->
+                            <label class="access-mode-card {% if exam.allow_all_students %}selected{% endif %}">
+                                <input type="radio" name="access_mode" value="all" {% if exam.allow_all_students %}checked{% endif %} class="access-radio">
+                                <div class="access-card-content">
+                                    <span class="access-card-title"><i class="bi bi-globe" style="color:var(--success-color, #10b981);"></i> Allow All Students</span>
+                                    <p class="access-card-desc">Any student in the system can take this exam.</p>
+                                </div>
+                            </label>
 
-                        <!-- Allow Specific -->
-                        <label class="radio-line">
-                            <input type="radio" name="access_mode" value="specific" {% if exam.allowed_students and not
-                                exam.allow_all_students %}checked{% endif %} class="access-radio" id="specific-radio">
-                            <span>Allow Specific Students Only</span>
-                        </label>
+                            <!-- Allow Specific -->
+                            <label class="access-mode-card {% if exam.allowed_students and not exam.allow_all_students %}selected{% endif %}">
+                                <input type="radio" name="access_mode" value="specific" {% if exam.allowed_students and not exam.allow_all_students %}checked{% endif %} class="access-radio" id="specific-radio">
+                                <div class="access-card-content">
+                                    <span class="access-card-title"><i class="bi bi-people-fill" style="color:#6366f1;"></i> Specific Students Only</span>
+                                    <p class="access-card-desc">Only hand-picked students or specific batches can take this exam.</p>
+                                </div>
+                            </label>
+                        </div>
 
                     </div>
 
@@ -442,10 +442,10 @@
                     <input id="student-search" class="form-input" placeholder="Search name/PRN/roll">
 
                     <h4 class="column-title"><i class="bi bi-list-ol"></i> Roll Range</h4>
-                    <input id="range-input" class="form-input" placeholder="e.g. 1-20, 25-40">
+                    <input id="range-input" class="form-input" placeholder="e.g. 1-20, 25, 30, 41-50">
 
-                    <button id="apply-range-btn" class="btn btn-primary btn-sm">Apply</button>
-                    <button id="clear-range-btn" class="btn btn-outline btn-sm">Clear</button>
+                    <button id="apply-range-btn" class="btn btn-primary btn-sm">Apply</button> <br>
+                    <button id="clear-range-btn" class="btn btn-primary btn-sm">Clear</button>
 
                     <div id="range-error" class="range-error"></div>
                 </div>
@@ -457,20 +457,18 @@
 
                     <div class="student-list student-grid">
                         {% for s in all_students %}
-                        <label class="student-row" data-student-id="{{ s.id }}" data-batch="{{ s.batch or '' }}"
-                            data-roll-id="{{ s.roll_id or '' }}">
+                        <label class="student-row {% if exam.allowed_students and (s.id|string) in exam.allowed_students.split(',') %}selected-row{% endif %}" 
+                            data-student-id="{{ s.id }}" data-batch="{{ s.batch or '' }}" data-roll-id="{{ s.roll_id or '' }}">
 
-                            <input type="checkbox" class="student-checkbox" value="{{ s.id }}" {% if
-                                exam.allowed_students and (s.id|string) in exam.allowed_students.split(',') %}checked{%
-                                endif %}>
+                            <input type="checkbox" class="student-checkbox" value="{{ s.id }}" {% if exam.allowed_students and (s.id|string) in exam.allowed_students.split(',') %}checked{% endif %}>
 
                             <div class="student-info">
                                 <strong class="student-name">{{ s.full_name }}</strong>
 
                                 <div class="student-meta">
-                                    Roll: {{ s.roll_id or 'N/A' }} • Batch: {{ s.batch or 'N/A' }}
+                                    Roll: {{ s.roll_id or 'N/A' }} • Batch: {{ s.batch or 'N/A' }}<br>
                                     {% if s.prn_number %}
-                                    • PRN: {{ s.prn_number }}
+                                    PRN: {{ s.prn_number }}
                                     {% endif %}
                                 </div>
 
@@ -594,67 +592,7 @@
     <!-- ======================================================= -->
     <!-- POST-EXAM SETTINGS CARD                                   -->
     <!-- ======================================================= -->
-    <div class="card panel-box" style="margin-top:16px;">
-        <div class="card-header">
-            <h3 class="card-title" style="margin:0;"><i class="bi bi-flag-fill" style="color:#8b5cf6;"></i> Post-Exam
-                Behaviour</h3>
-        </div>
-        <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
-
-            <!-- Leaderboard Toggle -->
-            <div
-                style="display:flex; align-items:center; justify-content:space-between; padding:0.8rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background:rgba(255,255,255,0.03);">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <div
-                        style="width:36px;height:36px;border-radius:8px;background:rgba(245,158,11,0.1);color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
-                        <i class="bi bi-trophy-fill"></i>
-                    </div>
-                    <div>
-                        <div style="font-weight:600;color:#e8eaf0;">Show Leaderboard</div>
-                        <div style="font-size:12px;color:#8899aa;">Allow students to view rankings after submitting
-                        </div>
-                    </div>
-                </div>
-                <label style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
-                    <input type="checkbox" id="leaderboardToggle" {% if exam.show_leaderboard %}checked{% endif %}
-                        onchange="savePostSetting('show_leaderboard', this.checked)"
-                        style="opacity:0;width:0;height:0;">
-                    <span
-                        style="position:absolute;inset:0;background:{% if exam.show_leaderboard %}#6366f1{% else %}#4a5568{% endif %};border-radius:24px;transition:.3s;"></span>
-                    <span
-                        style="position:absolute;height:18px;width:18px;background:white;border-radius:50%;bottom:3px;left:{% if exam.show_leaderboard %}23{% else %}3{% endif %}px;transition:.3s;box-shadow:0 1px 3px rgba(0,0,0,.15);"></span>
-                </label>
-            </div>
-
-            <!-- Post-Exam Redirect -->
-            <div
-                style="padding:0.8rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background:rgba(255,255,255,0.03);">
-                <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-                    <div
-                        style="width:36px;height:36px;border-radius:8px;background:rgba(139,92,246,0.1);color:#8b5cf6;display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
-                        <i class="bi bi-box-arrow-right"></i>
-                    </div>
-                    <div>
-                        <div style="font-weight:600;color:#e8eaf0;">After Submission — Show</div>
-                        <div style="font-size:12px;color:#8899aa;">What students see immediately after they submit</div>
-                    </div>
-                </div>
-                <div style="display:flex; gap:10px;">
-                    <button id="btn-post-results" onclick="setPostRedirect('results')"
-                        class="btn {% if not exam.post_exam_redirect or exam.post_exam_redirect == 'results' %}btn-primary{% else %}btn-secondary{% endif %}"
-                        style="flex:1;">
-                        <i class="bi bi-bar-chart-fill"></i> Their Results
-                    </button>
-                    <button id="btn-post-dashboard" onclick="setPostRedirect('dashboard')"
-                        class="btn {% if exam.post_exam_redirect == 'dashboard' %}btn-primary{% else %}btn-secondary{% endif %}"
-                        style="flex:1;">
-                        <i class="bi bi-house-fill"></i> Dashboard
-                    </button>
-                </div>
-            </div>
-
-        </div>
-    </div>
+    
 
     <div class="modal-button-row">
         <button class="btn btn-primary open-details-modal">
@@ -881,29 +819,180 @@
         }
     }
 
-    /* Original inline styles */
-    .access-group {
-        margin-bottom: 20px;
-        padding: 10px 5px;
+    /* Exam Access Cards */
+    .access-cards-container {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 10px;
     }
-
-    .access-label {
-        font-weight: 600;
-        margin-bottom: 8px;
-        display: block;
-    }
-
-    .radio-line {
+    
+    .access-mode-card {
         display: flex;
         align-items: center;
-        gap: 10px;
-        margin: 8px 0;
+        gap: 15px;
+        padding: 16px 20px;
+        background: var(--card-bg, #1b2233);
+        border: 2px solid var(--border-color, #2b3244);
+        border-radius: 12px;
         cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .access-mode-card:hover {
+        background: var(--hover-bg, #242940);
+        border-color: #6366f1;
+    }
+    
+    .access-mode-card.selected {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: #6366f1;
+    }
+    
+    .access-mode-card input[type="radio"] {
+        width: 22px;
+        height: 22px;
+        accent-color: #6366f1;
+        cursor: pointer;
+        margin: 0;
+    }
+    
+    .access-card-content {
+        flex: 1;
+    }
+    
+    .access-card-title {
+        font-weight: 700;
+        color: var(--text-primary, #e8eaf0);
+        font-size: 1.05rem;
+        margin-bottom: 4px;
+        display: block;
+    }
+    
+    .access-card-desc {
+        color: var(--text-secondary, #8899aa);
+        font-size: 0.85rem;
+        margin: 0;
     }
 
-    .access-radio {
-        width: 18px;
-        height: 18px;
+    /* Student Selection Modern Grid */
+    .student-modal-grid {
+        display: grid;
+        grid-template-columns: 280px 1fr 200px;
+        gap: 20px;
+        height: 60vh;
+        min-height: 500px;
+    }
+    
+    .modal-column {
+        background: var(--card-bg, #1e293b);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: 12px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    .column-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary, #fff);
+        margin-top: 0;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .column-title i {
+        color: #6366f1;
+    }
+    
+    .student-list-column {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+    }
+    
+    .student-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px;
+        overflow-y: auto;
+        padding-right: 5px;
+        align-content: start;
+        height: 100%;
+    }
+    
+    .student-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+        background: var(--card-bg, #1e293b);
+        border: 2px solid var(--border-color, #334155);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin: 0;
+    }
+    
+    .student-row:hover {
+        border-color: #6366f1;
+        background: var(--hover-bg, #2a3548);
+    }
+    
+    .student-row.selected-row {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: #10b981;
+    }
+    
+    .student-checkbox {
+        width: 22px;
+        height: 22px;
+        accent-color: #10b981;
+        cursor: pointer;
+        margin-top: 2px;
+    }
+    
+    .student-info {
+        flex: 1;
+    }
+    
+    .student-name {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text-primary, #fff);
+        margin-bottom: 4px;
+        display: block;
+    }
+    
+    .student-meta {
+        font-size: 0.85rem;
+        color: var(--text-secondary, #94a3b8);
+        line-height: 1.4;
+    }
+    
+    .student-tag {
+        font-size: 0.75rem;
+        background: rgba(139, 92, 246, 0.15);
+        color: #a78bfa;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        margin-top: 6px;
+        border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+    
+    @media (max-width: 1024px) {
+        .student-modal-grid {
+            grid-template-columns: 1fr;
+            height: auto;
+        }
+        .student-list-column {
+            height: 400px;
+        }
     }
 
     .selected-text {
@@ -1005,5 +1094,40 @@
         document.getElementById('btn-post-results').className = 'btn ' + (mode === 'results' ? 'btn-primary' : 'btn-secondary');
         document.getElementById('btn-post-dashboard').className = 'btn ' + (mode === 'dashboard' ? 'btn-primary' : 'btn-secondary');
     }
+
+    /* ── UI Enhancements ── */
+    document.addEventListener("DOMContentLoaded", () => {
+        // Access Modal UI syncing
+        document.querySelectorAll('.access-radio').forEach(radio => {
+            radio.addEventListener('change', function() {
+                document.querySelectorAll('.access-mode-card').forEach(card => card.classList.remove('selected'));
+                if(this.checked) this.closest('.access-mode-card').classList.add('selected');
+            });
+        });
+
+        // Student list UI syncing
+        document.querySelectorAll('.student-checkbox').forEach(cb => {
+            cb.addEventListener('change', function() {
+                if(this.checked) this.closest('.student-row').classList.add('selected-row');
+                else this.closest('.student-row').classList.remove('selected-row');
+            });
+        });
+
+        function syncStudentRows() {
+            document.querySelectorAll('.student-checkbox').forEach(cb => {
+                if(cb.checked) cb.closest('.student-row').classList.add('selected-row');
+                else cb.closest('.student-row').classList.remove('selected-row');
+            });
+        }
+
+        ['select-all-btn', 'deselect-all-btn', 'select-evens-btn', 'select-odds-btn', 'apply-range-btn'].forEach(id => {
+            const btn = document.getElementById(id);
+            if(btn) {
+                btn.addEventListener('click', () => {
+                    setTimeout(syncStudentRows, 50);
+                });
+            }
+        });
+    });
 </script>
 {% endblock %}

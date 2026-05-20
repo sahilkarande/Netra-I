@@ -1316,19 +1316,7 @@
             <h1 class="ce-pg-title">Create New Exam</h1>
             <p class="ce-pg-sub">Configure your exam settings, proctoring, and delivery options</p>
         </div>
-        <div class="ce-steps">
-            <div class="ce-step active" id="step1">
-                <div class="step-num">1</div>Details
-            </div>
-            <div class="step-line"></div>
-            <div class="ce-step" id="step2">
-                <div class="step-num">2</div>Security
-            </div>
-            <div class="step-line"></div>
-            <div class="ce-step" id="step3">
-                <div class="step-num">3</div>Publish
-            </div>
-        </div>
+
     </div>
 
     <!-- Tab Row -->
@@ -1380,7 +1368,7 @@
                                 <div class="f-group">
                                     <label class="f-label">Passing Score (%) <span class="req">*</span></label>
                                     <input type="number" name="passing_score" class="f-input" required min="0" max="100"
-                                        value="50" step="0.1">
+                                        value="40" step="0.1">
                                 </div>
                             </div>
 
@@ -1486,7 +1474,7 @@
                                         <span class="help-icon"
                                             data-tip="Recommended: 10 for classroom exams, 15 for home exams. Higher = more forgiving.">?</span>
                                     </label>
-                                    <input type="number" name="ps_max_warnings" value="25" min="5" max="100"
+                                    <input type="number" name="ps_max_warnings" value="10" min="5" max="100"
                                         class="f-input">
                                     <div class="f-hint">Before auto-submit triggers</div>
                                 </div>
@@ -1496,7 +1484,7 @@
                                         <span class="help-icon"
                                             data-tip="Exam auto-submits once this limit is reached.">?</span>
                                     </label>
-                                    <input type="number" name="max_tab_switches" value="5" min="1" max="20"
+                                    <input type="number" name="max_tab_switches" value="3" min="1" max="20"
                                         class="f-input">
                                     <div class="f-hint">Then exam auto-submits</div>
                                 </div>
@@ -1579,12 +1567,12 @@
                             <div class="f-group" style="margin-bottom:0.75rem;">
                                 <label class="f-label">After Submission — Show</label>
                                 <div class="post-opt-row">
-                                    <label class="post-opt sel" id="po-results" onclick="selPostOpt('results')">
-                                        <input type="radio" name="post_exam_redirect" value="results" checked>
+                                    <label class="post-opt " id="po-results" onclick="selPostOpt('results')">
+                                        <input type="radio" name="post_exam_redirect" value="results" >
                                         <span class="opt-icon"></span> Their Results
                                     </label>
-                                    <label class="post-opt" id="po-dashboard" onclick="selPostOpt('dashboard')">
-                                        <input type="radio" name="post_exam_redirect" value="dashboard">
+                                    <label class="post-opt sel" id="po-dashboard" onclick="selPostOpt('dashboard')">
+                                        <input type="radio" name="post_exam_redirect" value="dashboard" checked>
                                         <span class="opt-icon"></span> Dashboard
                                     </label>
                                 </div>
@@ -1608,12 +1596,18 @@
                                         </div>
                                     </div>
                                     <label style="position:relative; display:inline-block; width:38px; height:20px; flex-shrink:0; cursor:pointer;">
-                                        <input type="checkbox" name="show_leaderboard_check" checked
-                                               onchange="document.getElementById('lb_hidden').value = this.checked ? 'true' : 'false'"
-                                               style="opacity:0; width:0; height:0; position:absolute;">
-                                        <span style="position:absolute; inset:0; border-radius:20px; background:#6366f1; transition:background 0.25s;"
-                                              onclick="const c=this.previousElementSibling; setTimeout(()=>{this.style.background=c.checked?'#6366f1':'rgba(255,255,255,0.12)'; this.querySelector('span').style.left=c.checked?'20px':'2px';},0)">
-                                            <span style="position:absolute; height:16px; width:16px; bottom:2px; left:20px; border-radius:50%; background:#fff; transition:left 0.25s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+                                        <input type="checkbox" name="show_leaderboard_check"
+                                            onchange="document.getElementById('lb_hidden').value = this.checked ? 'true' : 'false'"
+                                            style="opacity:0; width:0; height:0; position:absolute;">
+
+                                        <span style="position:absolute; inset:0; border-radius:20px; background:rgba(255,255,255,0.12); transition:background 0.25s;"
+                                            onclick="const c=this.previousElementSibling; setTimeout(()=>{
+                                                this.style.background = c.checked ? '#6366f1' : 'rgba(255,255,255,0.12)';
+                                                this.querySelector('span').style.left = c.checked ? '20px' : '2px';
+                                            },0)">
+
+                                            <span style="position:absolute; height:16px; width:16px; bottom:2px; left:2px; border-radius:50%; background:#fff; transition:left 0.25s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+
                                         </span>
                                     </label>
                                 </div>

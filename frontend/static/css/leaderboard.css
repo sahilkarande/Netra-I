@@ -22,41 +22,30 @@
     --lb-red: #ef4444;
     --lb-cyan: #06b6d4;
 
-    --lb-bg: #f8fafc;
-    --lb-card-bg: #ffffff;
-    --lb-card-border: #e2e8f0;
-    --lb-hover-bg: #f1f5f9;
-    --lb-input-bg: #ffffff;
-    --lb-input-border: #cbd5e1;
+    --lb-bg: var(--bg);
+    --lb-card-bg: var(--card-bg, var(--bg-card));
+    --lb-card-border: var(--border-color, var(--border));
+    --lb-hover-bg: var(--bg-secondary, var(--bg-alt));
+    --lb-input-bg: var(--bg-card);
+    --lb-input-border: var(--border-color, var(--border));
 
-    --lb-text: #0f172a;
-    --lb-text-secondary: #64748b;
-    --lb-text-muted: #94a3b8;
+    --lb-text: var(--text-primary, var(--txt));
+    --lb-text-secondary: var(--text-secondary, var(--txt-2));
+    --lb-text-muted: var(--muted, var(--txt-3));
 
     --lb-radius: 14px;
     --lb-radius-sm: 10px;
     --lb-radius-xs: 8px;
-    --lb-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-    --lb-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-    --lb-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-    --lb-transition: all 0.2s ease;
-}
-
-[data-theme="dark"] {
-    --lb-bg: #0f172a;
-    --lb-card-bg: #1e293b;
-    --lb-card-border: #334155;
-    --lb-hover-bg: #334155;
-    --lb-input-bg: #1e293b;
-    --lb-input-border: #475569;
-
-    --lb-text: #f1f5f9;
-    --lb-text-secondary: #cbd5e1;
-    --lb-text-muted: #94a3b8;
-
     --lb-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     --lb-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --lb-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --lb-transition: all 0.2s ease;
+}
+
+[data-theme="light"] {
+    --lb-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --lb-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --lb-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 /* ---------- Container ---------- */
@@ -124,7 +113,11 @@
     justify-content: center;
     font-size: 2rem;
     backdrop-filter: blur(8px);
-    color: #fbbf24;
+    color: #fbbf24 !important;
+}
+
+.lb-header-icon .bi {
+    color: inherit !important;
 }
 
 .lb-title {
@@ -132,14 +125,14 @@
     font-weight: 700;
     margin: 0;
     line-height: 1.2;
-    color: white;
+    color: white !important;
 }
 
 .lb-subtitle {
     font-size: 1rem;
     opacity: 0.8;
     margin: 0.25rem 0 0 0;
-    color: white;
+    color: white !important;
 }
 
 .lb-header-actions {

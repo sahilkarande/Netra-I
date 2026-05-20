@@ -610,8 +610,14 @@
     {% endif %}
   </div>
 
-  <!-- ===== BATCH & EXAM SELECTOR (original, unchanged) ===== -->
-  <div class="sr-selector-card sr-animate-in">
+  <!-- ===== TWO COLUMN LAYOUT ===== -->
+  <div class="sr-layout">
+    
+    <!-- LEFT SIDEBAR -->
+    <div class="sr-sidebar">
+
+      <!-- ===== BATCH & EXAM SELECTOR ===== -->
+      <div class="sr-selector-card sr-animate-in">
     <div class="sr-selector-title">
       <i class="bi bi-funnel"></i> Select Report Parameters
     </div>
@@ -650,8 +656,68 @@
   </div>
 
   {% if report_data %}
+      <!-- ===== FILTER BAR (Moved to Sidebar) ===== -->
+      <div class="sr-filter-card sr-animate-in">
+        <div class="sr-filter-header">
+          <div class="sr-filter-title">
+            <i class="bi bi-funnel"></i> Filter Results
+          </div>
+          <div class="sr-filter-actions">
+            <span class="sr-result-count" id="result-count">
+              Showing <strong id="visible-rows">0</strong> of <strong id="total-rows">0</strong>
+            </span>
+            <button type="button" class="sr-btn sr-btn-ghost sr-btn-sm" onclick="clearAllFilters()">
+              <i class="bi bi-arrow-counterclockwise"></i> Reset
+            </button>
 
-  <!-- ===== SUMMARY METRICS (original, unchanged) ===== -->
+          </div>
+        </div>
+
+        <div class="sr-filter-grid">
+          <div class="sr-filter-item">
+            <label for="filter-prn">PRN Number</label>
+            <input type="text" id="filter-prn" class="sr-filter-input" placeholder="Search PRN...">
+          </div>
+          <div class="sr-filter-item">
+            <label for="filter-name">Student Name</label>
+            <input type="text" id="filter-name" class="sr-filter-input" placeholder="Search name...">
+          </div>
+          <div class="sr-filter-item">
+            <label for="filter-min-total">Min Total</label>
+            <input type="number" id="filter-min-total" class="sr-filter-input" placeholder="Min marks..." step="0.01">
+          </div>
+          <div class="sr-filter-item">
+            <label for="filter-max-total">Max Total</label>
+            <input type="number" id="filter-max-total" class="sr-filter-input" placeholder="Max marks..." step="0.01">
+          </div>
+          <div class="sr-filter-item">
+            <label for="filter-min-percentage">Min %</label>
+            <input type="number" id="filter-min-percentage" class="sr-filter-input" placeholder="Min %..." step="0.01">
+          </div>
+          <div class="sr-filter-item">
+            <label for="filter-status">Status</label>
+            <select id="filter-status" class="sr-filter-input">
+              <option value="">All</option>
+              <option value="pass">Passed</option>
+              <option value="fail">Failed</option>
+              <option value="absent">Absent</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- active filter pill tags -->
+        <div class="sr-filter-tags" id="sr-filter-tags"></div>
+      </div>
+  {% endif %}
+
+    </div><!-- /.sr-sidebar -->
+
+    <!-- RIGHT MAIN CONTENT -->
+    <div class="sr-main">
+
+  {% if report_data %}
+
+  <!-- ===== SUMMARY METRICS ===== -->
   <div class="sr-summary-grid">
     <div class="sr-metric-card sr-metric-blue sr-animate-in sr-delay-1">
       <div class="sr-metric-header">
@@ -722,61 +788,6 @@
     </button>
   </div>
 
-  <!-- ===== FILTER BAR (original fields + new filter tags row) ===== -->
-  <div class="sr-filter-card sr-animate-in">
-    <div class="sr-filter-header">
-      <div class="sr-filter-title">
-        <i class="bi bi-funnel"></i> Filter Results
-      </div>
-      <div class="sr-filter-actions">
-        <span class="sr-result-count" id="result-count">
-          Showing <strong id="visible-rows">0</strong> of <strong id="total-rows">0</strong>
-        </span>
-        <button type="button" class="sr-btn sr-btn-ghost sr-btn-sm" onclick="clearAllFilters()">
-          <i class="bi bi-arrow-counterclockwise"></i> Reset
-        </button>
-        <button type="button" class="sr-btn sr-btn-success sr-btn-sm" onclick="exportFilteredData()">
-          <i class="bi bi-download"></i> Export CSV
-        </button>
-      </div>
-    </div>
-
-    <div class="sr-filter-grid">
-      <div class="sr-filter-item">
-        <label for="filter-prn">PRN Number</label>
-        <input type="text" id="filter-prn" class="sr-filter-input" placeholder="Search PRN...">
-      </div>
-      <div class="sr-filter-item">
-        <label for="filter-name">Student Name</label>
-        <input type="text" id="filter-name" class="sr-filter-input" placeholder="Search name...">
-      </div>
-      <div class="sr-filter-item">
-        <label for="filter-min-total">Min Total</label>
-        <input type="number" id="filter-min-total" class="sr-filter-input" placeholder="Min marks..." step="0.01">
-      </div>
-      <div class="sr-filter-item">
-        <label for="filter-max-total">Max Total</label>
-        <input type="number" id="filter-max-total" class="sr-filter-input" placeholder="Max marks..." step="0.01">
-      </div>
-      <div class="sr-filter-item">
-        <label for="filter-min-percentage">Min %</label>
-        <input type="number" id="filter-min-percentage" class="sr-filter-input" placeholder="Min %..." step="0.01">
-      </div>
-      <div class="sr-filter-item">
-        <label for="filter-status">Status</label>
-        <select id="filter-status" class="sr-filter-input">
-          <option value="">All</option>
-          <option value="pass">Passed</option>
-          <option value="fail">Failed</option>
-          <option value="absent">Absent</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- active filter pill tags -->
-    <div class="sr-filter-tags" id="sr-filter-tags"></div>
-  </div>
-
   <!-- ===== FIND & REPLACE PANEL (NEW) ===== -->
   <div class="sr-fnr-panel" id="sr-fnr-panel">
     <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -826,6 +837,10 @@
           <span>Edit Mode</span>
         </button>
         <!-- PDF opens modal -->
+
+        <button type="button" class="sr-btn sr-btn-success sr-btn-sm" onclick="exportFilteredData()">
+          <i class="bi bi-download"></i> Export CSV
+        </button>
         <button class="sr-btn sr-btn-danger sr-btn-sm" onclick="openPdfModal()">
           <i class="bi bi-file-earmark-pdf-fill"></i> PDF
         </button>
@@ -954,6 +969,9 @@
     <p>Select a batch and one or more exams above to generate a detailed student performance report.</p>
   </div>
   {% endif %}
+
+    </div><!-- /.sr-main -->
+  </div><!-- /.sr-layout -->
 
 </div><!-- /.sr-container -->
 

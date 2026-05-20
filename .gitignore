@@ -27,8 +27,8 @@ Thumbs.db
 .idea/
 
 # ===== Compiled models / heavy binaries =====
-models/*.bin
-models/*.xml
+ai_models/*.bin
+ai_models/*.xml
 
 # ===== Logs / temporary files =====
 *.log

@@ -47,7 +47,7 @@ from flask import Flask
 # Local Application Imports
 # ============================
 from backend.database import db
-from models import (
+from backend.models import (
     User, Exam, Question, StudentExam,
     StudentAnswer, ActivityLog,
     ExamCalibration, ExamViolation
@@ -67,7 +67,7 @@ from backend.services.proctor_vision.openvino_vision import (
     CHEATING_WEIGHTS,
 )
 
-from models import StudentAnswer
+from backend.models import StudentAnswer
 
 
 
@@ -1400,13 +1400,44 @@ def register_routes(app):
         
         total_exams = len(exams)
         active_exams = len([e for e in exams if e.is_active])
-        total_attempts = sum([len(e.student_exams) for e in exams])
+        
+        all_student_exams = []
+        for e in exams:
+            all_student_exams.extend(e.student_exams)
+            
+        total_attempts = len(all_student_exams)
+        submitted_exams = [se for se in all_student_exams if se.status == 'submitted']
+        total_submitted = len(submitted_exams)
+        
+        avg_class_score = 0
+        pass_rate = 0
+        
+        if total_submitted > 0:
+            avg_class_score = round(sum(se.percentage or 0 for se in submitted_exams) / total_submitted, 1)
+            passed = len([se for se in submitted_exams if se.passed])
+            pass_rate = round((passed / total_submitted) * 100, 1)
+            
+        unique_students = len(set(se.student_id for se in all_student_exams))
+        
+        # Fetch the most recent 5 submissions for the activity feed
+        recent_activities = sorted(
+            [se for se in submitted_exams if se.submitted_at],
+            key=lambda x: x.submitted_at,
+            reverse=True
+        )[:5]
+        
+        results_visible_count = len([e for e in exams if getattr(e, 'post_exam_redirect', 'results') != 'dashboard'])
         
         return render_template('faculty/dashboard.html', 
                              exams=exams,
                              total_exams=total_exams,
                              active_exams=active_exams,
-                             total_attempts=total_attempts)
+                             total_attempts=total_attempts,
+                             avg_class_score=avg_class_score,
+                             pass_rate=pass_rate,
+                             unique_students=unique_students,
+                             recent_activities=recent_activities,
+                             results_visible_count=results_visible_count)
 
     @app.route('/faculty/set_leaderboard', methods=['POST'])
     @login_required
@@ -1425,6 +1456,28 @@ def register_routes(app):
                 exam.show_leaderboard = enabled
             db.session.commit()
             return jsonify({'success': True, 'updated': len(exams), 'show_leaderboard': enabled})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/faculty/set_results_visibility', methods=['POST'])
+    @login_required
+    def faculty_set_results_visibility():
+        """Toggle post_exam_redirect on all exams belonging to this faculty."""
+        if current_user.role not in ('faculty', 'admin'):
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        try:
+            data = request.get_json(force=True) or {}
+            enabled = bool(data.get('show_results', True))
+            new_mode = 'results' if enabled else 'dashboard'
+            if current_user.role == 'admin':
+                exams = Exam.query.all()
+            else:
+                exams = Exam.query.filter_by(creator_id=current_user.id).all()
+            for exam in exams:
+                exam.post_exam_redirect = new_mode
+            db.session.commit()
+            return jsonify({'success': True, 'updated': len(exams), 'show_results': enabled})
         except Exception as e:
             db.session.rollback()
             return jsonify({'success': False, 'error': str(e)}), 500
@@ -1667,7 +1720,7 @@ def register_routes(app):
 
         try:
             # 🔥 Step 1: Manually delete all related data (defensive cleanup)
-            from models import Question, StudentExam, StudentAnswer, ActivityLog
+            from backend.models import Question, StudentExam, StudentAnswer, ActivityLog
             
             # Delete related questions, student exams, and logs
             Question.query.filter_by(exam_id=exam.id).delete()
@@ -2585,13 +2638,16 @@ def register_routes(app):
             else:
                 exam.is_assigned = False
 
+        # ✅ Compute stats only for exams that allow leaderboard
+        visible_completed = [se for se in completed_exams if se.exam and getattr(se.exam, 'show_leaderboard', True)]
+        
         # ✅ Filter valid percentages
-        percentages = [se.percentage for se in completed_exams if se.percentage is not None]
+        percentages = [se.percentage for se in visible_completed if se.percentage is not None]
 
         total_exams_taken = len(completed_exams)
         avg_score = (sum(percentages) / len(percentages)) if percentages else 0
-        passed_count = len([se for se in completed_exams if se.passed])
-        pass_rate = (passed_count / len(completed_exams) * 100) if completed_exams else 0
+        passed_count = len([se for se in visible_completed if se.passed])
+        pass_rate = (passed_count / len(visible_completed) * 100) if visible_completed else 0
         best_score = max(percentages) if percentages else 0
 
         # ✅ Always define it
@@ -2602,6 +2658,7 @@ def register_routes(app):
         return render_template(
             'student/dashboard.html',
             completed_exams=completed_exams or [],
+            visible_completed=visible_completed or [],
             available_exams=available_exams or [],
             total_exams_taken=total_exams_taken or 0,
             avg_score=avg_score or 0,
@@ -2892,7 +2949,7 @@ def register_routes(app):
             dict: Scoring results with score, total_points, percentage, passed
         """
         try:
-            from models import StudentExam, StudentAnswer, Question
+            from backend.models import StudentExam, StudentAnswer, Question
             
             # Get student exam
             student_exam = StudentExam.query.get(student_exam_id)
@@ -3423,6 +3480,10 @@ def register_routes(app):
         
         if student_exam.student_id != current_user.id:
             flash('Access denied', 'error')
+            return redirect(url_for('student_dashboard'))
+            
+        if not getattr(student_exam.exam, 'show_leaderboard', True):
+            flash('Results are currently hidden by the instructor for this exam.', 'warning')
             return redirect(url_for('student_dashboard'))
         
         if student_exam.status not in ('submitted', 'force_ended', 'terminated', 'completed'):
@@ -3986,6 +4047,10 @@ def register_routes(app):
         if current_user.role == 'student':
             if student_exam.student_id != current_user.id:
                 flash('Access denied', 'error')
+                return redirect(url_for('student_dashboard'))
+                
+            if not getattr(student_exam.exam, 'show_leaderboard', True):
+                flash('Results are currently hidden by the instructor for this exam.', 'warning')
                 return redirect(url_for('student_dashboard'))
         elif current_user.role == 'faculty':
             # Faculty can only download PDFs for exams they created
@@ -5221,29 +5286,8 @@ def register_routes(app):
                     "success": False,
                     "message": "Can only change passwords for students"
                 }), 400
-            
-            # Get new password from form
-            new_password = request.form.get('new_password')
-            confirm_password = request.form.get('confirm_password')
-            
-            # Validation
-            if not new_password or not confirm_password:
-                return jsonify({
-                    "success": False,
-                    "message": "Both password fields are required"
-                }), 400
-            
-            if new_password != confirm_password:
-                return jsonify({
-                    "success": False,
-                    "message": "Passwords do not match"
-                }), 400
-            
-            if len(new_password) < 6:
-                return jsonify({
-                    "success": False,
-                    "message": "Password must be at least 6 characters long"
-                }), 400
+            # Automatically set password to "123456789"
+            new_password = "123456789"
             
             # Update password
             student.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')

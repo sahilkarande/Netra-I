@@ -94,7 +94,7 @@ class OpenVINOProctor:
     def __init__(
         self,
         state: ProctorState,
-        model_dir: str = "models",
+        model_dir: str = "ai_models",
         device: str = "CPU",
         feature_flags: Optional[Dict[str, Any]] = None,
     ):

@@ -18,7 +18,7 @@ from sqlalchemy import text
 from backend.database import db, login_manager
 import traceback
 from datetime import timedelta
-from models import User, Exam, Question, StudentExam, StudentAnswer, ActivityLog
+from backend.models import User, Exam, Question, StudentExam, StudentAnswer, ActivityLog
 
 # Load environment variables
 load_dotenv()

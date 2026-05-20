@@ -88,7 +88,11 @@
     justify-content: center;
     font-size: 2rem;
     backdrop-filter: blur(8px);
-    color: white;
+    color: white !important;
+}
+
+.sm-header-icon .bi {
+    color: inherit !important;
 }
 
 .sm-title {
@@ -96,14 +100,14 @@
     font-weight: 700;
     margin: 0;
     line-height: 1.2;
-    color: white;
+    color: white !important;
 }
 
 .sm-subtitle {
     font-size: 1rem;
     opacity: 0.8;
     margin: 0.25rem 0 0 0;
-    color: white;
+    color: white !important;
 }
 
 .sm-header-actions {
@@ -611,25 +615,25 @@
 /* Action Buttons */
 .sm-actions {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    flex-direction: row;
+    gap: 6px;
     align-items: center;
 }
 
 .sm-action-btn {
-    width: 30px;
-    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 4px;
     border-radius: 6px;
     border: none;
     cursor: pointer;
     transition: var(--sm-transition);
-    font-size: 0.82rem;
-    padding: 0;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
     text-decoration: none;
     color: inherit;
+    font-weight: 600;
 }
 
 .sm-action-view {

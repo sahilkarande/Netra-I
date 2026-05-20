@@ -379,38 +379,16 @@
         </div>
 
         <form id="passwordResetForm">
-            <div class="form-group-modal">
-                <label for="new_password">
-                    <i class="bi bi-shield-lock-fill"></i>
-                    New Password
-                </label>
-                <input type="password" 
-                       id="new_password" 
-                       name="new_password" 
-                       required
-                       minlength="6"
-                       placeholder="Enter new password (min 6 characters)">
+            <div style="background: var(--card-bg, #f8fafc); border: 1px dashed var(--border, #cbd5e1); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; text-align: center;">
+                <p style="margin: 0; color: var(--text-primary, #334155); font-size: 1.1rem;">
+                    New password will be set to: <br>
+                    <strong style="font-size: 1.5rem; letter-spacing: 2px; color: var(--primary-color, #4f46e5); display: block; margin-top: 0.5rem;">123456789</strong>
+                </p>
             </div>
-
-            <div class="form-group-modal">
-                <label for="confirm_password">
-                    <i class="bi bi-check-circle-fill"></i>
-                    Confirm Password
-                </label>
-                <input type="password" 
-                       id="confirm_password" 
-                       name="confirm_password" 
-                       required
-                       minlength="6"
-                       placeholder="Confirm new password"
-                       oninput="validatePasswordMatch()">
-            </div>
-
-            <div id="passwordMatchStatus" style="display: none;"></div>
 
             <button type="submit" class="btn-reset-password" id="submitBtn">
                 <i class="bi bi-shield-check"></i>
-                Reset Password
+                Confirm Reset Password
             </button>
         </form>
     </div>
@@ -422,7 +400,6 @@
     // Open password modal
     function openPasswordModal() {
         document.getElementById('passwordModal').classList.add('active');
-        document.getElementById('new_password').focus();
     }
 
     // Close password modal
@@ -448,63 +425,14 @@
         }
     });
 
-    // Validate password match in real-time with enhanced styling
-    function validatePasswordMatch() {
-        const newPassword = document.getElementById('new_password').value;
-        const confirmPassword = document.getElementById('confirm_password').value;
-        const statusDiv = document.getElementById('passwordMatchStatus');
-        const submitBtn = document.getElementById('submitBtn');
-        
-        if (confirmPassword.length === 0) {
-            statusDiv.style.display = 'none';
-            statusDiv.className = '';
-            submitBtn.disabled = false;
-            return;
-        }
-        
-        statusDiv.style.display = 'block';
-        
-        if (newPassword.length < 6) {
-            statusDiv.className = 'warning';
-            statusDiv.textContent = 'Password must be at least 6 characters';
-            submitBtn.disabled = true;
-        } else if (newPassword === confirmPassword) {
-            statusDiv.className = 'match';
-            statusDiv.textContent = 'Passwords match!';
-            submitBtn.disabled = false;
-        } else {
-            statusDiv.className = 'no-match';
-            statusDiv.textContent = 'Passwords do not match';
-            submitBtn.disabled = true;
-        }
-    }
-
     // Handle form submission
     document.getElementById('passwordResetForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
-        const newPassword = document.getElementById('new_password').value;
-        const confirmPassword = document.getElementById('confirm_password').value;
         const submitBtn = document.getElementById('submitBtn');
         
-        // Validation
-        if (!newPassword || !confirmPassword) {
-            alert('❌ Both password fields are required!');
-            return;
-        }
-        
-        if (newPassword !== confirmPassword) {
-            alert('❌ Passwords do not match!');
-            return;
-        }
-        
-        if (newPassword.length < 6) {
-            alert('❌ Password must be at least 6 characters long!');
-            return;
-        }
-        
         // Confirm action
-        if (!confirm('Are you sure you want to reset this student\'s password?')) {
+        if (!confirm('Are you sure you want to reset this student\'s password to 123456789?')) {
             return;
         }
         
@@ -515,13 +443,8 @@
         submitBtn.innerHTML = '<span>Resetting Password...</span>';
         
         try {
-            const formData = new FormData();
-            formData.append('new_password', newPassword);
-            formData.append('confirm_password', confirmPassword);
-            
             const response = await fetch('{{ url_for("faculty_change_student_password", student_id=student.id) }}', {
-                method: 'POST',
-                body: formData
+                method: 'POST'
             });
             
             const data = await response.json();
@@ -546,21 +469,6 @@
             submitBtn.disabled = false;
             submitBtn.classList.remove('loading');
             submitBtn.innerHTML = originalHTML;
-        }
-    });
-
-    // Add enter key support
-    document.getElementById('new_password').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('confirm_password').focus();
-        }
-    });
-
-    document.getElementById('confirm_password').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !document.getElementById('submitBtn').disabled) {
-            e.preventDefault();
-            document.getElementById('passwordResetForm').dispatchEvent(new Event('submit'));
         }
     });
 </script>

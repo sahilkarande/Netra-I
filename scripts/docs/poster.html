@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Netra-I · C-DAC Proctored Exam Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+@page { size: A4 portrait; margin: 0; }
+
+*, *::before, *::after {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+
+:root {
+  --teal:        #007ee5;
+  --teal-2:      #00a6ff;
+  --teal-dim:    rgba(0,138,130,0.08);
+  --teal-mid:    rgba(0,138,130,0.15);
+  --teal-glow:   rgba(0,138,130,0.2);
+  --navy:        #f0f4f8;
+  --navy-1:      #e8eef5;
+  --navy-2:      #dde6f0;
+  --navy-card:   #ffffff;
+  --navy-card-2: #f7fafc;
+  --border:      rgba(0,0,0,0.08);
+  --border-teal: rgba(0,138,130,0.2);
+  --txt:         #0f1e2e;
+  --txt-2:       #4a6278;
+  --txt-3:       #8da0b5;
+}
+
+body {
+  width: 210mm;
+    display: flex;
+  flex-direction: column;
+  height: 297mm;
+  background-attachment: fixed;
+  max-width: 210mm;
+  min-height: 297mm;
+  max-height: 297mm;
+  overflow: hidden;
+  background: var(--navy);
+  font-family: 'Outfit', sans-serif;
+  color: var(--txt);
+  position: relative;
+}
+
+/* ═══════════════════════════════
+   BACKGROUND LAYERS
+═══════════════════════════════ */
+.bg-layer { position: absolute; inset: 0; pointer-events: none; }
+
+/* Fine hex/dot mesh */
+.bg-mesh {
+  background-image:
+    radial-gradient(circle, rgba(0,212,200,0.028) 1px, transparent 1px);
+  background-size: 18px 18px;
+  position: absolute; inset: 0;
+}
+
+/* Atmospheric glows */
+.bg-glow-tr {
+  position: absolute;
+  top: -80px; right: -40px;
+  width: 380px; height: 380px;
+  background: radial-gradient(ellipse, rgba(0,138,130,0.12) 0%, transparent 68%);
+}
+.bg-glow-bl {
+  position: absolute;
+  bottom: 30px; left: -80px;
+  width: 320px; height: 320px;
+  background: radial-gradient(ellipse, rgba(0,100,160,0.08) 0%, transparent 65%);
+}
+.bg-glow-center {
+  position: absolute;
+  top: 38%; left: 50%; transform: translate(-50%, -50%);
+  width: 500px; height: 300px;
+  background: radial-gradient(ellipse, rgba(0,212,200,0.04) 0%, transparent 70%);
+}
+
+/* Diagonal stripe accent */
+.bg-diag {
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    -55deg,
+    transparent,
+    transparent 38px,
+    rgba(0,212,200,0.012) 38px,
+    rgba(0,212,200,0.012) 39px
+  );
+}
+
+/* ═══════════════════════════════
+   TOP CHROME BARS
+═══════════════════════════════ */
+.chrome-top {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+background: linear-gradient(90deg, transparent, var(--teal-2) 20%, var(--teal) 50%, var(--teal-2) 80%, transparent);
+  z-index: 10;
+}
+.chrome-top-inner {
+  position: absolute;
+  top: 4px; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,200,0.2), transparent);
+  z-index: 10;
+}
+
+/* Side accent lines */
+.side-line-left {
+  position: absolute;
+  top: 60px; left: 6mm; bottom: 60px;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--teal-2) 20%, var(--teal-2) 80%, transparent);
+  opacity: 0.12;
+  z-index: 2;
+}
+.side-line-right {
+  position: absolute;
+  top: 60px; right: 6mm; bottom: 60px;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--teal-2) 20%, var(--teal-2) 80%, transparent);
+  opacity: 0.12;
+  z-index: 2;
+}
+
+/* Corner brackets */
+.corner {
+  position: absolute;
+  width: 14px; height: 14px;
+  z-index: 3;
+}
+.corner-tl { top: 8mm; left: 8mm; border-top: 1.5px solid var(--teal); border-left: 1.5px solid var(--teal); opacity: 0.45; }
+.corner-tr { top: 8mm; right: 8mm; border-top: 1.5px solid var(--teal); border-right: 1.5px solid var(--teal); opacity: 0.45; }
+.corner-bl { bottom: 8mm; left: 8mm; border-bottom: 1.5px solid var(--teal); border-left: 1.5px solid var(--teal); opacity: 0.45; }
+.corner-br { bottom: 8mm; right: 8mm; border-bottom: 1.5px solid var(--teal); border-right: 1.5px solid var(--teal); opacity: 0.45; }
+
+/* ═══════════════════════════════
+   MAIN LAYOUT
+═══════════════════════════════ */
+.poster {
+  position: relative;
+  z-index: 5;
+  min-height: 297mm;
+  width: 210mm;
+  height: 297mm;
+  justify-content: space-between; 
+    min-height: 297mm;
+  max-height: 297mm;
+  padding: 10mm 14mm 6mm; 
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+
+}
+
+/* ── HEADER ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6mm;
+  padding-bottom: 5mm;
+  position: relative;
+}
+header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-teal) 30%, var(--border-teal) 70%, transparent);
+}
+.header-logos {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.C-DAC-logo {
+  height: 34px;
+  object-fit: contain;
+
+}
+.logo-divider {
+  width: 1px; height: 26px;
+  background: linear-gradient(to bottom, transparent, var(--border-teal), transparent);
+}
+.app-logo {
+  height: 34px;
+  object-fit: contain;
+}
+.header-right { display: flex; align-items: center; gap: 8px; }
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 8px;
+  border: 1px solid var(--border-teal);
+  border-radius: 4px;
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--teal);
+  background: var(--teal-dim);
+}
+.status-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 6px var(--teal);
+}
+.ver-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--txt-3);
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+/* ── HERO ── */
+.hero {
+  display: grid;
+  grid-template-columns: 1fr 56mm;
+  gap: 8mm;
+  align-items: center;
+  margin-bottom: 6mm;
+}
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--teal);
+  letter-spacing: 0.06em;
+  margin-bottom: 4mm;
+}
+.hero-eyebrow i { font-size: 9pt; }
+.hero-eyebrow::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-teal);
+  min-width: 20px;
+}
+.hero-title {
+  font-size: 60pt;
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  color: var(--txt);
+}
+.hero-title .accent { color: var(--teal); }
+.hero-title .title-sub {
+  display: block;
+  font-size: 9pt;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--txt-2);
+  margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.hero-desc {
+  font-size: 9pt;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--txt-2);
+  margin-top: 5mm;
+  max-width: 90mm;
+  border-left: 2px solid var(--teal-mid);
+  padding-left: 4mm;
+}
+.hero-desc strong { color: var(--txt); font-weight: 500; }
+
+/* SHIELD VISUAL */
+.shield-stage {
+  position: relative;
+  width: 56mm; height: 56mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Concentric rings */
+.ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--border-teal);
+}
+.ring-1 { width: 100%; height: 100%;  }
+.ring-2 { width: 78%; height: 78%; }
+.ring-3 { width: 56%; height: 56%; }
+/* Crosshair lines */
+.cross-h, .cross-v {
+  position: absolute;
+  background: var(--border-teal);
+
+}
+.cross-h { left: 5%; right: 5%; height: 1px; top: 50%; }
+.cross-v { top: 5%; bottom: 5%; width: 1px; left: 50%; }
+/* Center shield icon box */
+.shield-box {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, rgba(0,138,130,0.1) 0%, rgba(0,100,160,0.08) 100%);
+  border: 1.5px solid rgba(0,212,200,0.35);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 0 28px rgba(0,212,200,0.25), inset 0 0 14px rgba(0,212,200,0.06);
+}
+.shield-box i { font-size: 22px; color: var(--teal); }
+/* Orbiting nodes */
+.node {
+  position: absolute;
+  width: 22px; height: 22px;
+  background: #ffffff;
+  border: 1px solid var(--border-teal);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  color: var(--teal);
+  z-index: 3;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+.node i { font-size: 10px; }
+.n1 { top:  3%; right: 18%; }
+.n2 { top: 40%; right: -5%; }
+.n3 { bottom: 8%; right: 16%; }
+.n4 { bottom: 3%; left: 18%; }
+.n5 { top:  6%; left: 14%; }
+/* Connector dots */
+.conn-dot {
+  position: absolute;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--teal);
+  opacity: 0.4;
+  z-index: 1;
+}
+
+/* ── DIVIDER ── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4mm;
+}
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-teal));
+}
+.section-divider::after {
+  background: linear-gradient(90deg, var(--border-teal), transparent);
+}
+.div-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  color: var(--txt-3);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── SECTION HEADINGS ── */
+.sec-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-bottom: 2mm;
+}
+.sec-eyebrow::before {
+  content: '';
+  width: 12px; height: 1.5px;
+  background: var(--teal);
+}
+.sec-title {
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--txt);
+  margin-bottom: 4mm;
+  line-height: 1.2;
+}
+
+/* ── FEATURES GRID ── */
+.features-section { margin-bottom: 5mm; }
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2.5mm;
+}
+.feat-card {
+  background: var(--navy-card);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  padding: 3.5mm 3.5mm 3mm;
+  position: relative;
+  overflow: hidden;
+}
+/* Top teal accent */
+.feat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, var(--teal), var(--teal-2) 60%, transparent);
+  opacity: 0.5;
+}
+/* Subtle glow corner */
+.feat-card::after {
+  content: '';
+  position: absolute;
+  top: -12px; left: -12px;
+  width: 50px; height: 50px;
+  background: radial-gradient(circle, rgba(0,212,200,0.06) 0%, transparent 70%);
+}
+.feat-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2mm;
+}
+.feat-icon-box {
+  width: 24px; height: 24px;
+  border-radius: 5px;
+  background: var(--teal-dim);
+  border: 1px solid rgba(0,212,200,0.15);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.feat-icon-box i { font-size: 11px; color: var(--teal); }
+.feat-title {
+  font-size: 8pt;
+  font-weight: 700;
+  color: var(--txt);
+  line-height: 1.2;
+}
+.feat-desc {
+  font-size: 6.8pt;
+  line-height: 1.55;
+  color: var(--txt-2);
+  padding-left: 0;
+}
+
+/* ── AUDIENCE + SECURITY STRIP ── */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3mm;
+  margin-bottom: 5mm;
+}
+.aud-card {
+  background: var(--navy-card);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3.5mm 4mm;
+  position: relative;
+  overflow: hidden;
+}
+.aud-card::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--teal), transparent 60%);
+  opacity: 0.25;
+}
+.aud-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2.5mm;
+}
+.aud-icon-box {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--teal-dim), rgba(0,80,130,0.15));
+  border: 1px solid var(--border-teal);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.aud-icon-box i { font-size: 13px; color: var(--teal); }
+.aud-role {
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--txt);
+}
+.aud-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1.8mm;
+}
+.aud-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 7pt;
+  color: var(--txt-2);
+  line-height: 1.4;
+}
+.aud-list li i {
+  font-size: 8pt;
+  color: var(--teal);
+  flex-shrink: 0;
+  margin-top: 1px;
+  opacity: 0.8;
+}
+
+/* ── SECURITY STRIP ── */
+.security-strip {
+  background: linear-gradient(90deg, rgba(0,212,200,0.06) 0%, rgba(0,80,150,0.1) 50%, rgba(0,212,200,0.06) 100%);
+  border: 1px solid var(--border-teal);
+  border-radius: 7px;
+  padding: 3.5mm 5mm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5mm;
+  position: relative;
+  overflow: hidden;
+}
+.security-strip::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, var(--teal) 30%, var(--teal) 70%, transparent);
+  opacity: 0.4;
+}
+.strip-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 7.5pt;
+  color: var(--txt-2);
+}
+.strip-item i { font-size: 12pt; color: var(--teal); opacity: 0.85; }
+.strip-item span { font-weight: 500; color: var(--txt); display: block; font-size: 7pt; }
+.strip-item small { font-size: 6.5pt; color: var(--txt-3); }
+.strip-sep {
+  width: 1px; height: 22px;
+  background: var(--border-teal);
+  opacity: 0.4;
+}
+
+/* ── FOOTER ── */
+footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4mm;
+  gap: 13mm;
+  position: relative;
+}
+
+.security-strip { margin-bottom: 3mm; }  /* was 5mm, keep as is */
+.stats-row { margin-bottom: 4mm; }       /* increase from 3mm */
+footer::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-teal) 30%, var(--border-teal) 70%, transparent);
+}
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.footer-brand-name {
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--txt);
+  letter-spacing: -0.01em;
+}
+.footer-brand-name span { color: var(--teal); }
+.footer-sub {
+  font-size: 6.5pt;
+  color: var(--txt-3);
+  margin-top: 1px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.tech-stack {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.tech-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--txt-3);
+  background: rgba(255,255,255,0.02);
+  letter-spacing: 0.04em;
+}
+.footer-seal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.seal-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 7pt;
+  font-weight: 600;
+  color: var(--teal);
+  background: var(--teal-dim);
+  border: 1px solid var(--border-teal);
+  border-radius: 4px;
+  padding: 3px 10px 3px 6px;
+}
+.seal-badge i { font-size: 9pt; }
+.seal-sub {
+  font-size: 6pt;
+  color: var(--txt-3);
+  font-family: 'JetBrains Mono', monospace;
+  text-align: right;
+}
+
+@media print {
+  body { width: 210mm; height: 297mm; background: var(--navy); }
+}
+
+/* ── STATS ROW ── */
+.stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg,
+    rgba(0,212,200,0.04) 0%,
+    rgba(0,80,150,0.08) 50%,
+    rgba(0,212,200,0.04) 100%
+  );
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--teal);
+  border-radius: 7px;
+  padding: 3mm 5mm;
+  margin-bottom: 3mm;
+  position: relative;
+  overflow: hidden;
+}
+.stats-row::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, transparent, var(--teal), transparent);
+  opacity: 0.35;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.stat-item i {
+  font-size: 13pt;
+  color: var(--teal);
+  opacity: 0.75;
+  margin-bottom: 1px;
+}
+.stat-num {
+  font-size: 13pt;
+  font-weight: 800;
+  color: var(--txt);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 6pt;
+  color: var(--txt-3);
+  text-align: center;
+  letter-spacing: 0.04em;
+  font-family: 'JetBrains Mono', monospace;
+}
+.stat-sep {
+  width: 1px;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--border-teal), transparent);
+}
+</style>
+</head>
+<body>
+
+<!-- BG LAYERS -->
+<div class="bg-glow-tr"></div>
+<div class="bg-glow-bl"></div>
+<div class="bg-glow-center"></div>
+<div class="bg-mesh"></div>
+<div class="bg-diag"></div>
+
+<!-- CHROME -->
+<div class="chrome-top"></div>
+<div class="chrome-top-inner"></div>
+<div class="side-line-left"></div>
+<div class="side-line-right"></div>
+
+<!-- CORNER BRACKETS -->
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+
+<div class="poster">
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="header-left">
+      <img class="C-DAC-logo" src="/home/user1/Project2/Netra-I_local/frontend/static/images/Lite_Theme_logo.png">
+      <div class="logo-sep"></div>
+      <img class="app-logo" src="/home/user1/Project2/Netra-I_local/frontend/static/images/applogo.png">
+    </div>
+    <div class="header-right">
+      
+      <div class="status-badge">
+        <div class="status-dot"></div>
+        AI-Powered Proctored Exam Platform
+      </div>
+    </div>
+  </header>
+
+  <!-- ── HERO ── -->
+  <div class="hero">
+    <div>
+      <div class="hero-eyebrow">
+        <i class="bi bi-shield-lock-fill"></i>
+        C-DAC · Advanced Assessment Technology
+      </div>
+      <h1 class="hero-title">
+        Netra<span class="accent">-I</span>
+        <span class="title-sub">Intelligent Proctoring System</span>
+      </h1>
+      <p class="hero-desc">
+        Secure Digital Education with <strong>AI-Powered</strong> Integrity.
+        Real-time facial monitoring, adaptive threat detection, and seamless
+        exam delivery for C-DAC's enterprise assessment ecosystem.
+      </p>
+    </div>
+
+    <!-- SHIELD VISUAL -->
+    <div class="shield-stage">
+      <div class="ring ring-1"></div>
+      <div class="ring ring-2"></div>
+      <div class="ring ring-3"></div>
+      <div class="cross-h"></div>
+      <div class="cross-v"></div>
+
+      <div class="shield-box">
+        <i class="bi bi-shield-fill-check"></i>
+      </div>
+
+      <div class="node n1"><i class="bi bi-camera-video-fill"></i></div>
+      <div class="node n2"><i class="bi bi-lock-fill"></i></div>
+      <div class="node n3"><i class="bi bi-bar-chart-fill"></i></div>
+      <div class="node n4"><i class="bi bi-cpu-fill"></i></div>
+      <div class="node n5"><i class="bi bi-envelope-fill"></i></div>
+    </div>
+  </div>
+
+  <!-- ── SECTION DIVIDER ── -->
+  <div class="section-divider" style="margin-bottom:4mm;">
+    <span class="div-label">// platform capabilities</span>
+  </div>
+
+  <!-- ── FEATURES ── -->
+  <div class="features-section">
+    <div class="features-grid">
+
+      <div class="feat-card">
+        <div class="feat-head">
+          <div class="feat-icon-box"><i class="bi bi-eye-fill"></i></div>
+          <div class="feat-title">AI Vision Proctoring</div>
+        </div>
+        <div class="feat-desc">Real-time face detection &amp; head pose estimation via OpenVINO. Continuous 128-dimensional identity verification every 30 seconds.</div>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-head">
+          <div class="feat-icon-box"><i class="bi bi-display-fill"></i></div>
+          <div class="feat-title">Hardware Enforcement</div>
+        </div>
+        <div class="feat-desc">Scans and flags external monitors, virtual cameras (OBS, Snap), and unauthorized Bluetooth/gaming headsets before exam entry.</div>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-head">
+          <div class="feat-icon-box"><i class="bi bi-record-circle-fill"></i></div>
+          <div class="feat-title">Screen Capture Block</div>
+        </div>
+        <div class="feat-desc">Intercepts browser-level <code style="font-family:JetBrains Mono;font-size:6pt;color:var(--teal)">getDisplayMedia</code> APIs to prevent recording extensions and unauthorized remote sharing.</div>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-head">
+          <div class="feat-icon-box"><i class="bi bi-graph-up-arrow"></i></div>
+          <div class="feat-title">Advanced Analytics</div>
+        </div>
+        <div class="feat-desc">Pass/fail trends, per-question difficulty curves, time-on-task metrics, violation summaries, and professional PDF exports.</div>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-head">
+          <div class="feat-icon-box"><i class="bi bi-stars"></i></div>
+          <div class="feat-title">Smart Question Refinement</div>
+        </div>
+        <div class="feat-desc">Claude AI integration for grammar correction, clarity improvement, and formatting standardisation on bulk-uploaded question banks.</div>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-head">
+          <div class="feat-icon-box"><i class="bi bi-lightning-charge-fill"></i></div>
+          <div class="feat-title">Instant Auto-Grading</div>
+        </div>
+        <div class="feat-desc">Automated scoring with immediate result access, detailed answer breakdown, and automated email notification delivery to students.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SECTION DIVIDER ── -->
+  <div class="section-divider" style="margin-bottom:4mm;">
+    <span class="div-label">// who it is for</span>
+  </div>
+
+  <!-- ── AUDIENCE ── -->
+  <div class="bottom-grid">
+    <div class="aud-card">
+      <div class="aud-head">
+        <div class="aud-icon-box"><i class="bi bi-person-workspace"></i></div>
+        <div class="aud-role">Faculty</div>
+      </div>
+      <ul class="aud-list">
+        <li><i class="bi bi-check2-circle"></i> AI-assisted exam creation &amp; question enhancement</li>
+        <li><i class="bi bi-check2-circle"></i> Malpractice detection with violation dashboards</li>
+        <li><i class="bi bi-check2-circle"></i> Exportable PDF performance &amp; proctoring reports</li>
+        <li><i class="bi bi-check2-circle"></i> Live monitoring dashboard &amp; admin SQL console</li>
+      </ul>
+    </div>
+    <div class="aud-card">
+      <div class="aud-head">
+        <div class="aud-icon-box"><i class="bi bi-mortarboard-fill"></i></div>
+        <div class="aud-role">Students</div>
+      </div>
+      <ul class="aud-list">
+        <li><i class="bi bi-check2-circle"></i> Clean, distraction-free exam interface</li>
+        <li><i class="bi bi-check2-circle"></i> Auto-saved answers &amp; real-time countdown timer</li>
+        <li><i class="bi bi-check2-circle"></i> Instant results with detailed score breakdown</li>
+        <li><i class="bi bi-check2-circle"></i> Performance comparison &amp; personal analytics</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── SECURITY STRIP ── -->
+  <div class="security-strip">
+    <div class="strip-item">
+      <i class="bi bi-shield-check"></i>
+      <div>
+        <span>Tab Switch Detection</span>
+        <small>Violation counting &amp; auto-flagging</small>
+      </div>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="strip-item">
+      <i class="bi bi-clipboard-x"></i>
+      <div>
+        <span>Copy/Paste Prevention</span>
+        <small>Clipboard monitoring enabled</small>
+      </div>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="strip-item">
+      <i class="bi bi-tools"></i>
+      <div>
+        <span>DevTools Blocking</span>
+        <small>F12 · Ctrl+Shift+I intercepted</small>
+      </div>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="strip-item">
+      <i class="bi bi-person-bounding-box"></i>
+      <div>
+        <span>Identity Verification</span>
+        <small>128-dim face descriptors</small>
+      </div>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="strip-item">
+      <i class="bi bi-activity"></i>
+      <div>
+        <span>Activity Logging</span>
+        <small>Timestamped audit trail</small>
+      </div>
+    </div>
+  </div>
+<!-- ── STATS ROW ── -->
+<div class="stats-row">
+  <div class="stat-item">
+    <i class="bi bi-people-fill"></i>
+    <div class="stat-num">100+</div>
+    <div class="stat-label">Concurrent Students</div>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-item">
+    <i class="bi bi-patch-check-fill"></i>
+    <div class="stat-num">95%</div>
+    <div class="stat-label">Uptime Reliability</div>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-item">
+    <i class="bi bi-camera-video-fill"></i>
+    <div class="stat-num">10s</div>
+    <div class="stat-label">Identity Check Interval</div>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-item">
+    <i class="bi bi-layers-fill"></i>
+    <div class="stat-num">6+</div>
+    <div class="stat-label">Security Layers</div>
+  </div>
+  <div class="stat-sep"></div>
+  <div class="stat-item">
+    <i class="bi bi-file-earmark-bar-graph-fill"></i>
+    <div class="stat-num">128</div>
+    <div class="stat-label">Face Descriptor Dims</div>
+  </div>
+</div>
+<div style="flex:1; min-height: 0;"></div>
+
+  <!-- ── FOOTER ── -->
+  <footer>
+    <div class="footer-brand">
+      <div>
+        <div class="footer-brand-name">ProctoGuard · <span>Netra-I</span></div>
+        <div class="footer-sub">Centre for Development of Advanced Computing (C-DAC)</div>
+      </div>
+    </div>
+    <div class="tech-stack">
+      <span class="tech-pill">Flask</span>
+      <span class="tech-pill">OpenVINO</span>
+      <span class="tech-pill">face-api.js</span>
+      <span class="tech-pill">Claude AI</span>
+      <span class="tech-pill">OpenCV</span>
+      <span class="tech-pill">SQLAlchemy</span>
+    </div>
+    <div class="footer-seal">
+      <div class="seal-badge">
+        <i class="bi bi-patch-check-fill"></i>
+        Enterprise-Grade Security
+      </div>
+      <div class="seal-sub">AI · Vision · Analytics</div>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
