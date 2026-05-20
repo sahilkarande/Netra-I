@@ -14,7 +14,7 @@
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-cloud-upload"></i> Upload & Import
         </button>
-        <a href="{{ url_for('faculty_student_list') }}" class="btn btn-outline">
+        <a href="{{ url_for('faculty.faculty_students') }}" class="btn btn-outline">
           <i class="bi bi-arrow-left"></i> Cancel
         </a>
       </div>
@@ -22,7 +22,7 @@
 
     <div class="mt-4">
       <p><strong>💡 Tip:</strong> You can export a template to match the required structure.</p>
-      <a href="{{ url_for('faculty_export_students') }}" class="btn btn-outline btn-sm">
+      <a href="{{ url_for('faculty.export_students') }}" class="btn btn-outline btn-sm">
         <i class="bi bi-download"></i> Download Template
       </a>
     </div>

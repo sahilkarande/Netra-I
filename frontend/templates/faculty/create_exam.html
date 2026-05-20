@@ -1622,7 +1622,7 @@
                         <button type="submit" class="btn-create" onclick="collectProctor()">
                             <i class="bi bi-plus-circle-fill"></i> Create Exam
                         </button>
-                        <a href="{{ url_for('faculty_dashboard') }}" class="btn-cancel">
+                        <a href="{{ url_for('faculty.faculty_dashboard') }}" class="btn-cancel">
                             <i class="bi bi-x"></i> Cancel
                         </a>
                     </div>
@@ -1675,7 +1675,7 @@
                 <div class="batch-submit-bar" id="batch-submit-bar">
                     <div class="batch-summary">Ready to create <strong id="batch-sub-count">0</strong> exam(s)</div>
                     <div style="display:flex; gap:0.5rem;">
-                        <a href="{{ url_for('faculty_dashboard') }}" class="btn-cancel"
+                        <a href="{{ url_for('faculty.faculty_dashboard') }}" class="btn-cancel"
                             style="width:auto; padding:0.55rem 1.1rem;">Cancel</a>
                         <button type="button" class="btn-create" onclick="submitBatch()" id="btn-batch"
                             style="width:auto; padding:0.55rem 1.25rem; font-size:0.85rem;">
@@ -1703,7 +1703,7 @@
             <div class="result-msg" id="r-msg"></div>
             <div class="result-list" id="r-list"></div>
             <div class="result-acts">
-                <a href="{{ url_for('faculty_dashboard') }}" class="btn-create"
+                <a href="{{ url_for('faculty.faculty_dashboard') }}" class="btn-create"
                     style="width:auto; padding:0.6rem 1.25rem; font-size:0.85rem;">Go to Dashboard</a>
                 <button type="button" class="btn-cancel" onclick="resetBatch()"
                     style="width:auto; padding:0.6rem 1.1rem;">Create More</button>
@@ -1916,7 +1916,7 @@
             document.getElementById('ov-result').classList.remove('vis');
             document.getElementById('ov-detail').textContent = 'Creating ' + meta.length + ' exam(s)…';
             document.getElementById('btn-batch').disabled = true;
-            fetch('{{ url_for("batch_create_exams") }}', { method: 'POST', body: fd })
+            fetch('{{ url_for('faculty.batch_create_exams') }}', { method: 'POST', body: fd })
                 .then(r => r.json())
                 .then(data => {
                     document.getElementById('btn-batch').disabled = false;

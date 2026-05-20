@@ -5,7 +5,7 @@
 <div class="container">
     <!-- Back Button -->
     <div style="margin-bottom: 1.5rem;">
-        <a href="{{ url_for('faculty_dashboard') }}" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+        <a href="{{ url_for('faculty.faculty_dashboard') }}" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
             <i class="bi bi-arrow-left"></i>
             Back to Dashboard
         </a>
@@ -443,7 +443,7 @@
         submitBtn.innerHTML = '<span>Resetting Password...</span>';
         
         try {
-            const response = await fetch('{{ url_for("faculty_change_student_password", student_id=student.id) }}', {
+            const response = await fetch('{{ url_for("faculty.faculty_change_student_password", student_id=student.id) }}', {
                 method: 'POST'
             });
             

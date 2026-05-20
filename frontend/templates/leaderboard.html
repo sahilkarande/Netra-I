@@ -33,13 +33,13 @@
                 <i class="bi bi-sliders"></i> Filters
             </div>
             <div class="lb-filter-actions">
-                <a href="{{ url_for('global_leaderboard') }}" class="lb-btn lb-btn-ghost lb-btn-sm"
+                <a href="{{ url_for('student.global_leaderboard') }}" class="lb-btn lb-btn-ghost lb-btn-sm"
                     style="text-decoration:none;">
                     <i class="bi bi-arrow-counterclockwise"></i> Reset
                 </a>
             </div>
         </div>
-        <form method="GET" action="{{ url_for('global_leaderboard') }}" id="main-filter-form">
+        <form method="GET" action="{{ url_for('student.global_leaderboard') }}" id="main-filter-form">
             <div class="lb-filter-form-grid">
                 <div class="lb-field">
                     <label class="lb-field-label" for="start">Start Date</label>

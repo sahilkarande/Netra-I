@@ -179,12 +179,12 @@
 <div class="admin-wrap">
 
     <div class="admin-nav">
-        <a href="{{ url_for('admin_dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
-        <a href="{{ url_for('admin_manage_faculty') }}"><i class="bi bi-person-badge"></i> Manage Faculty</a>
-        <a href="{{ url_for('admin_student_list') }}" class="active"><i class="bi bi-people"></i> All Students</a>
-        <a href="{{ url_for('admin_all_exams') }}"><i class="bi bi-journal-text"></i> All Exams</a>
-        <a href="{{ url_for('global_leaderboard') }}"><i class="bi bi-trophy"></i> Leaderboard</a>
-        <a href="{{ url_for('admin_sql_console') }}"><i class="bi bi-terminal"></i> SQL Console</a>
+        <a href="{{ url_for('admin.admin_dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="{{ url_for('admin.manage_faculty') }}"><i class="bi bi-person-badge"></i> Manage Faculty</a>
+        <a href="{{ url_for('admin.admin_students') }}" class="active"><i class="bi bi-people"></i> All Students</a>
+        <a href="{{ url_for('admin.admin_all_exams') }}"><i class="bi bi-journal-text"></i> All Exams</a>
+        <a href="{{ url_for('student.global_leaderboard') }}"><i class="bi bi-trophy"></i> Leaderboard</a>
+        <a href="{{ url_for('admin.admin_sql_console') }}"><i class="bi bi-terminal"></i> SQL Console</a>
     </div>
 
     <div class="page-header">

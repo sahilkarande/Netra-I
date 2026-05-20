@@ -234,7 +234,7 @@ document.documentElement.setAttribute("data-theme",saved);
 <div class="nav-logo">
 <img id="navLogo"
 src="{{ url_for('static', filename='images/Dark_Theme_logo.png') }}"
-onclick="location.href='{{ url_for('index') }}'">
+onclick="location.href='{{ url_for('auth.index') }}'">
 </div>
 
 <div class="nav-right">
@@ -252,7 +252,7 @@ onclick="location.href='{{ url_for('index') }}'">
 <span class="nav-username">{{ current_user.full_name or current_user.username }}</span>
 </span>
 
-<a href="{{ url_for('logout') }}" class="btn-nav-outline">
+<a href="{{ url_for('auth.logout') }}" class="btn-nav-outline">
 <i class="bi bi-box-arrow-right"></i> Logout
 </a>
 
@@ -262,7 +262,7 @@ onclick="location.href='{{ url_for('index') }}'">
 <i class="bi bi-envelope"></i> Contact
 </a>
 
-<a href="{{ url_for('login') }}" class="btn-nav-cta">
+<a href="{{ url_for('auth.login') }}" class="btn-nav-cta">
 Login
 </a>
 

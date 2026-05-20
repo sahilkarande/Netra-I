@@ -38,6 +38,93 @@
     letter-spacing: 0.03em;
     cursor: not-allowed;
   }
+
+  /* View Switcher Styles */
+  .active-view {
+      background: var(--primary-color) !important;
+      color: white !important;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+  .view-ctrl-btn {
+      color: var(--text-primary);
+      background: transparent;
+      border: 1px solid transparent;
+  }
+  .view-ctrl-btn:hover {
+      background: var(--bg-secondary);
+      color: var(--primary-color);
+  }
+  .exam-table-container {
+      background: transparent;
+      margin-top: 2rem;
+  }
+  .exam-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 1rem;
+  }
+  .exam-table th {
+      text-align: center;
+      padding: 1rem;
+      color: var(--text-primary);
+      font-weight: 800;
+      font-size: 1.4rem;
+      border: none;
+      background: transparent;
+  }
+  .exam-table th:first-child { text-align: left; }
+  .exam-table th:last-child { text-align: center; }
+
+  .exam-list-row {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+  }
+  .exam-list-row:hover {
+      background: var(--bg-secondary);
+      transform: scale(1.01);
+  }
+  .exam-table td {
+      padding: 1.5rem 1rem;
+      border: none;
+      text-align: center;
+      vertical-align: middle;
+      color: var(--text-primary);
+  }
+  .exam-table td:first-child { 
+      text-align: left; 
+      border-top-left-radius: 12px;
+      border-bottom-left-radius: 12px;
+  }
+  .exam-table td:last-child { 
+      border-top-right-radius: 12px;
+      border-bottom-right-radius: 12px;
+  }
+
+  .metric-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--bg-secondary);
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+  }
+
+  /* Fix for Dropdown visibility in Dark Mode */
+  #sortBy {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      cursor: pointer;
+  }
+  #sortBy option {
+      background: var(--card-bg);
+      color: var(--text-primary);
+  }
 </style>
 
 <div class="container">
@@ -46,7 +133,7 @@
     <div class="student-profile-banner">
       <div class="welcome-content">
         <h1>Welcome back, {{ current_user.full_name or current_user.username }}!</h1>
-        <a href="{{ url_for('global_leaderboard') }}" class="btn-outline" style="background: transparent; border: 1px solid var(--border); border-radius: 8px;">
+        <a href="{{ url_for('student.global_leaderboard') }}" class="btn-outline" style="background: transparent; border: 1px solid var(--border); border-radius: 8px;">
           <i class="bi bi-trophy"></i> Leaderboard
         </a>
       </div>
@@ -168,40 +255,50 @@
           <strong>Exam in Progress!</strong>
           <div class="muted">You have an unfinished exam. Continue where you left off.</div>
         </div>
-        <a href="{{ url_for('take_exam', exam_id=in_progress.exam_id) }}" class="btn-start-exam" style="flex: 0 0 auto;">
+        <a href="{{ url_for('exam.take_exam', exam_id=in_progress.exam_id) }}" class="btn-start-exam" style="flex: 0 0 auto;">
           <i class="bi bi-play-circle"></i> Continue
         </a>
       </div>
       {% endif %}
 
-      <div class="hub-controls" role="toolbar" aria-label="search and filters">
-        <div class="hub-search-box" role="search" aria-label="search exams">
-          <i class="bi bi-search muted"></i>
-          <input id="examSearchInput" type="search" placeholder="Search exams by title, description..." aria-label="Search exams" />
-          <button id="clearSearch" title="Clear search" class="muted" style="background:transparent; border:none; cursor:pointer; display:none; color:#8899aa; position:absolute; right:10px; top:50%; transform:translateY(-50%);">✕</button>
-        </div>
+      <!-- Exam Toolbar -->
+      <div style="margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+          <!-- Search Bar -->
+          <div style="position: relative; flex-grow: 1; min-width: 300px;">
+              <i class="bi bi-search" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
+              <input type="text" id="examSearchInput" class="form-control" placeholder="Search exams by title, description..."
+                  style="padding-left: 2.5rem; width: 100%; border-radius: 12px; height: 50px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+          </div>
 
-        <div style="position: relative;">
-          <button class="sort-btn-compact" title="Sort Exams"><i class="bi bi-sort-down"></i></button>
-          <select id="sortBy" class="sort-overlay-select" aria-label="Sort exams">
-            <option value="newest">Sort: Newest</option>
-            <option value="duration">Sort: Duration (asc)</option>
-            <option value="passing">Sort: Passing % (desc)</option>
-            <option value="questions">Sort: Questions (desc)</option>
-          </select>
-        </div>
+          <!-- View Controls -->
+          <div style="display: flex; gap: 0.5rem; background: var(--bg-secondary); padding: 0.35rem; border-radius: 12px; border: 1px solid var(--border); align-items: center;">
+              <button onclick="setExamsView('grid')" id="viewGridBtn" class="btn btn-sm view-ctrl-btn active-view" style="padding: 0.6rem 1.2rem; border-radius: 10px; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s; font-weight: 600;">
+                  <i class="bi bi-grid-fill"></i> Grid
+              </button>
+              <button onclick="setExamsView('table')" id="viewTableBtn" class="btn btn-sm view-ctrl-btn" style="padding: 0.6rem 1.2rem; border-radius: 10px; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s; font-weight: 600;">
+                  <i class="bi bi-table"></i> Table
+              </button>
+          </div>
 
-        <button id="toggleGridView" class="btn btn-outline" style="height: 44px; margin: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px;" title="Toggle compact view"><i class="bi bi-grid-3x3-gap"></i></button>
-
-        <div class="modal-triggers" style="margin-left: auto;">
-          {% if completed_exams %}
-          <button class="modal-trigger-btn" data-modal="performanceModal"><i class="bi bi-graph-up"></i> Performance</button>
-          {% endif %}
-          <button class="modal-trigger-btn" data-modal="availableExamsModal"><i class="bi bi-clipboard-check"></i> All Exams</button>
-          {% if completed_exams %}
-          <button class="modal-trigger-btn" data-modal="historyModal"><i class="bi bi-clock-history"></i> History</button>
-          {% endif %}
-        </div>
+          <!-- Sort & Actions -->
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <div style="position: relative;">
+                <select id="sortBy" class="form-control" style="height: 50px; border-radius: 12px; padding: 0 1rem;">
+                  <option value="newest">Sort: Newest</option>
+                  <option value="duration">Sort: Duration</option>
+                  <option value="passing">Sort: Passing %</option>
+                  <option value="questions">Sort: Questions</option>
+                </select>
+              </div>
+              
+              <div class="modal-triggers" style="display: flex; gap: 0.5rem;">
+                {% if completed_exams %}
+                <button class="modal-trigger-btn" data-modal="performanceModal" title="Performance Trend" style="height: 50px; border-radius: 12px; width: 50px; display: flex; align-items: center; justify-content: center; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);"><i class="bi bi-graph-up"></i></button>
+                <button class="modal-trigger-btn" data-modal="historyModal" title="Exam History" style="height: 50px; border-radius: 12px; width: 50px; display: flex; align-items: center; justify-content: center; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);"><i class="bi bi-clock-history"></i></button>
+                {% endif %}
+                <button class="modal-trigger-btn" data-modal="availableExamsModal" title="Available Exams" style="height: 50px; border-radius: 12px; width: 50px; display: flex; align-items: center; justify-content: center; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);"><i class="bi bi-clipboard-check"></i></button>
+              </div>
+          </div>
       </div>
 
       <!-- Exam Grid -->
@@ -209,7 +306,6 @@
     {% if available_exams %}
     <div id="examGrid" class="exam-grid" aria-label="available exams list">
       {% for exam in available_exams %}
-      {# Add attempted class if student has attempted this exam #}
       <article
         class="exam-card {% if exam.attempted_by_current_user %}attempted{% endif %}{% if not exam.is_assigned %} not-assigned{% endif %}"
         data-title="{{ exam.title | lower }}" data-desc="{{ exam.description | default('') | lower }}"
@@ -234,14 +330,11 @@
           <div class="meta-item"><i class="bi bi-clock"></i> {{ exam.duration_minutes }} mins</div>
           <div class="meta-item"><i class="bi bi-question-circle"></i> {{ exam.questions|length }} Qs</div>
           <div class="meta-item"><i class="bi bi-trophy"></i> {{ exam.passing_score }}% pass</div>
-          {% if exam.category %}<div class="meta-item"><i class="bi bi-tags"></i> {{ exam.category }}</div>{% endif %}
-          {% if exam.difficulty %}<div class="meta-item"><i class="bi bi-speedometer2"></i> {{ exam.difficulty }}</div>
-          {% endif %}
         </div>
 
         <div class="exam-actions">
           {% if exam.is_assigned %}
-          <form method="POST" action="{{ url_for('start_exam', exam_id=exam.id) }}" style="flex:1;">
+          <form method="POST" action="{{ url_for('exam.start_exam', exam_id=exam.id) }}" style="flex:1;">
             <button type="submit" class="btn-start-exam" aria-label="Start {{ exam.title }}">
               <i class="bi bi-play-circle-fill"></i>
               {% if exam.attempted_by_current_user %}Retake{% else %}Start{% endif %}
@@ -261,6 +354,71 @@
         </div>
       </article>
       {% endfor %}
+    </div>
+
+    <!-- Table View (Modern Layout) -->
+    <div id="examTable" class="exam-table-container" style="display: none;">
+        <table class="exam-table">
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Exam <br> Name</th>
+                    <th style="width: 20%;">Decrption</th>
+                    <th style="width: 12%;">time</th>
+                    <th style="width: 12%;">Quesiotns</th>
+                    <th style="width: 10%;">% pass</th>
+                    <th style="width: 15%;">Attemped / take <br> exam</th>
+                    <th style="width: 6%;">View</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exam in available_exams %}
+                <tr class="exam-list-row" data-title="{{ exam.title | lower }}" data-desc="{{ exam.description | default('') | lower }}"
+                    data-duration="{{ exam.duration_minutes or 0 }}" data-passing="{{ exam.passing_score or 0 }}"
+                    data-questions="{{ exam.questions|length }}" data-created="{{ exam.created_at.isoformat() if exam.created_at is defined else '' }}">
+                    <td>
+                        <span style="font-weight: 700; font-size: 1.2rem; display: block; color: var(--text-primary);">{{ exam.title }}</span>
+                    </td>
+                    <td>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary); opacity: 0.7;">{{ exam.description or "No description available" }}</div>
+                    </td>
+                    <td>
+                        <div class="metric-pill">
+                            <i class="bi bi-clock"></i>
+                            {{ exam.duration_minutes }} mins
+                        </div>
+                    </td>
+                    <td>
+                        <div class="metric-pill">
+                            <i class="bi bi-question-circle"></i>
+                            {{ exam.questions|length }} Qs
+                        </div>
+                    </td>
+                    <td>
+                        <span style="font-weight: 700; font-size: 1.1rem;">{{ exam.passing_score }}%</span>
+                    </td>
+                    <td>
+                        {% if exam.is_assigned %}
+                        <form method="POST" action="{{ url_for('exam.start_exam', exam_id=exam.id) }}">
+                            <button type="submit" class="btn-start-exam" style="padding: 0.6rem 1.2rem; font-size: 0.9rem;">
+                                <i class="bi bi-play-circle-fill"></i>
+                                {% if exam.attempted_by_current_user %}Retake{% else %}Start{% endif %}
+                            </button>
+                        </form>
+                        {% else %}
+                        <div class="btn-not-assigned" style="padding: 0.6rem 1.2rem;">
+                            <i class="bi bi-lock-fill"></i> Not Assigned
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn-preview" data-exam-id="{{ exam.id }}" data-exam-title="{{ exam.title }}" style="width: 45px; height: 45px; display: inline-flex; align-items: center; justify-content: center; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border); color: var(--text-secondary);">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
     {% else %}
     <div class="empty-state">
@@ -323,7 +481,7 @@
               <div class="meta-item"><i class="bi bi-trophy"></i> {{ exam.passing_score }}% pass</div>
             </div>
 
-            <form method="POST" action="{{ url_for('start_exam', exam_id=exam.id) }}" style="margin-top:0.6rem;">
+            <form method="POST" action="{{ url_for('exam.start_exam', exam_id=exam.id) }}" style="margin-top:0.6rem;">
               <button class="btn-start-exam full-width" type="submit">
                 <i class="bi bi-play-circle-fill"></i>
                 {% if exam.attempted_by_current_user %}Retake Exam{% else %}Start Exam{% endif %}
@@ -350,8 +508,9 @@
         <table class="performance-table enhanced" role="table" aria-label="performance history">
           <thead>
             <tr>
-              <th>Exam</th>
-
+              <th style="text-align: left;">Exam</th>
+              <th>Score</th>
+              <th>Status</th>
               <th>Time Taken</th>
               <th>Date</th>
               <th>Actions</th>
@@ -359,8 +518,26 @@
           </thead>
           <tbody>
             {% for student_exam in completed_exams %}
-            <tr>
-              <td>{{ student_exam.exam.title }}</td>
+            <tr style="border-bottom: 1px solid var(--border);">
+              <td style="text-align: left; font-weight: 600;">{{ student_exam.exam.title }}</td>
+              <td>
+                {% if student_exam.exam.show_leaderboard %}
+                <span class="badge" style="background: {% if student_exam.passed %}rgba(16, 185, 129, 0.1); color: #10b981;{% else %}rgba(239, 68, 68, 0.1); color: #ef4444;{% endif %} border: 1px solid currentColor; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: bold;">
+                  {{ student_exam.percentage }}%
+                </span>
+                {% else %}
+                <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border); padding: 0.3rem 0.8rem; border-radius: 999px;" title="Results hidden by instructor">
+                  <i class="bi bi-eye-slash"></i> Hidden
+                </span>
+                {% endif %}
+              </td>
+              <td>
+                {% if student_exam.passed %}
+                <span style="color: #10b981; font-weight: 600;"><i class="bi bi-check-circle-fill"></i> Passed</span>
+                {% else %}
+                <span style="color: #ef4444; font-weight: 600;"><i class="bi bi-x-circle-fill"></i> Failed</span>
+                {% endif %}
+              </td>
 
 
               <td>{{ student_exam.time_taken_minutes or 'N/A' }} min</td>
@@ -397,11 +574,39 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <script>
+  /* ---------- Grid/Table View Toggle (Global Scope) ---------- */
+  window.setExamsView = function(mode) {
+    const grid = document.querySelector('#examGrid');
+    const table = document.querySelector('#examTable');
+    const gridBtn = document.querySelector('#viewGridBtn');
+    const tableBtn = document.querySelector('#viewTableBtn');
+
+    if (!grid || !table) return;
+
+    if (mode === 'grid') {
+      grid.style.display = 'grid';
+      table.style.display = 'none';
+      if (gridBtn) gridBtn.classList.add('active-view');
+      if (tableBtn) tableBtn.classList.remove('active-view');
+    } else {
+      grid.style.display = 'none';
+      table.style.display = 'block';
+      if (gridBtn) gridBtn.classList.remove('active-view');
+      if (tableBtn) tableBtn.classList.add('active-view');
+    }
+    localStorage.setItem('studentExamsView', mode);
+  };
+
+  // Restore view preference on load
+  document.addEventListener("DOMContentLoaded", function() {
+      const savedView = localStorage.getItem('studentExamsView') || 'grid';
+      window.setExamsView(savedView);
+  });
 
   (function () {
-    /* ---------- Helpers ---------- */
     const $ = sel => document.querySelector(sel);
     const $$ = sel => Array.from(document.querySelectorAll(sel));
+
     const debounce = (fn, ms = 250) => {
       let t;
       return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
@@ -411,11 +616,6 @@
     const searchInput = $('#examSearchInput');
     const clearSearchBtn = $('#clearSearch');
     const sortSelect = $('#sortBy');
-    const examGrid = $('#examGrid');
-    const gridToggle = $('#toggleGridView');
-
-    /* track all exam cards */
-    let examCards = examGrid ? Array.from(examGrid.children) : [];
 
     /* ---------- Search / Filter / Sort Logic ---------- */
     function normalize(str) { return (str || '').toString().trim().toLowerCase(); }
@@ -424,53 +624,48 @@
       const q = normalize(searchInput.value);
       const sortBy = sortSelect.value;
 
-      let cards = examCards.slice();
+      // Track all items (cards and rows)
+      const allCards = Array.from(document.querySelectorAll("#examGrid .exam-card"));
+      const allRows = Array.from(document.querySelectorAll("#examTable .exam-list-row"));
 
-      // Filter by search
-      if (q) {
-        cards = cards.filter(card => {
-          return card.dataset.title.includes(q) || card.dataset.desc.includes(q) || card.dataset.category.includes(q);
+      function processItems(items) {
+        if (items.length === 0) return;
+        let filtered = items.slice();
+        if (q) {
+          filtered = filtered.filter(item => {
+            return item.dataset.title.includes(q) || (item.dataset.desc && item.dataset.desc.includes(q));
+          });
+        }
+        
+        filtered.sort((a, b) => {
+          if (sortBy === 'duration') return parseInt(a.dataset.duration) - parseInt(b.dataset.duration);
+          if (sortBy === 'passing') return parseInt(b.dataset.passing) - parseInt(a.dataset.passing);
+          if (sortBy === 'questions') return parseInt(b.dataset.questions) - parseInt(a.dataset.questions);
+          let da = a.dataset.created || '';
+          let db = b.dataset.created || '';
+          return new Date(db) - new Date(da);
         });
-        clearSearchBtn.style.display = 'inline';
-      } else {
-        clearSearchBtn.style.display = 'none';
+
+        // Toggle visibility
+        items.forEach(item => {
+          item.style.display = filtered.includes(item) ? "" : "none";
+        });
+        
+        // Re-order
+        const parent = items[0].parentElement;
+        filtered.forEach(item => parent.appendChild(item));
       }
 
-      // Sort
-      cards.sort((a, b) => {
-        if (sortBy === 'duration') return parseInt(a.dataset.duration) - parseInt(b.dataset.duration);
-        if (sortBy === 'passing') return parseInt(b.dataset.passing) - parseInt(a.dataset.passing);
-        if (sortBy === 'questions') return parseInt(b.dataset.questions) - parseInt(a.dataset.questions);
-        // newest: fallback to created (ISO)
-        let da = a.dataset.created || '';
-        let db = b.dataset.created || '';
-        return new Date(db) - new Date(da);
-      });
-
-      // Re-render
-      if (examGrid) {
-        examGrid.innerHTML = '';
-        cards.forEach(c => examGrid.appendChild(c));
-      }
+      processItems(allCards);
+      processItems(allRows);
     }
 
     const debouncedApply = debounce(applyFilters, 180);
 
     if (searchInput) {
       searchInput.addEventListener('input', debouncedApply);
-      clearSearchBtn.addEventListener('click', () => { searchInput.value = ''; searchInput.focus(); applyFilters(); });
     }
     if (sortSelect) sortSelect.addEventListener('change', applyFilters);
-
-    // Grid toggle
-    if (gridToggle) {
-      let compact = false;
-      gridToggle.addEventListener('click', () => {
-        compact = !compact;
-        examGrid.style.gridTemplateColumns = compact ? 'repeat(auto-fit, minmax(280px,1fr))' : '';
-        gridToggle.innerHTML = compact ? '<i class="bi bi-list-ul"></i> List' : '<i class="bi bi-grid-3x3-gap"></i> Grid';
-      });
-    }
 
     /* ---------- Modal Management ---------- */
     const modalTriggers = $$('.modal-trigger-btn, .modal-trigger');
@@ -500,10 +695,10 @@
     });
 
     // Preview button logic
-    $$('#examGrid .btn-preview').forEach(btn => {
+    $$('#examGrid .btn-preview, #examTable .btn-preview').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        const card = btn.closest('.exam-card');
+        const card = btn.closest('.exam-card') || btn.closest('.exam-list-row');
         if (!card) return;
         const title = btn.dataset.examTitle;
         const desc = card.dataset.desc || 'No description';

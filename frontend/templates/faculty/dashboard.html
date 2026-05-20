@@ -61,22 +61,22 @@
             </div>
 
             <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-                <a href="{{ url_for('create_exam') }}" class="dashboard-action-btn">
+                <a href="{{ url_for('faculty.create_exam') }}" class="dashboard-action-btn">
                     <i class="bi bi-plus-circle-fill"></i>
                     <span>Create<br>New exam</span>
                 </a>
 
-                <a href="{{ url_for('faculty_student_list') }}" class="dashboard-action-btn">
+                <a href="{{ url_for('faculty.faculty_students') }}" class="dashboard-action-btn">
                     <i class="bi bi-people-fill"></i>
                     <span>Manage<br>Students</span>
                 </a>
 
-                <a href="{{ url_for('faculty_student_report') }}" class="dashboard-action-btn">
+                <a href="{{ url_for('faculty.faculty_student_report') }}" class="dashboard-action-btn">
                     <i class="bi bi-file-earmark-bar-graph-fill"></i>
                     <span>Students<br>Report</span>
                 </a>
 
-                <a href="{{ url_for('global_leaderboard') }}" class="dashboard-action-btn">
+                <a href="{{ url_for('student.global_leaderboard') }}" class="dashboard-action-btn">
                     <i class="bi bi-trophy-fill"></i>
                     <span>Global<br>Leaderboard</span>
                 </a>
@@ -182,25 +182,177 @@
         </div>
     </div>
 
-    <!-- Exam Search Bar -->
-    <div style="margin-bottom: 1.5rem;">
-        <div style="position: relative; width: 100%;">
+    <!-- Exams Section -->
+    {% if exams %}
+    <!-- Exam Toolbar -->
+    <div style="margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <!-- Search Bar -->
+        <div style="position: relative; flex-grow: 1; min-width: 300px;">
             <i class="bi bi-search" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
-            <input type="text" id="examSearch" class="form-control" placeholder="Search exams..."
-                style="padding-left: 2.5rem; width: 100%;">
+            <input type="text" id="examSearch" class="form-control" placeholder="Search exams by title, description..."
+                style="padding-left: 2.5rem; width: 100%; border-radius: 12px; height: 50px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+        </div>
+
+        <!-- View Controls -->
+        <div style="display: flex; gap: 0.5rem; background: var(--bg-secondary); padding: 0.35rem; border-radius: 12px; border: 1px solid var(--border); align-items: center;">
+            <button onclick="setExamsView('grid')" id="viewGridBtn" class="btn btn-sm view-ctrl-btn active-view" style="padding: 0.6rem 1.2rem; border-radius: 10px; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s; font-weight: 600;">
+                <i class="bi bi-grid-fill"></i> Grid
+            </button>
+            <button onclick="setExamsView('table')" id="viewTableBtn" class="btn btn-sm view-ctrl-btn" style="padding: 0.6rem 1.2rem; border-radius: 10px; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s; font-weight: 600;">
+                <i class="bi bi-table"></i> Table
+            </button>
+        </div>
+
+        <!-- Quick Navigation -->
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="{{ url_for('faculty.exam_analytics', exam_id=exams[0].id if exams else 0) }}" class="btn btn-outline" style="padding: 0.6rem 1.2rem; border-radius: 12px; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="bi bi-graph-up"></i> Performance
+            </a>
+            <a href="{{ url_for('admin.admin_all_exams') if current_user.role == 'admin' else '#' }}" class="btn btn-outline" style="padding: 0.6rem 1.2rem; border-radius: 12px; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="bi bi-clipboard-check"></i> All Exams
+            </a>
+            <a href="#" class="btn btn-outline" style="padding: 0.6rem 1.2rem; border-radius: 12px; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="bi bi-clock-history"></i> History
+            </a>
         </div>
     </div>
 
+    <style>
+        .active-view {
+            background: var(--primary-color) !important;
+            color: white !important;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+        .view-ctrl-btn {
+            color: var(--text-primary);
+            background: transparent;
+            border: 1px solid transparent;
+        }
+        .view-ctrl-btn:hover {
+            background: var(--bg-secondary);
+            color: var(--primary-color);
+        }
+        .exam-table-container {
+            background: transparent;
+            border-radius: 0;
+            border: none;
+            overflow: visible;
+            box-shadow: none;
+            margin-top: 2rem;
+        }
+        .exam-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 1rem;
+        }
+        .exam-table th {
+            text-align: center;
+            padding: 1rem;
+            color: var(--text-primary);
+            font-weight: 800;
+            font-size: 1.4rem;
+            border: none;
+            background: transparent;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+        .exam-table th:first-child { text-align: left; }
+        .exam-table th:last-child { text-align: center; }
 
-    <!-- Exams Section -->
-    {% if exams %}
+        .exam-list-row {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+        .exam-list-row:hover {
+            background: var(--bg-secondary);
+            transform: scale(1.01);
+        }
+        .exam-table td {
+            padding: 1.5rem 1rem;
+            border: none;
+            text-align: center;
+            vertical-align: middle;
+            color: var(--text-primary);
+        }
+        .exam-table td:first-child { 
+            text-align: left; 
+            border-top-left-radius: 12px;
+            border-bottom-left-radius: 12px;
+        }
+        .exam-table td:last-child { 
+            border-top-right-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+
+        .list-exam-title {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            display: block;
+            margin-bottom: 0.3rem;
+            opacity: 0.9;
+        }
+        .list-exam-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .metric-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-secondary);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .status-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 0.6rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: default;
+        }
+
+        .view-action-btn {
+            width: 45px;
+            height: 45px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            transition: all 0.3s;
+        }
+        .view-action-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+    </style>
+
+
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
         <h2 class="card-title" style="margin:0; font-size: 1.5rem; font-weight: 700;">Your Exams</h2>
     </div>
 
     <div class="exam-grid" id="facultyExamGrid">
         {% for exam in exams %}
-        <article class="exam-card {% if not exam.is_active %}not-active{% endif %}" data-title="{{ exam.title | lower }}">
+        <article class="exam-card {% if not exam.is_active %}not-active{% endif %}" data-title="{{ exam.title | lower }} {{ exam.description | lower }}">
             <div class="exam-header">
                 <div>
                     <div class="exam-title">{{ exam.title }}</div>
@@ -222,13 +374,13 @@
             </div>
 
             <div class="exam-actions" style="margin-top: 1.5rem; justify-content: flex-end; gap: 0.75rem; display: flex; border-top: 1px solid var(--border); padding-top: 1rem;">
-                <a href="{{ url_for('view_exam', exam_id=exam.id) }}" class="btn-icon" title="View Exam">
+                <a href="{{ url_for('faculty.view_exam', exam_id=exam.id) }}" class="btn-icon" title="View Exam">
                     <i class="bi bi-eye"></i>
                 </a>
-                <a href="{{ url_for('exam_analytics', exam_id=exam.id) }}" class="btn-icon" title="Analytics">
+                <a href="{{ url_for('faculty.exam_analytics', exam_id=exam.id) }}" class="btn-icon" title="Analytics">
                     <i class="bi bi-bar-chart"></i>
                 </a>
-                <form method="POST" action="{{ url_for('delete_exam', exam_id=exam.id) }}" onsubmit="return confirm('Are you sure you want to delete this exam? This action cannot be undone.')" style="margin:0;">
+                <form method="POST" action="{{ url_for('faculty.delete_exam', exam_id=exam.id) }}" onsubmit="return confirm('Are you sure you want to delete this exam? This action cannot be undone.')" style="margin:0;">
                     <button type="submit" class="btn-icon btn-icon-danger" style="border-color: rgba(239, 68, 68, 0.3);" title="Delete Exam">
                         <i class="bi bi-trash"></i>
                     </button>
@@ -238,12 +390,71 @@
         {% endfor %}
     </div>
 
+    <!-- Table View (Modern Layout) -->
+    <div id="facultyExamTable" class="exam-table-container" style="display: none;">
+        <table class="exam-table">
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Exam <br> Name</th>
+                    <th style="width: 20%;">Decrption</th>
+                    <th style="width: 12%;">time</th>
+                    <th style="width: 12%;">Quesiotns</th>
+                    <th style="width: 10%;">% pass</th>
+                    <th style="width: 15%;">Attemped / take <br> exam</th>
+                    <th style="width: 6%;">View</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exam in exams %}
+                <tr class="exam-list-row" data-title="{{ exam.title | lower }} {{ exam.description | lower }}">
+                    <td>
+                        <span class="list-exam-title">{{ exam.title }}</span>
+                    </td>
+                    <td>
+                        <div class="list-exam-desc">{{ exam.description or "No description available" }}</div>
+                    </td>
+                    <td>
+                        <div class="metric-pill">
+                            <i class="bi bi-clock"></i>
+                            {{ exam.duration_minutes }} mins
+                        </div>
+                    </td>
+                    <td>
+                        <div class="metric-pill">
+                            <i class="bi bi-question-circle"></i>
+                            {{ exam.questions|length }} Qs
+                        </div>
+                    </td>
+                    <td>
+                        <span style="font-weight: 700; font-size: 1.1rem;">{{ exam.passing_score }}%</span>
+                    </td>
+                    <td>
+                        <div class="status-btn">
+                            <i class="bi bi-lock-fill"></i>
+                            {% if exam.student_exams %}
+                                {{ exam.student_exams|length }} Attempts
+                            {% else %}
+                                Not Assigned
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('faculty.view_exam', exam_id=exam.id) }}" class="view-action-btn" title="View Exam">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
     {% else %}
     <div class="card text-center">
         <div style="padding: 3rem 0;">
             <h2 style="font-size: 1.5rem; margin-bottom: 1rem;"><i class="bi bi-inbox" style="margin-right: 0.5rem; color: var(--text-secondary);"></i> No exams yet</h2>
             <p style="color: var(--text-secondary); margin-bottom: 2rem;">Create your first exam to get started!</p>
-            <a href="{{ url_for('create_exam') }}" class="btn btn-primary btn-lg">Create Exam</a>
+            <a href="{{ url_for('faculty.create_exam') }}" class="btn btn-primary btn-lg">Create Exam</a>
         </div>
     </div>
     {% endif %}
@@ -347,7 +558,7 @@
             if (text) text.innerHTML = 'Results<br>' + (enabled ? 'ON' : 'OFF');
 
             try {
-                const r = await fetch('{{ url_for("faculty_set_results_visibility") }}', {
+                const r = await fetch('{{ url_for('faculty.faculty_set_results_visibility') }}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ show_results: enabled })
@@ -398,7 +609,7 @@
             status.textContent = 'Saving…';
         }
         try {
-            const r = await fetch('{{ url_for("faculty_set_leaderboard") }}', {
+            const r = await fetch('{{ url_for('faculty.faculty_set_leaderboard') }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ show_leaderboard: enabled })
@@ -417,20 +628,54 @@
         setTimeout(() => status.style.display = 'none', 3000);
     };
 
-    const examSearchInput = document.getElementById("examSearch");
+    // -----------------------------
+    // Grid/List View Toggle
+    // -----------------------------
+    function setExamsView(mode) {
+        const grid = document.getElementById('facultyExamGrid');
+        const table = document.getElementById('facultyExamTable');
+        
+        const gridBtn = document.getElementById('viewGridBtn');
+        const tableBtn = document.getElementById('viewTableBtn');
+
+        // Hide all
+        grid.style.display = 'none';
+        table.style.display = 'none';
+        
+        gridBtn.classList.remove('active-view');
+        tableBtn.classList.remove('active-view');
+
+        if (mode === 'grid') {
+            grid.style.display = 'grid';
+            gridBtn.classList.add('active-view');
+        } else if (mode === 'table') {
+            table.style.display = 'block';
+            tableBtn.classList.add('active-view');
+        }
+        
+        localStorage.setItem('facultyExamsView', mode);
+    }
+
+    // Restore view preference
+    document.addEventListener("DOMContentLoaded", function() {
+        const savedView = localStorage.getItem('facultyExamsView') || 'grid';
+        setExamsView(savedView);
+    });
 
     if (examSearchInput) {
         examSearchInput.addEventListener("keyup", function () {
             const filter = examSearchInput.value.toLowerCase();
-            const cards = document.querySelectorAll("#facultyExamGrid .exam-card");
+            
+            // Filter Grid Cards
+            document.querySelectorAll("#facultyExamGrid .exam-card").forEach(card => {
+                const searchContent = card.getAttribute("data-title") || "";
+                card.style.display = searchContent.includes(filter) ? "" : "none";
+            });
 
-            cards.forEach(card => {
-                const title = card.getAttribute("data-title") || "";
-                if (title.includes(filter)) {
-                    card.style.display = "";
-                } else {
-                    card.style.display = "none";
-                }
+            // Filter Table Rows
+            document.querySelectorAll("#facultyExamTable .exam-list-row").forEach(row => {
+                const searchContent = row.getAttribute("data-title") || "";
+                row.style.display = searchContent.includes(filter) ? "" : "none";
             });
         });
     }

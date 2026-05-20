@@ -621,7 +621,7 @@
     <div class="sr-selector-title">
       <i class="bi bi-funnel"></i> Select Report Parameters
     </div>
-    <form method="GET" action="{{ url_for('faculty_student_report') }}">
+    <form method="GET" action="{{ url_for('faculty.faculty_student_report') }}">
       <div class="sr-selector-grid">
         <div class="sr-field-group">
           <label class="sr-field-label" for="batch">Batch</label>
@@ -1408,17 +1408,32 @@
     const table = document.getElementById('report-table');
     if (!table) return;
 
-    const headers = Array.from(table.querySelectorAll('thead th')).map(th => {
+    const ths = Array.from(table.querySelectorAll('thead th'));
+    // Exclude the last column (Undo button)
+    const headers = ths.slice(0, ths.length - 1).map(th => {
       const inp = th.querySelector('.sr-col-name-input');
-      return inp ? inp.value : th.textContent.trim();
+      return inp ? inp.value.trim() : th.textContent.trim();
     });
 
     const rows = Array.from(table.querySelectorAll('tbody tr:not(.filtered-out)'));
     let csv = headers.join(',') + '\n';
     rows.forEach(row => {
-      const cells = Array.from(row.cells).map(cell => {
-        let text = cell.querySelector('.sr-marks-input')?.value || cell.textContent.trim();
-        if (text.includes(',') || text.includes('"')) text = '"' + text.replace(/"/g, '""') + '"';
+      const cells = Array.from(row.cells).slice(0, row.cells.length - 1).map(cell => {
+        let text = '';
+        if (cell.querySelector('.sr-marks-input')) {
+            text = cell.querySelector('.sr-marks-input').value.trim();
+        } else if (cell.querySelector('.sr-student-name')) {
+            text = cell.querySelector('.sr-student-name').textContent.trim();
+        } else {
+            text = cell.textContent.trim();
+        }
+        
+        // Remove any stray newlines to prevent CSV row splitting
+        text = text.replace(/[\r\n]+/g, ' ').trim();
+        
+        if (text.includes(',') || text.includes('"')) {
+            text = '"' + text.replace(/"/g, '""') + '"';
+        }
         return text;
       });
       csv += cells.join(',') + '\n';

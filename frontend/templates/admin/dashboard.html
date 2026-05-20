@@ -283,12 +283,12 @@
 
     <!-- Admin Navigation -->
     <div class="admin-nav">
-        <a href="{{ url_for('admin_dashboard') }}" class="active"><i class="bi bi-speedometer2"></i> Dashboard</a>
-        <a href="{{ url_for('admin_manage_faculty') }}"><i class="bi bi-person-badge"></i> Manage Faculty</a>
-        <a href="{{ url_for('admin_student_list') }}"><i class="bi bi-people"></i> All Students</a>
-        <a href="{{ url_for('admin_all_exams') }}"><i class="bi bi-journal-text"></i> All Exams</a>
-        <a href="{{ url_for('global_leaderboard') }}"><i class="bi bi-trophy"></i> Leaderboard</a>
-    <!-- <a href="{{ url_for('admin_sql_console') }}"><i class="bi bi-terminal"></i> SQL Console</a> -->
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="active"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="{{ url_for('admin.manage_faculty') }}"><i class="bi bi-person-badge"></i> Manage Faculty</a>
+        <a href="{{ url_for('admin.admin_students') }}"><i class="bi bi-people"></i> All Students</a>
+        <a href="{{ url_for('admin.admin_all_exams') }}"><i class="bi bi-journal-text"></i> All Exams</a>
+        <a href="{{ url_for('student.global_leaderboard') }}"><i class="bi bi-trophy"></i> Leaderboard</a>
+    <!-- <a href="{{ url_for('admin.admin_sql_console') }}"><i class="bi bi-terminal"></i> SQL Console</a> -->
     </div>
 
     <!-- Header -->
@@ -338,7 +338,7 @@
         <div class="section-card">
             <div class="section-header">
                 <h2><i class="bi bi-person-badge"></i> Faculty Performance</h2>
-                <a href="{{ url_for('admin_manage_faculty') }}" class="view-all">Manage →</a>
+                <a href="{{ url_for('admin.manage_faculty') }}" class="view-all">Manage →</a>
             </div>
             {% if faculty_stats %}
             <table class="admin-table">
@@ -420,7 +420,7 @@
     <div class="section-card">
         <div class="section-header">
             <h2><i class="bi bi-clock-history"></i> Recent Exams</h2>
-            <a href="{{ url_for('admin_all_exams') }}" class="view-all">View All Exams →</a>
+            <a href="{{ url_for('admin.admin_all_exams') }}" class="view-all">View All Exams →</a>
         </div>
         {% if recent_exams_data %}
         <table class="admin-table">

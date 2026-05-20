@@ -217,11 +217,11 @@
                         </td>
                         <td>
                             <div class="sm-actions">
-                                <a href="{{ url_for('student_profile', student_id=student.id) }}"
+                                <a href="{{ url_for('faculty.faculty_student_profile', student_id=student.id) }}"
                                     class="sm-action-btn sm-action-view" title="View Profile">
                                     <i class="bi bi-eye-fill"></i> View
                                 </a>
-                                <a href="{{ url_for('faculty_edit_student', student_id=student.id) }}"
+                                <a href="{{ url_for('faculty.faculty_edit_student', student_id=student.id) }}"
                                     class="sm-action-btn sm-action-edit" title="Edit Student">
                                     <i class="bi bi-pencil-fill"></i> Edit
                                 </a>
@@ -257,14 +257,14 @@
         </p>
         <div class="sm-empty-actions">
             {% if request.args.get('q') %}
-            <a href="{{ url_for('faculty_student_list') }}" class="sm-btn sm-btn-primary">
+            <a href="{{ url_for('faculty.faculty_students') }}" class="sm-btn sm-btn-primary">
                 <i class="bi bi-arrow-left"></i> Show All
             </a>
             {% else %}
             <button class="sm-btn sm-btn-primary" onclick="openImportModal()">
                 <i class="bi bi-upload"></i> Import Students
             </button>
-            <a href="{{ url_for('download_student_template') }}" class="sm-btn sm-btn-outline">
+            <a href="{{ url_for('faculty.download_template') }}" class="sm-btn sm-btn-outline">
                 <i class="bi bi-download"></i> Download Template
             </a>
             {% endif %}
@@ -292,11 +292,11 @@
                 </button>
             </div>
 
-            <form id="importForm" action="{{ url_for('faculty_import_students') }}" method="POST"
+            <form id="importForm" action="{{ url_for('faculty.import_students') }}" method="POST"
                 enctype="multipart/form-data">
                 <div class="modal-body-custom">
                     <div class="quick-actions-bar">
-                        <a href="{{ url_for('download_student_template') }}" class="btn-quick-action">
+                        <a href="{{ url_for('faculty.download_template') }}" class="btn-quick-action">
                             <i class="bi bi-download"></i> Download Template
                         </a>
                     </div>

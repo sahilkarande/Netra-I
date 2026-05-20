@@ -80,7 +80,7 @@
 
                 <!-- Back to Login -->
                 <div class="back-link">
-                    <a href="{{ url_for('login') }}">
+                    <a href="{{ url_for('auth.login') }}">
                         <i class="bi bi-arrow-left"></i> Back to Login
                     </a>
                 </div>
@@ -187,7 +187,7 @@
             resendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending...';
 
             try {
-                const response = await fetch('{{ url_for("resend_otp") }}', {
+                const response = await fetch('{{ url_for('auth.resend_otp') }}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

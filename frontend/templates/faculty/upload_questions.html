@@ -53,7 +53,7 @@
             </ul>
         </div>
 
-        <form id="uploadForm" method="POST" enctype="multipart/form-data" action="{{ url_for('upload_questions', exam_id=exam.id) }}">
+        <form id="uploadForm" method="POST" enctype="multipart/form-data" action="{{ url_for('faculty.upload_questions', exam_id=exam.id) }}">
             
             <div class="uq-form-group">
                 <label class="uq-form-label">Select File <span style="color:var(--uq-red)">*</span></label>
@@ -86,7 +86,7 @@
             </div>
 
             <div class="uq-main-actions">
-                <a href="{{ url_for('faculty_dashboard') }}" class="uq-btn uq-btn-outline"><i class="bi bi-arrow-left"></i> Cancel</a>
+                <a href="{{ url_for('faculty.faculty_dashboard') }}" class="uq-btn uq-btn-outline"><i class="bi bi-arrow-left"></i> Cancel</a>
                 <button type="submit" id="submitBtn" class="uq-btn uq-btn-primary"><i class="bi bi-upload"></i> Process & Upload Questions</button>
             </div>
         </form>
@@ -175,7 +175,7 @@
             previewServerBtn.innerHTML = "<i class='bi bi-hourglass-split'></i> Previewing...";
 
             try {
-                const resp = await fetch("{{ url_for('preview_questions', exam_id=exam.id) }}", {
+                const resp = await fetch("{{ url_for('faculty.preview_questions', exam_id=exam.id) }}", {
                     method: "POST",
                     body: form,
                     credentials: "same-origin"

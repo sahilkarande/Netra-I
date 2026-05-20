@@ -277,22 +277,22 @@
     <!-- Admin Nav -->
     <div class="admin-nav"
         style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;padding:0.75rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;">
-        <a href="{{ url_for('admin_dashboard') }}"
+        <a href="{{ url_for('admin.admin_dashboard') }}"
             style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
                 class="bi bi-speedometer2"></i> Dashboard</a>
-        <a href="{{ url_for('admin_manage_faculty') }}"
+        <a href="{{ url_for('admin.manage_faculty') }}"
             style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;background:var(--primary-color);color:#fff;text-decoration:none;font-size:0.85rem;font-weight:500;"><i
                 class="bi bi-person-badge"></i> Manage Faculty</a>
-        <a href="{{ url_for('admin_student_list') }}"
+        <a href="{{ url_for('admin.admin_students') }}"
             style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
                 class="bi bi-people"></i> All Students</a>
-        <a href="{{ url_for('admin_all_exams') }}"
+        <a href="{{ url_for('admin.admin_all_exams') }}"
             style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
                 class="bi bi-journal-text"></i> All Exams</a>
-        <a href="{{ url_for('global_leaderboard') }}"
+        <a href="{{ url_for('student.global_leaderboard') }}"
             style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
                 class="bi bi-trophy"></i> Leaderboard</a>
-        <a href="{{ url_for('admin_sql_console') }}"
+        <a href="{{ url_for('admin.admin_sql_console') }}"
             style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
                 class="bi bi-terminal"></i> SQL Console</a>
     </div>
@@ -321,7 +321,7 @@
     <!-- Create Faculty Form -->
     <div class="create-card">
         <h2><i class="bi bi-person-plus"></i> Create New Faculty</h2>
-        <form method="POST" action="{{ url_for('admin_create_faculty') }}">
+        <form method="POST" action="{{ url_for('admin.create_faculty') }}">
             <div class="form-grid">
                 <div class="form-group">
                     <label for="full_name">Full Name *</label>

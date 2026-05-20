@@ -75,7 +75,7 @@ def create_app():
     # ──────────────────────────────────────────────────────────────
     # INITIALIZE SOCKET.IO ⚠️ CRITICAL FOR BINARY PROCTORING
     # ──────────────────────────────────────────────────────────────
-    from backend.routes import socketio
+    from backend.socket_io import socketio
     socketio.init_app(app)
     print("✅ Socket.IO initialized for binary proctoring")
 
@@ -108,8 +108,8 @@ def create_app():
         # ── Cache Control ──
         # Never cache authentication or dashboard routes
         if endpoint in [
-            'login', 'logout', 'register', 'verify_otp',
-            'student_dashboard', 'faculty_dashboard', 'admin_dashboard'
+            'auth.login', 'auth.logout', 'auth.register', 'auth.verify_otp',
+            'student.student_dashboard', 'faculty.faculty_dashboard', 'admin.admin_dashboard'
         ]:
             response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
             response.headers['Pragma'] = 'no-cache'
@@ -132,74 +132,18 @@ def create_app():
     @login_manager.unauthorized_handler
     def unauthorized():
         flash('Please log in to access this page.', 'warning')
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
 
     # ──────────────────────────────────────────────────────────────
     # ROUTE REGISTRATION
     # ──────────────────────────────────────────────────────────────
     with app.app_context():
-        from backend.routes import register_routes
-        register_routes(app)
+        from backend.routes import register_blueprints
+        register_blueprints(app)
         db.create_all()
         print("✅ Database initialized!")
 
-    # ──────────────────────────────────────────────────────────────
-    # ADMIN SQL CONSOLE (For Admin Only)
-    # ──────────────────────────────────────────────────────────────
-    def is_admin_user():
-        """Check if current user is admin"""
-        return getattr(current_user, "role", None) == "admin"
 
-    @app.route("/admin/sql_console", methods=["GET"])
-    @login_required
-    def admin_sql_console():
-        if not is_admin_user():
-            return "Access Denied", 403
-        return render_template("admin_sql_console.html")
-
-    @app.route("/admin/sql_console/run", methods=["POST"])
-    @login_required
-    def admin_sql_run():
-        if not is_admin_user():
-            return jsonify({"success": False, "error": "Access denied"}), 403
-
-        payload = request.get_json() or {}
-        sql = (payload.get("sql") or "").strip()
-        if not sql:
-            return jsonify({"success": False, "error": "Empty SQL query"}), 400
-
-        try:
-            engine = db.engine
-            first_word = sql.split(None, 1)[0].lower()
-
-            # SELECT / DQL
-            if first_word in ("select", "with", "pragma"):
-                with engine.connect() as conn:
-                    result = conn.execute(text(sql))
-                    columns = result.keys()
-                    rows = [dict(r._mapping) for r in result.fetchall()]
-                return jsonify({
-                    "success": True,
-                    "type": "select",
-                    "columns": columns,
-                    "rows": rows,
-                    "rowcount": len(rows)
-                })
-
-            # DML / DDL
-            else:
-                with engine.begin() as conn:
-                    result = conn.execute(text(sql))
-                    affected = result.rowcount if result.rowcount is not None else 0
-                return jsonify({
-                    "success": True,
-                    "type": "update",
-                    "message": f"Statement executed successfully. Rows affected: {affected}"
-                })
-
-        except Exception as e:
-            traceback.print_exc()
-            return jsonify({"success": False, "error": str(e)}), 500
 
     # ──────────────────────────────────────────────────────────────
     # ROUTE LIST DEBUG INFO
@@ -297,7 +241,7 @@ if __name__ == '__main__':
     # ──────────────────────────────────────────────────────────────
     # ⚠️ CRITICAL: USE SOCKETIO.RUN() NOT APP.RUN()
     # ──────────────────────────────────────────────────────────────
-    from backend.routes import socketio
+    from backend.socket_io import socketio
     
     run_kwargs = {
         "debug": debug,

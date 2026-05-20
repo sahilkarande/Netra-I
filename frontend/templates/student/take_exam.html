@@ -731,11 +731,11 @@ DRAGGABLE FLOATING CAMERA WIDGET
       }
     })(),
     urls: {
-      save: "{{ url_for('save_answer') }}",
+      save: "{{ url_for('exam.save_answer') }}",
       tabUpd: "{{ url_for('api_update_tabcount', student_exam_id=student_exam.id) }}",
       logAct: "{{ url_for('api_log_activity',   student_exam_id=student_exam.id) }}",
       status: "{{ url_for('api_check_exam_status', student_exam_id=student_exam.id) }}",
-      submit: "{{ url_for('submit_exam', student_exam_id=student_exam.id) }}"
+      submit: "{{ url_for('exam.submit_exam', student_exam_id=student_exam.id) }}"
     }
   };
 

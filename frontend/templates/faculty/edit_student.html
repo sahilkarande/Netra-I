@@ -20,7 +20,7 @@
             </p>
         </div>
         <div class="header-actions">
-            <a href="{{ url_for('faculty_student_list') }}" class="btn btn-outline">
+            <a href="{{ url_for('faculty.faculty_students') }}" class="btn btn-outline">
                 <i class="bi bi-arrow-left"></i>
                 Back to List
             </a>
@@ -339,7 +339,7 @@ async function confirmDelete() {
             
             if (data.success) {
                 alert('✅ Student deleted successfully!');
-                window.location.href = "{{ url_for('faculty_student_list') }}";
+                window.location.href = "{{ url_for('faculty.faculty_students') }}";
             } else {
                 alert('❌ Error: ' + (data.error || 'Failed to delete student'));
             }
