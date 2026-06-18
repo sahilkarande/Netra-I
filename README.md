@@ -8,7 +8,8 @@ A comprehensive, enterprise-grade Python-based web application for conducting se
 
 - **Real-time Face Detection**: Uses OpenVINO and OpenCV for high-performance facial tracking
 - **Continuous Identity Verification**: Utilizes `face-api.js` to extract 128-dimensional face descriptors, ensuring the student's identity matches throughout the exam via periodic background checks.
-- **Unified Pre-Exam System Checks**: Comprehensive environment staging that verifies network stability, camera, microphone, and enforces hardware rules before exam entry.
+- **Unified Pre-Exam System Checks**: Comprehensive environment staging that verifies network stability, camera, microphone, an
+d enforces hardware rules before exam entry.
 - **Hardware Environment Scanning**: Actively monitors and flags unauthorized external displays, virtual cameras, and external communication devices (e.g., Bluetooth headsets).
 - **Screen Sharing & Recording Prevention**: Intercepts browser-level display capture APIs to block malicious screen recording or unauthorized remote sharing.
 - **Adaptive Thresholds**: Soft and hard deviation thresholds with cooldown periods for head pose and background noise.

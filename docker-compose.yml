@@ -1,0 +1,20 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8800:8800"
+    volumes:
+      - .:/app
+      # Prevent the local venv from overriding the container's environment
+      - /app/venv
+    environment:
+      - PORT=8800
+      - FLASK_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
