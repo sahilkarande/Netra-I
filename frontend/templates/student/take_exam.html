@@ -660,7 +660,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='vendor/socket.io/socket.io.min.js') }}"></script>
 
 <script>
   /* ── utils (must be first) ── */
@@ -2222,7 +2222,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
   /* ══════════════════════════════════
      FACE-API.JS: load models + detection loop
   ══════════════════════════════════ */
-  const FACE_MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+  const FACE_MODEL_URL = "{{ url_for('static', filename='vendor/face-api/models') }}";
   let _faceLoopT = null;
   S._faceStable = 0;
   /* Face detection is a BONUS — default true so it never blocks the proceed gate.
@@ -2235,7 +2235,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
       /* Load the library dynamically so it never blocks page rendering */
       await new Promise(resolve => {
         const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+        s.src = "{{ url_for('static', filename='vendor/face-api/face-api.min.js') }}";
         s.onload  = resolve;
         s.onerror = resolve; /* still resolve on error — we handle missing below */
         document.head.appendChild(s);

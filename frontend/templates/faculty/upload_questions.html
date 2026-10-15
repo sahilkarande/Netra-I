@@ -94,8 +94,8 @@
 </div>
 
 <!-- External libs for client parsing -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js" integrity crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='vendor/papaparse/papaparse.min.js') }}" integrity crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='vendor/xlsx/xlsx.full.min.js') }}" integrity crossorigin="anonymous"></script>
 
 <script>
     document.addEventListener("DOMContentLoaded", () => {
