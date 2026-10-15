@@ -27,6 +27,9 @@ PASSWORD = 'Passw0rd!'
 def app():
     application = create_app()
     application.config.update(TESTING=True)
+    # Anything the app writes under instance/ (e.g. credential sheets) goes
+    # to a throwaway folder, never the real installation's.
+    application.instance_path = os.path.join(_DB_DIR, 'instance')
     return application
 
 

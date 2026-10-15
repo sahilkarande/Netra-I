@@ -210,10 +210,12 @@ def delete_faculty(faculty_id):
     faculty = User.query.get_or_404(faculty_id)
     if faculty.role != 'faculty':
         return jsonify({"success": False, "error": "User is not faculty"}), 400
-        
-    db.session.delete(faculty)
-    db.session.commit()
-    return jsonify({"success": True, "message": "Faculty deleted successfully!"})
+
+    from backend.services import account_service
+    ok, message = account_service.delete_faculty(faculty, current_user)
+    if not ok:
+        return jsonify({"success": False, "error": message}), 409
+    return jsonify({"success": True, "message": message})
 
 @admin_bp.route('/admin/students')
 @login_required

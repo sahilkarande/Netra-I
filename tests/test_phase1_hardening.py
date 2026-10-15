@@ -199,3 +199,213 @@ def test_p1_12_unhandled_error_is_generic(app, seed, monkeypatch):
     assert resp.status_code == 500
     assert b'secret internal detail' not in resp.data
     assert b'SELECT' not in resp.data
+
+
+# ── P0-4: no shared default passwords ───────────────────────────────────────
+
+def _import_csv(client, body: bytes):
+    import io
+    return client.post('/faculty/import_students',
+                       data={'file': (io.BytesIO(body), 'students.csv')},
+                       content_type='multipart/form-data')
+
+
+def test_p0_4_import_generates_distinct_random_passwords(app, seed):
+    fac = app.test_client()
+    login(fac, 'faca')
+    _import_csv(fac, b"full_name,email,prn_number\nAsha,asha@example.com,250840125101\n"
+                     b"Ravi,ravi@example.com,250840125102\n")
+
+    # Neither the old default nor each other's password works
+    for who in ('asha@example.com', 'ravi@example.com'):
+        assert login(app.test_client(), who, 'Student@123').status_code == 200
+
+    page = fac.get('/faculty/students').data.decode()
+    token = re.search(r'/faculty/credentials/([\w-]+)', page).group(1)
+    sheet = fac.get(f'/faculty/credentials/{token}')
+    assert sheet.status_code == 200 and sheet.mimetype == 'text/csv'
+    rows = [r.split(',') for r in sheet.data.decode().strip().splitlines()[1:]]
+    passwords = {r[3]: r[4] for r in rows}
+    assert len(set(passwords.values())) == 2
+    assert all(len(p) >= 10 for p in passwords.values())
+    assert login(app.test_client(), 'asha@example.com', passwords['asha@example.com']).status_code == 302
+
+    # One-time: the second download is refused and the file is gone
+    again = fac.get(f'/faculty/credentials/{token}')
+    assert again.status_code == 302
+    with app.app_context():
+        assert db.session.query(User).filter_by(email='asha@example.com').one().created_by == seed['fac_a']
+
+
+def test_p0_4_credentials_bound_to_session(app, seed):
+    fac = app.test_client()
+    login(fac, 'faca')
+    _import_csv(fac, b"full_name,email\nAsha,asha@example.com\n")
+    token = re.search(r'/faculty/credentials/([\w-]+)', fac.get('/faculty/students').data.decode()).group(1)
+    other = app.test_client()
+    login(other, 'facb')
+    assert other.get(f'/faculty/credentials/{token}').status_code == 302
+
+
+def test_p0_4_file_password_is_respected(app, seed):
+    fac = app.test_client()
+    login(fac, 'faca')
+    _import_csv(fac, b"full_name,email,password\nAsha,asha@example.com,Chosen#123\n")
+    assert login(app.test_client(), 'asha@example.com', 'Chosen#123').status_code == 302
+    assert b'/faculty/credentials/' not in fac.get('/faculty/students').data
+
+
+def test_p0_4_reset_returns_random_password_once(app, seed):
+    fac = app.test_client()
+    login(fac, 'faca')
+    first = fac.post(f"/faculty/change-student-password/{seed['s1']}").get_json()
+    second = fac.post(f"/faculty/change-student-password/{seed['s1']}").get_json()
+    assert first['temporary_password'] != second['temporary_password']
+    assert login(app.test_client(), 'stud1', '123456789').status_code == 200
+    assert login(app.test_client(), 'stud1', first['temporary_password']).status_code == 200
+    assert login(app.test_client(), 'stud1', second['temporary_password']).status_code == 302
+
+
+# ── P0-7: deletes leave no orphans and never crash ──────────────────────────
+
+def _orphans(app):
+    from sqlalchemy import text
+    with app.app_context():
+        return db.session.execute(text(
+            'select count(*) from student_exam se left join users u on u.id = se.student_id '
+            'where u.id is null')).scalar()
+
+
+def test_p0_7_delete_student_with_attempt(app, seed):
+    fac = app.test_client()
+    login(fac, 'faca')
+    resp = fac.post(f"/faculty/delete_student/{seed['s1']}")
+    assert resp.status_code == 200 and resp.get_json()['success'] is True
+    assert _orphans(app) == 0
+    with app.app_context():
+        assert db.session.get(User, seed['s1']) is None
+
+
+def test_p0_7_bulk_delete_keeps_leaderboard_working(app, seed):
+    _set(app, Exam, seed['exam'], results_published=True, show_leaderboard=True)
+    fac = app.test_client()
+    login(fac, 'faca')
+    resp = fac.post('/faculty/delete_students', json={'ids': [seed['s1'], seed['admin']]})
+    assert resp.get_json()['deleted'] == 1             # the admin id is refused
+    assert _orphans(app) == 0
+    admin = app.test_client()
+    login(admin, 'admin1')
+    assert admin.get('/global_leaderboard').status_code == 200
+    with app.app_context():
+        assert db.session.get(User, seed['admin']) is not None
+
+
+def test_p0_7_delete_faculty_with_exams_is_refused(app, seed):
+    admin = app.test_client()
+    login(admin, 'admin1')
+    resp = admin.post(f"/admin/delete-faculty/{seed['fac_a']}")
+    assert resp.status_code == 409
+    assert 'owns' in resp.get_json()['error']
+    assert admin.post(f"/admin/delete-faculty/{seed['fac_b']}").status_code == 200
+
+
+def test_p0_7_foreign_keys_enforced(app):
+    from sqlalchemy import text
+    with app.app_context():
+        assert db.session.execute(text('PRAGMA foreign_keys')).scalar() == 1
+
+
+# ── P1-9: faculty only manage students in their scope ───────────────────────
+
+@pytest.fixture
+def other_dept_student(app, seed):
+    """A student imported by faculty B (DAC) who never sat a DBDA exam."""
+    from werkzeug.security import generate_password_hash
+    with app.app_context():
+        u = User(username='dacstud', email='dac@example.com', role='student',
+                 password_hash=generate_password_hash(PASSWORD), is_verified=True,
+                 password_changed=True, created_by=seed['fac_b'], full_name='Dac Student')
+        db.session.add(u)
+        db.session.commit()
+        return u.id
+
+
+@pytest.mark.parametrize('method,path', [
+    ('get', '/faculty/student/{sid}/profile'),
+    ('get', '/faculty/student/{sid}/edit'),
+    ('post', '/faculty/change-student-password/{sid}'),
+    ('post', '/faculty/student/{sid}/reset-face'),
+    ('get', '/faculty/student/{sid}/face-history'),
+    ('post', '/faculty/delete_student/{sid}'),
+])
+def test_p1_9_other_department_student_is_out_of_scope(app, seed, other_dept_student, method, path):
+    fac = app.test_client()
+    login(fac, 'faca')
+    url = path.format(sid=other_dept_student)
+    resp = fac.post(url, json={'reason': 'x'}) if method == 'post' else fac.get(url)
+    assert resp.status_code == 404
+    with app.app_context():
+        assert db.session.get(User, other_dept_student) is not None
+
+
+def test_p1_9_lists_and_exports_are_scoped(app, seed, other_dept_student):
+    fac = app.test_client()
+    login(fac, 'faca')
+    assert b'dac@example.com' not in fac.get('/faculty/students').data
+    assert b'dac@example.com' not in fac.get('/faculty/export_students').data
+    assert b'stud1@example.com' in fac.get('/faculty/export_students').data   # legacy, unowned
+
+    owner = app.test_client()
+    login(owner, 'facb')
+    assert b'dac@example.com' in owner.get('/faculty/students').data
+    admin = app.test_client()
+    login(admin, 'admin1')
+    assert admin.get(f'/faculty/student/{other_dept_student}/profile').status_code == 200
+
+
+# ── P1-10: one attempt per student per exam, one answer per question ───────
+
+def test_p1_10_unique_attempt_enforced(app, seed):
+    from sqlalchemy.exc import IntegrityError
+    with app.app_context():
+        db.session.add(StudentExam(student_id=seed['s1'], exam_id=seed['exam']))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+
+
+def test_p1_10_unique_answer_enforced(app, seed):
+    from sqlalchemy.exc import IntegrityError
+    from backend.models import StudentAnswer
+    with app.app_context():
+        db.session.add_all([
+            StudentAnswer(student_exam_id=seed['attempt'], question_id=seed['q1'], selected_answer='A'),
+            StudentAnswer(student_exam_id=seed['attempt'], question_id=seed['q1'], selected_answer='B'),
+        ])
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+
+
+def test_p1_10_indexes_added_to_existing_database(tmp_path):
+    """An old database without the constraints gains them at start-up."""
+    import sqlite3
+    from flask import Flask
+    from backend.database import db as _db
+    from app import ensure_schema_indexes
+
+    path = tmp_path / 'old.db'
+    con = sqlite3.connect(path)
+    con.executescript(
+        'CREATE TABLE student_exam (id INTEGER PRIMARY KEY, student_id INTEGER, exam_id INTEGER);'
+        'CREATE TABLE student_answer (id INTEGER PRIMARY KEY, student_exam_id INTEGER, question_id INTEGER);')
+    con.close()
+
+    mini = Flask('mini')
+    mini.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{path}'
+    _db.init_app(mini)
+    with mini.app_context():
+        ensure_schema_indexes()
+    con = sqlite3.connect(path)
+    names = {r[0] for r in con.execute("select name from sqlite_master where type='index'")}
+    assert {'uq_student_exam_student_exam', 'uq_student_answer_attempt_question'} <= names

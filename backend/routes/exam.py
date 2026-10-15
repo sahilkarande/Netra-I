@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app, session
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room
+from sqlalchemy.exc import IntegrityError
 
 from backend.database import db
 from backend.models import Exam, Question, StudentExam, StudentAnswer, ActivityLog, ExamViolation, ExamCalibration
@@ -113,7 +114,11 @@ def start_exam(exam_id):
             started_at=datetime.utcnow()
         )
         db.session.add(student_exam)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # A double-clicked Start already created the attempt; use that one
+            db.session.rollback()
     elif student_exam.status != 'started':
         # Pre-created at import time: the clock starts now, not at import.
         student_exam.status = 'started'
@@ -243,7 +248,13 @@ def save_answer():
         answer.selected_answer = str(selected_answer)[:10] if selected_answer is not None else None
         answer.answered_at = datetime.utcnow()
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Two overlapping autosaves raced to insert the same answer row. The
+        # other request won; the client sends the full map again next tick.
+        db.session.rollback()
+        return jsonify({"success": False, "retry": True}), 409
     return jsonify({"success": True})
 
 @exam_bp.route('/submit_exam/<int:student_exam_id>', methods=['POST'])

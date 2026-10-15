@@ -47,6 +47,7 @@ LATE_COLUMNS = {
         'password_hint': 'VARCHAR(255)',
         'default_results_published': 'BOOLEAN DEFAULT 0',
         'default_show_leaderboard': 'BOOLEAN DEFAULT 1',
+        'created_by': 'INTEGER',
     },
     'face_enrollment': {
         'is_locked': 'BOOLEAN DEFAULT 1',
@@ -87,6 +88,51 @@ def ensure_schema_columns():
             except Exception as e:
                 db.session.rollback()
                 print(f"⚠️  Could not add {table}.{name}: {e}")
+
+
+# Indexes and uniqueness added after tables already existed in the field.
+# (name, table, columns, unique). Unique ones stop duplicate attempts/answers.
+LATE_INDEXES = [
+    ('uq_student_exam_student_exam', 'student_exam', ('student_id', 'exam_id'), True),
+    ('uq_student_answer_attempt_question', 'student_answer', ('student_exam_id', 'question_id'), True),
+    ('ix_student_exam_student_id', 'student_exam', ('student_id',), False),
+    ('ix_student_exam_exam_id', 'student_exam', ('exam_id',), False),
+    ('ix_question_exam_id', 'question', ('exam_id',), False),
+    ('ix_exam_violation_student_exam_id', 'exam_violation', ('student_exam_id',), False),
+    ('ix_activity_log_student_exam_id', 'activity_log', ('student_exam_id',), False),
+    ('ix_users_created_by', 'users', ('created_by',), False),
+]
+
+
+def ensure_schema_indexes():
+    """Add missing indexes/unique constraints to existing tables.
+
+    A unique index cannot be created while duplicates exist; that is reported
+    rather than fixed automatically, because merging attempts is a decision for
+    a person, not a start-up script.
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+    for name, table, cols, unique in LATE_INDEXES:
+        if table not in tables:
+            continue
+        covered = [i for i in inspector.get_indexes(table)
+                   if tuple(i['column_names']) == cols and (bool(i.get('unique')) or not unique)]
+        if unique:
+            covered += [u for u in inspector.get_unique_constraints(table)
+                        if tuple(u['column_names']) == cols]
+        if covered:
+            continue
+        kind = 'UNIQUE INDEX' if unique else 'INDEX'
+        try:
+            db.session.execute(text(
+                f'CREATE {kind} IF NOT EXISTS {name} ON {table} ({", ".join(cols)})'))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️  Could not create {name} on {table}: {e}")
 
 
 # Kept as an alias so older call sites keep working.
@@ -265,6 +311,7 @@ def create_app():
         register_blueprints(app)
         db.create_all()
         ensure_schema_columns()
+        ensure_schema_indexes()
         print("✅ Database initialized!")
 
     # ──────────────────────────────────────────────────────────────

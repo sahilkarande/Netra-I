@@ -6,7 +6,7 @@ import pandas as pd
 import shutil
 import traceback
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app, session, abort
 from functools import wraps
 from flask_login import login_required, current_user
 from sqlalchemy import func
@@ -19,6 +19,7 @@ from backend.services.pdf_generator import generate_batch_report_pdf
 from backend.services.proctor_service import PROCTOR_INSTANCES, _heartbeat_registry, _last_frame_processed
 from backend.services.exam_service import assign_shuffle
 from backend.socket_io import socketio
+from backend.services import account_service
 
 faculty_bp = Blueprint('faculty', __name__)
 
@@ -79,6 +80,17 @@ def _faculty_can_access_exam(exam):
         if creator_course and creator_course == user_course:
             return True
     return False
+
+def _managed_student_or_404(student_id):
+    """The student, if the current staff member may manage them; else 404.
+
+    404 rather than 403 so other departments' student IDs cannot be probed.
+    """
+    student = User.query.get(student_id)
+    if not account_service.can_manage_student(current_user, student):
+        abort(404)
+    return student
+
 
 def _faculty_can_access_student(student_id):
     """Check if faculty or course faculty created an exam that this student has taken"""
@@ -369,6 +381,7 @@ def import_students():
 
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
         added, skipped = 0, 0
+        credentials = []
         errors = []
 
         def clean_string(value):
@@ -397,7 +410,12 @@ def import_students():
                 prn_raw = clean_string(row.get('prn_number'))
                 prn_clean = prn_raw.replace('.', '').replace(' ', '') if prn_raw else ''
 
-                password = clean_string(row.get('password')) or 'Student@123'
+                # A password from the file is the faculty's choice; otherwise a
+                # random one per student, never a shared default.
+                password = clean_string(row.get('password'))
+                generated = not password
+                if generated:
+                    password = account_service.generate_temp_password()
                 hashed_pw = generate_password_hash(password)
 
                 student = User(
@@ -410,10 +428,18 @@ def import_students():
                     roll_id=clean_string(row.get('roll_id')) or None,
                     password_hash=hashed_pw,
                     role='student',
-                    is_verified=True
+                    is_verified=True,
+                    created_by=current_user.id,
                 )
                 db.session.add(student)
                 db.session.commit()
+
+                if generated:
+                    credentials.append({
+                        'full_name': student.full_name, 'username': student.username,
+                        'prn_number': student.prn_number, 'email': student.email,
+                        'temporary_password': password,
+                    })
 
                 if exam:
                     student_exam = StudentExam(student_id=student.id, exam_id=exam.id)
@@ -430,6 +456,10 @@ def import_students():
 
         db.session.commit()
         flash(f"✅ {added} added | ⚠️ {skipped} skipped", 'success')
+        if credentials:
+            _stash_credentials(credentials)
+            flash(f"{len(credentials)} student(s) were given a random temporary password. "
+                  "Download the credentials sheet now — it can only be downloaded once.", 'warning')
         return redirect(url_for('faculty.faculty_students'))
 
     except Exception as e:
@@ -531,7 +561,7 @@ def view_exam(exam_id):
         return redirect(url_for('faculty.faculty_dashboard'))
     
     # Get all students for the selection modal
-    all_students = User.query.filter_by(role='student').order_by(User.full_name).all()
+    all_students = account_service.scoped_students_query(current_user).order_by(User.full_name).all()
     
     # Get unique batches
     all_batches = db.session.query(User.batch).filter(User.role == 'student', User.batch != None).distinct().all()
@@ -656,6 +686,50 @@ def faculty_publish_results(exam_id):
 
     return jsonify({"success": True, "message": f"Results published! {deleted_images} images cleaned."})
 
+def _credentials_dir():
+    path = os.path.join(current_app.instance_path, 'credentials')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _stash_credentials(rows):
+    """Keep the generated passwords just long enough for one download.
+
+    They are written to instance/ (never served statically), bound to this
+    session, and deleted on download.
+    """
+    import secrets as _secrets
+    token = _secrets.token_urlsafe(16)
+    with open(os.path.join(_credentials_dir(), f'{token}.csv'), 'wb') as f:
+        f.write(account_service.credentials_csv(rows))
+    try:
+        os.chmod(os.path.join(_credentials_dir(), f'{token}.csv'), 0o600)
+    except OSError:
+        pass
+    session['credentials_token'] = token
+
+
+@faculty_bp.route('/faculty/credentials/<token>')
+@login_required
+@staff_required
+def download_credentials(token):
+    """One-time download of the temporary passwords from the last import."""
+    if not token or session.get('credentials_token') != token:
+        flash('That credentials sheet is no longer available.', 'error')
+        return redirect(url_for('faculty.faculty_students'))
+    path = os.path.join(_credentials_dir(), f'{secure_filename(token)}.csv')
+    session.pop('credentials_token', None)
+    try:
+        with open(path, 'rb') as f:
+            data = f.read()
+        os.remove(path)
+    except OSError:
+        flash('That credentials sheet is no longer available.', 'error')
+        return redirect(url_for('faculty.faculty_students'))
+    return send_file(io.BytesIO(data), mimetype='text/csv', as_attachment=True,
+                     download_name=f"student_credentials_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+
+
 @faculty_bp.route('/faculty/students')
 @login_required
 @staff_required
@@ -669,7 +743,7 @@ def faculty_students():
     sort = request.args.get('sort', '')
     verified = request.args.get('verified', '')
 
-    query = User.query.filter_by(role='student')
+    query = account_service.scoped_students_query(current_user)
 
     if q:
         search = f"%{q}%"
@@ -708,7 +782,8 @@ def faculty_students():
     return render_template('faculty/manage_students.html', 
                          students=students, 
                          batches=batches, 
-                         departments=departments)
+                         departments=departments,
+                         credentials_token=session.get('credentials_token'))
 
 @faculty_bp.route('/faculty/student_report', methods=['GET'])
 @login_required
@@ -745,7 +820,7 @@ def faculty_student_report():
     
     if selected_batch and selected_exam_ids:
         # Get students in the selected batch
-        students = User.query.filter_by(role='student', batch=selected_batch).all()
+        students = account_service.scoped_students_query(current_user).filter(User.batch == selected_batch).all()
         summary['total_students'] = len(students)
         
         # Get selected exam objects in order
@@ -834,8 +909,12 @@ def faculty_student_report_pdf():
 def faculty_student_profile(student_id):
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
-    student = User.query.get_or_404(student_id)
-    student_exams = StudentExam.query.filter_by(student_id=student_id).all()
+    student = _managed_student_or_404(student_id)
+    # Only attempts on exams this faculty can see — not another department's marks
+    accessible = [e.id for e in _get_faculty_exams()]
+    student_exams = (StudentExam.query.filter(StudentExam.student_id == student_id,
+                                              StudentExam.exam_id.in_(accessible)).all()
+                     if accessible else [])
     return render_template('student/student_profile.html', student=student, student_exams=student_exams)
 
 @faculty_bp.route('/faculty/student/<int:student_id>/edit', methods=['GET', 'POST'])
@@ -851,6 +930,8 @@ def faculty_edit_student(student_id):
     if student.role != 'student':
         flash('Only student accounts can be edited here.', 'error')
         return redirect(url_for('faculty.faculty_students'))
+    if not account_service.can_manage_student(current_user, student):
+        abort(404)
 
     if request.method == 'POST':
         full_name = (request.form.get('full_name') or '').strip()
@@ -894,19 +975,28 @@ def download_template():
 def faculty_change_student_password(student_id):
     if current_user.role not in ['faculty', 'admin']:
         return jsonify({"success": False, "message": "Unauthorized"}), 403
-    student = User.query.get_or_404(student_id)
+    student = User.query.get(student_id)
     # Never let faculty reset a staff password — that would hand over the account
-    if student.role != 'student':
+    if student is not None and student.role != 'student':
         return jsonify({"success": False, "message": "Only student passwords can be reset here."}), 403
-    student.password_hash = generate_password_hash("123456789", method='pbkdf2:sha256')
-    # Reset to a default password -> student must set their own again on next login
+    if not account_service.can_manage_student(current_user, student):
+        return jsonify({"success": False, "message": "Student not found."}), 404
+
+    # A fresh random password, shown to the faculty once. A fixed default
+    # would let anyone who knows it take the account before the student does.
+    temp_password = account_service.generate_temp_password()
+    student.password_hash = generate_password_hash(temp_password, method='pbkdf2:sha256')
     student.password_changed = False
     student.password_changed_at = None
     student.password_hint = None
     db.session.commit()
+    current_app.logger.info('user %s reset password of student %s', current_user.id, student.id)
     return jsonify({
         "success": True,
-        "message": "Password reset successfully. The student must set a new password on next login."
+        "temporary_password": temp_password,
+        "message": (f"Password reset. Temporary password: {temp_password}\n"
+                    "Give it to the student — it is not shown again. "
+                    "They must set their own password on next login."),
     })
 @faculty_bp.route('/faculty/split-questions')
 @login_required
@@ -1033,6 +1123,8 @@ def faculty_reset_student_face(student_id):
     student = User.query.get_or_404(student_id)
     if student.role != 'student':
         return jsonify({"success": False, "message": "Not a student account."}), 400
+    if not account_service.can_manage_student(current_user, student):
+        return jsonify({"success": False, "message": "Student not found."}), 404
 
     payload = request.get_json(silent=True) or request.form or {}
     reason = (payload.get('reason') or '').strip()
@@ -1067,7 +1159,7 @@ def faculty_student_face_history(student_id):
             .order_by(FaceAuditLog.created_at.desc())
             .limit(50).all())
 
-    student = User.query.get_or_404(student_id)
+    student = _managed_student_or_404(student_id)
     return jsonify({
         "success": True,
         "enrollment": face_service.enrollment_info(student),
@@ -1184,10 +1276,11 @@ def delete_student(student_id):
     student = User.query.get_or_404(student_id)
     if student.role != 'student':
         return jsonify({"success": False, "error": "Can only delete students"}), 400
-        
+
     try:
-        db.session.delete(student)
-        db.session.commit()
+        deleted, refused = account_service.delete_students([student_id], current_user)
+        if not deleted:
+            return jsonify({"success": False, "error": "Student not found."}), 404
         return jsonify({"success": True})
     except Exception as e:
         db.session.rollback()
@@ -1201,16 +1294,18 @@ def delete_students():
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "error": "Access denied"}), 403
         
-    data = request.get_json()
-    student_ids = data.get('ids', [])
-    
+    data = request.get_json(silent=True) or {}
+    try:
+        student_ids = [int(i) for i in (data.get('ids') or [])]
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid selection"}), 400
+
     if not student_ids:
         return jsonify({"success": False, "error": "No students selected"}), 400
-        
+
     try:
-        User.query.filter(User.id.in_(student_ids), User.role == 'student').delete(synchronize_session=False)
-        db.session.commit()
-        return jsonify({"success": True})
+        deleted, refused = account_service.delete_students(student_ids, current_user)
+        return jsonify({"success": True, "deleted": deleted, "skipped": len(refused)})
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception('request failed')
@@ -1230,8 +1325,8 @@ def export_students():
     dept = request.args.get('department', '')
     ids = request.args.getlist('ids')
     
-    query = User.query.filter_by(role='student')
-    
+    query = account_service.scoped_students_query(current_user)
+
     if ids:
         query = query.filter(User.id.in_(ids))
     else:

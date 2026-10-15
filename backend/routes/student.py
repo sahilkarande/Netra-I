@@ -185,6 +185,8 @@ def global_leaderboard():
     # 3. Aggregate data by student
     student_data = {}
     for se in all_submitted:
+        if se.student is None:          # account removed; never crash the board
+            continue
         # Check batch filter at student level
         if batch_filter and se.student.batch != batch_filter:
             continue
