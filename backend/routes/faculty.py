@@ -6,7 +6,8 @@ import pandas as pd
 import shutil
 import traceback
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app, session, abort
+from functools import wraps
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
@@ -16,13 +17,40 @@ from backend.database import db
 from backend.models import User, Exam, Question, StudentExam, StudentAnswer, ExamViolation
 from backend.services.pdf_generator import generate_batch_report_pdf
 from backend.services.proctor_service import PROCTOR_INSTANCES, _heartbeat_registry, _last_frame_processed
-from backend.services.exam_service import assign_shuffle
+from backend.services.exam_service import assign_shuffle, finalize_overdue_attempts
 from backend.socket_io import socketio
+from backend.services import account_service
 
 faculty_bp = Blueprint('faculty', __name__)
 
+STAFF_ROLES = ('faculty', 'admin')
+
+
+def _is_staff():
+    return current_user.is_authenticated and current_user.role in STAFF_ROLES
+
+
+def staff_required(view):
+    """Faculty/admin only. Every faculty route carries this, so a missing role
+    check inside a view can never hand a student staff powers."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not _is_staff():
+            wants_json = (request.is_json
+                          or request.accept_mimetypes.best == 'application/json'
+                          or request.path.startswith('/api/'))
+            if wants_json or request.method != 'GET':
+                return jsonify({"success": False, "error": "Access denied"}), 403
+            flash('Access denied', 'error')
+            return redirect(url_for('auth.index'))
+        return view(*args, **kwargs)
+    return wrapped
+
+
 def _get_faculty_exams():
     """Retrieve exams accessible to current faculty (own exams + same course/department exams) or all if admin"""
+    if not _is_staff():
+        return []
     if current_user.role == 'admin':
         return Exam.query.order_by(Exam.created_at.desc()).all()
     user_course = current_user.course or current_user.department
@@ -38,7 +66,9 @@ def _get_faculty_exams():
 
 def _faculty_can_access_exam(exam):
     """Check if current user can access/manage the exam"""
-    if not exam:
+    # Students carry course/department too, so the department match below must
+    # never be reached for them.
+    if not exam or not _is_staff():
         return False
     if current_user.role == 'admin':
         return True
@@ -50,6 +80,17 @@ def _faculty_can_access_exam(exam):
         if creator_course and creator_course == user_course:
             return True
     return False
+
+def _managed_student_or_404(student_id):
+    """The student, if the current staff member may manage them; else 404.
+
+    404 rather than 403 so other departments' student IDs cannot be probed.
+    """
+    student = User.query.get(student_id)
+    if not account_service.can_manage_student(current_user, student):
+        abort(404)
+    return student
+
 
 def _faculty_can_access_student(student_id):
     """Check if faculty or course faculty created an exam that this student has taken"""
@@ -64,6 +105,7 @@ def _faculty_can_access_student(student_id):
 
 @faculty_bp.route('/faculty/dashboard')
 @login_required
+@staff_required
 def faculty_dashboard():
     if current_user.role != 'faculty' and current_user.role != 'admin':
         return redirect(url_for('auth.index'))
@@ -71,6 +113,7 @@ def faculty_dashboard():
     exams = _get_faculty_exams()
     
     exam_ids = [e.id for e in exams]
+    finalize_overdue_attempts(exam_ids=exam_ids)
     
     # Calculate statistics for the dashboard
     total_attempts = StudentExam.query.filter(StudentExam.exam_id.in_(exam_ids)).count() if exam_ids else 0
@@ -147,6 +190,7 @@ def _visibility_state(exams):
 
 @faculty_bp.route('/faculty/visibility-state')
 @login_required
+@staff_required
 def faculty_visibility_state():
     """Current results / leaderboard visibility for this faculty's exams."""
     if current_user.role not in ('faculty', 'admin'):
@@ -158,6 +202,7 @@ def faculty_visibility_state():
 
 @faculty_bp.route('/faculty/set_leaderboard', methods=['POST'])
 @login_required
+@staff_required
 def faculty_set_leaderboard():
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "message": "Unauthorized"}), 403
@@ -201,6 +246,7 @@ def faculty_set_leaderboard():
 
 @faculty_bp.route('/faculty/set_results_visibility', methods=['POST'])
 @login_required
+@staff_required
 def faculty_set_results_visibility():
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "message": "Unauthorized"}), 403
@@ -253,6 +299,7 @@ def faculty_set_results_visibility():
 
 @faculty_bp.route('/faculty/exam/create', methods=['GET', 'POST'])
 @login_required
+@staff_required
 def create_exam():
     """Create a single exam.
 
@@ -279,7 +326,8 @@ def create_exam():
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            flash(f'Could not create the exam: {e}', 'error')
+            current_app.logger.exception('create_exam failed')
+            flash('Could not create the exam. Please try again.', 'error')
             return render_template('faculty/create_exam.html',
                                    form=request.form), 500
 
@@ -294,6 +342,7 @@ def create_exam():
 
 @faculty_bp.route('/faculty/import_students', methods=['POST'])
 @login_required
+@staff_required
 def import_students():
     if current_user.role != 'faculty' and current_user.role != 'admin':
         flash('Access denied', 'error')
@@ -333,6 +382,7 @@ def import_students():
 
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
         added, skipped = 0, 0
+        credentials = []
         errors = []
 
         def clean_string(value):
@@ -361,7 +411,12 @@ def import_students():
                 prn_raw = clean_string(row.get('prn_number'))
                 prn_clean = prn_raw.replace('.', '').replace(' ', '') if prn_raw else ''
 
-                password = clean_string(row.get('password')) or 'Student@123'
+                # A password from the file is the faculty's choice; otherwise a
+                # random one per student, never a shared default.
+                password = clean_string(row.get('password'))
+                generated = not password
+                if generated:
+                    password = account_service.generate_temp_password()
                 hashed_pw = generate_password_hash(password)
 
                 student = User(
@@ -374,10 +429,18 @@ def import_students():
                     roll_id=clean_string(row.get('roll_id')) or None,
                     password_hash=hashed_pw,
                     role='student',
-                    is_verified=True
+                    is_verified=True,
+                    created_by=current_user.id,
                 )
                 db.session.add(student)
                 db.session.commit()
+
+                if generated:
+                    credentials.append({
+                        'full_name': student.full_name, 'username': student.username,
+                        'prn_number': student.prn_number, 'email': student.email,
+                        'temporary_password': password,
+                    })
 
                 if exam:
                     student_exam = StudentExam(student_id=student.id, exam_id=exam.id)
@@ -387,21 +450,28 @@ def import_students():
 
                 added += 1
             except Exception as e:
-                errors.append(f"Row {index + 2}: {str(e)}")
+                current_app.logger.warning("import row %s failed: %s", index + 2, e)
+                errors.append(f"Row {index + 2}: could not be imported")
                 skipped += 1
                 db.session.rollback()
 
         db.session.commit()
         flash(f"✅ {added} added | ⚠️ {skipped} skipped", 'success')
+        if credentials:
+            _stash_credentials(credentials)
+            flash(f"{len(credentials)} student(s) were given a random temporary password. "
+                  "Download the credentials sheet now — it can only be downloaded once.", 'warning')
         return redirect(url_for('faculty.faculty_students'))
 
     except Exception as e:
         db.session.rollback()
-        flash(f"Error processing file: {str(e)}", 'error')
+        current_app.logger.exception('import_students failed')
+        flash("Could not read the file. Check it is a valid CSV, Excel or JSON file.", 'error')
         return redirect(url_for('faculty.faculty_students'))
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/delete', methods=['POST'])
 @login_required
+@staff_required
 def delete_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -415,6 +485,7 @@ def delete_exam(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/upload', methods=['GET', 'POST'])
 @login_required
+@staff_required
 def upload_questions(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -426,70 +497,56 @@ def upload_questions(exam_id):
             flash('No file selected', 'error')
             return redirect(request.url)
             
-        filename = secure_filename(file.filename).lower()
-        try:
-            questions_data = []
-            if filename.endswith('.csv'):
-                stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-                questions_data = list(csv.DictReader(stream))
-            elif filename.endswith('.json'):
-                questions_data = json.loads(file.stream.read().decode("UTF8"))
-            elif filename.endswith('.xlsx') or filename.endswith('.xls'):
-                import pandas as pd
-                df = pd.read_excel(file.stream)
-                questions_data = df.to_dict(orient='records')
-            
-            if not questions_data:
-                flash('No valid data found in file', 'error')
-                return redirect(request.url)
+        from backend.services.question_splitter import validate_questions
 
-            # Check for questions count
-            count = 0
-            for row in questions_data:
-                # Robust column mapping
-                question_text = row.get('question') or row.get('question_text') or row.get('text')
-                if not question_text: continue
-                
-                a = row.get('a') or row.get('option_a') or row.get('option1') or row.get('Option A')
-                b = row.get('b') or row.get('option_b') or row.get('option2') or row.get('Option B')
-                c = row.get('c') or row.get('option_c') or row.get('option3') or row.get('Option C')
-                d = row.get('d') or row.get('option_d') or row.get('option4') or row.get('Option D')
-                ans = str(row.get('answer') or row.get('correct_answer') or row.get('correct') or 'A').strip().upper()
-                points = float(row.get('points') or row.get('score') or 1.0)
-
-                q = Question(
-                    exam_id=exam_id,
-                    question_text=question_text,
-                    option_a=str(a),
-                    option_b=str(b),
-                    option_c=str(c),
-                    option_d=str(d),
-                    correct_answer=ans,
-                    points=points
-                )
-                db.session.add(q)
-                count += 1
-            
-            db.session.commit()
-            flash(f'Successfully uploaded {count} questions!', 'success')
-            return redirect(url_for('faculty.view_exam', exam_id=exam_id))
-        except Exception as e:
-            db.session.rollback()
-            traceback.print_exc()
-            flash(f'Error processing file: {str(e)}', 'error')
+        filename = secure_filename(file.filename or '').lower()
+        questions, errors = validate_questions(filename, file.read())
+        if errors:
+            # All-or-nothing: a paper is never half-uploaded
+            shown = errors[:8]
+            more = f' (+{len(errors) - len(shown)} more)' if len(errors) > len(shown) else ''
+            flash('Nothing was uploaded. Fix these rows and try again: '
+                  + ' | '.join(shown) + more, 'error')
             return redirect(request.url)
-            
+
+        try:
+            next_order = (db.session.query(func.max(Question.order_number))
+                          .filter_by(exam_id=exam_id).scalar() or 0)
+            for i, q in enumerate(questions, start=1):
+                db.session.add(Question(
+                    exam_id=exam_id,
+                    question_text=q['question'],
+                    option_a=q['option_a'],
+                    option_b=q['option_b'],
+                    option_c=q['option_c'],
+                    option_d=q['option_d'],
+                    correct_answer=q['correct_answer'],
+                    points=q['points'],
+                    order_number=next_order + i,
+                ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('upload_questions failed')
+            flash('Could not save the questions. Please try again.', 'error')
+            return redirect(request.url)
+
+        flash(f'Successfully uploaded {len(questions)} questions!', 'success')
+        return redirect(url_for('faculty.view_exam', exam_id=exam_id))
+
     return render_template('faculty/upload_questions.html', exam=exam)
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>')
 @login_required
+@staff_required
 def view_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
         return redirect(url_for('faculty.faculty_dashboard'))
-    
+    finalize_overdue_attempts(exam_ids=[exam.id])
+
     # Get all students for the selection modal
-    all_students = User.query.filter_by(role='student').order_by(User.full_name).all()
+    all_students = account_service.scoped_students_query(current_user).order_by(User.full_name).all()
     
     # Get unique batches
     all_batches = db.session.query(User.batch).filter(User.role == 'student', User.batch != None).distinct().all()
@@ -520,11 +577,13 @@ def view_exam(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/analytics')
 @login_required
+@staff_required
 def exam_analytics(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
         return redirect(url_for('faculty.faculty_dashboard'))
-    
+    finalize_overdue_attempts(exam_ids=[exam.id])
+
     student_exams = StudentExam.query.filter_by(exam_id=exam_id).all()
     
     total_attempts = len(student_exams)
@@ -564,6 +623,7 @@ def exam_analytics(exam_id):
 
 @faculty_bp.route('/api/faculty/publish-results/<int:exam_id>', methods=['POST'])
 @login_required
+@staff_required
 def faculty_publish_results(exam_id):
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"error": "Access denied"}), 403
@@ -612,8 +672,53 @@ def faculty_publish_results(exam_id):
 
     return jsonify({"success": True, "message": f"Results published! {deleted_images} images cleaned."})
 
+def _credentials_dir():
+    path = os.path.join(current_app.instance_path, 'credentials')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _stash_credentials(rows):
+    """Keep the generated passwords just long enough for one download.
+
+    They are written to instance/ (never served statically), bound to this
+    session, and deleted on download.
+    """
+    import secrets as _secrets
+    token = _secrets.token_urlsafe(16)
+    with open(os.path.join(_credentials_dir(), f'{token}.csv'), 'wb') as f:
+        f.write(account_service.credentials_csv(rows))
+    try:
+        os.chmod(os.path.join(_credentials_dir(), f'{token}.csv'), 0o600)
+    except OSError:
+        pass
+    session['credentials_token'] = token
+
+
+@faculty_bp.route('/faculty/credentials/<token>')
+@login_required
+@staff_required
+def download_credentials(token):
+    """One-time download of the temporary passwords from the last import."""
+    if not token or session.get('credentials_token') != token:
+        flash('That credentials sheet is no longer available.', 'error')
+        return redirect(url_for('faculty.faculty_students'))
+    path = os.path.join(_credentials_dir(), f'{secure_filename(token)}.csv')
+    session.pop('credentials_token', None)
+    try:
+        with open(path, 'rb') as f:
+            data = f.read()
+        os.remove(path)
+    except OSError:
+        flash('That credentials sheet is no longer available.', 'error')
+        return redirect(url_for('faculty.faculty_students'))
+    return send_file(io.BytesIO(data), mimetype='text/csv', as_attachment=True,
+                     download_name=f"student_credentials_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+
+
 @faculty_bp.route('/faculty/students')
 @login_required
+@staff_required
 def faculty_students():
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
@@ -624,7 +729,7 @@ def faculty_students():
     sort = request.args.get('sort', '')
     verified = request.args.get('verified', '')
 
-    query = User.query.filter_by(role='student')
+    query = account_service.scoped_students_query(current_user)
 
     if q:
         search = f"%{q}%"
@@ -663,10 +768,89 @@ def faculty_students():
     return render_template('faculty/manage_students.html', 
                          students=students, 
                          batches=batches, 
-                         departments=departments)
+                         departments=departments,
+                         credentials_token=session.get('credentials_token'))
+
+def _empty_summary():
+    return {'total_students': 0, 'appeared': 0, 'passed': 0, 'failed': 0,
+            'absent': 0, 'average_marks': 0.0, 'pass_percentage': 0.0}
+
+
+def _summarise_rows(report_data):
+    """Recompute the summary block from finished report rows."""
+    summary = _empty_summary()
+    summary['total_students'] = len(report_data)
+    total_pct = 0.0
+    for row in report_data:
+        if row['status'] == 'absent':
+            summary['absent'] += 1
+            continue
+        summary['appeared'] += 1
+        summary['passed' if row['status'] == 'pass' else 'failed'] += 1
+        total_pct += row['percentage']
+    if summary['appeared']:
+        summary['average_marks'] = total_pct / summary['appeared']
+        summary['pass_percentage'] = summary['passed'] / summary['appeared'] * 100
+    return summary
+
+
+def _build_batch_report(selected_batch, selected_exam_ids, exams):
+    """Rows for the batch report: one per student, one mark column per exam.
+
+    Shared by the on-screen report and its PDF so both always agree. Only
+    exams in `exams` (what this staff member can access) are included.
+    """
+    report_data, exam_titles = [], []
+    if not (selected_batch and selected_exam_ids):
+        return exam_titles, report_data, _empty_summary()
+
+    by_id = {e.id: e for e in exams}
+    selected_exams = [by_id[eid] for eid in selected_exam_ids if eid in by_id]
+    exam_titles = [e.title for e in selected_exams]
+
+    students = account_service.scoped_students_query(current_user).filter(
+        User.batch == selected_batch).all()
+
+    for student in students:
+        row = {
+            'prn_number': student.prn_number,
+            'full_name': student.full_name or student.username,
+            'exam_marks': [],
+            'total_marks': 0.0,
+            'max_possible': 0.0,
+            'percentage': 0.0,
+            'status': 'absent',
+        }
+        for exam in selected_exams:
+            se = StudentExam.query.filter_by(student_id=student.id, exam_id=exam.id).first()
+            if se and se.status in ('submitted', 'completed'):
+                score = se.score or 0.0
+                row['exam_marks'].append(round(score, 2))
+                row['total_marks'] += score
+                row['max_possible'] += (se.total_points or 100.0)
+            else:
+                row['exam_marks'].append('Absent')
+        _finish_row(row)
+        report_data.append(row)
+
+    return exam_titles, report_data, _summarise_rows(report_data)
+
+
+def _finish_row(row):
+    """Percentage and pass/fail from a row's marks."""
+    marks = [m for m in row['exam_marks'] if m != 'Absent']
+    if not marks:
+        row['status'] = 'absent'
+        row['percentage'] = 0.0
+        return
+    if row['max_possible'] > 0:
+        row['percentage'] = row['total_marks'] / row['max_possible'] * 100
+    row['status'] = 'pass' if row['percentage'] >= 50 else 'fail'
+
 
 @faculty_bp.route('/faculty/student_report', methods=['GET'])
 @login_required
+@staff_required
 def faculty_student_report():
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
@@ -685,87 +869,9 @@ def faculty_student_report():
     selected_exam_ids_str = request.args.getlist('exam_ids')
     selected_exam_ids = [int(eid) for eid in selected_exam_ids_str if eid.isdigit()]
 
-    report_data = []
-    exam_titles = []
-    summary = {
-        'total_students': 0,
-        'appeared': 0,
-        'passed': 0,
-        'failed': 0,
-        'absent': 0,
-        'average_marks': 0.0,
-        'pass_percentage': 0.0
-    }
-    
-    if selected_batch and selected_exam_ids:
-        # Get students in the selected batch
-        students = User.query.filter_by(role='student', batch=selected_batch).all()
-        summary['total_students'] = len(students)
-        
-        # Get selected exam objects in order
-        selected_exams = []
-        for eid in selected_exam_ids:
-            for ex in exams:
-                if ex.id == eid:
-                    selected_exams.append(ex)
-                    exam_titles.append(ex.title)
-                    break
-        
-        total_marks_all = 0
-        
-        for student in students:
-            student_row = {
-                'prn_number': student.prn_number,
-                'full_name': student.full_name or student.username,
-                'exam_marks': [],
-                'total_marks': 0.0,
-                'max_possible': 0.0,
-                'percentage': 0.0,
-                'status': 'absent'
-            }
-            
-            appeared_in_any = False
-            passed_all = True
-            
-            for exam in selected_exams:
-                # Find StudentExam for this student and exam
-                student_exam = StudentExam.query.filter_by(student_id=student.id, exam_id=exam.id).first()
-                
-                if student_exam and student_exam.status in ['submitted', 'completed']:
-                    appeared_in_any = True
-                    score = student_exam.score or 0.0
-                    student_row['exam_marks'].append(round(score, 2))
-                    student_row['total_marks'] += score
-                    student_row['max_possible'] += (student_exam.total_points or 100.0) # Using total_points if available
-                    
-                    if not student_exam.passed:
-                        passed_all = False
-                else:
-                    student_row['exam_marks'].append('Absent')
-                    passed_all = False
-                    
-            if appeared_in_any:
-                summary['appeared'] += 1
-                if student_row['max_possible'] > 0:
-                    student_row['percentage'] = (student_row['total_marks'] / student_row['max_possible']) * 100
-                
-                if student_row['percentage'] >= 50:
-                    student_row['status'] = 'pass'
-                    summary['passed'] += 1
-                else:
-                    student_row['status'] = 'fail'
-                    summary['failed'] += 1
-                    
-                total_marks_all += student_row['percentage']
-            else:
-                summary['absent'] += 1
-                
-            report_data.append(student_row)
-            
-        if summary['appeared'] > 0:
-            summary['average_marks'] = total_marks_all / summary['appeared']
-            summary['pass_percentage'] = (summary['passed'] / summary['appeared']) * 100
-            
+    exam_titles, report_data, summary = _build_batch_report(
+        selected_batch, selected_exam_ids, exams)
+
     return render_template('faculty/student_report.html',
                          batches=batches,
                          exams=exams,
@@ -777,21 +883,90 @@ def faculty_student_report():
 
 @faculty_bp.route('/faculty/student_report/pdf', methods=['POST'])
 @login_required
+@staff_required
 def faculty_student_report_pdf():
-    # Placeholder for PDF generation
-    return "PDF Report generation triggered"
+    """Batch report as a PDF, matching what the faculty sees on screen.
+
+    Marks come from the database; the page's optional hand edits, column
+    names, notes and row order are presentation only. Edited rows are flagged
+    in the PDF so a changed mark is never passed off as the recorded one.
+    """
+    import base64
+    from backend.services.pdf_generator import generate_batch_report_pdf
+
+    payload = request.get_json(silent=True) or {}
+    batch_name = str(payload.get('batch_name') or '').strip()
+    try:
+        exam_ids = [int(e) for e in (payload.get('exam_ids') or [])]
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid exam selection."}), 400
+    if not batch_name or not exam_ids:
+        return jsonify({"success": False, "error": "Choose a batch and at least one exam."}), 400
+
+    exam_titles, report_data, _summary = _build_batch_report(
+        batch_name, exam_ids, _get_faculty_exams())
+    if not exam_titles:
+        return jsonify({"success": False, "error": "None of those exams are available to you."}), 403
+
+    # Hand edits: {"<row>_<exam>": value} in on-screen (database) row order
+    edited = set()
+    for key, value in (payload.get('mark_edits') or {}).items():
+        try:
+            si, mi = (int(x) for x in str(key).split('_', 1))
+            row = report_data[si]
+            if not 0 <= mi < len(row['exam_marks']):
+                continue
+            new = 'Absent' if str(value).strip().lower() == 'absent' else round(float(value), 2)
+        except (ValueError, IndexError, TypeError):
+            continue
+        row['exam_marks'][mi] = new
+        edited.add(si)
+    for si in edited:
+        row = report_data[si]
+        row['total_marks'] = sum(m for m in row['exam_marks'] if m != 'Absent')
+        _finish_row(row)
+        row['full_name'] = f"{row['full_name']} (edited)"
+
+    # Visible order / filtering from the page, by PRN
+    prn_order = [str(p) for p in (payload.get('prn_order') or []) if str(p)]
+    if prn_order:
+        by_prn = {}
+        for row in report_data:
+            by_prn.setdefault(str(row['prn_number'] or ''), []).append(row)
+        report_data = [r for p in prn_order for r in by_prn.pop(p, [])]
+
+    col_names = [str(c).strip() for c in (payload.get('col_names') or [])]
+    if len(col_names) == len(exam_titles):
+        exam_titles = [c or t for c, t in zip(col_names, exam_titles)]
+    col_notes = [str(n) for n in (payload.get('col_notes') or [])][:len(exam_titles)]
+
+    pdf = generate_batch_report_pdf(batch_name, exam_titles, report_data,
+                                    _summarise_rows(report_data), col_notes=col_notes)
+    data = pdf.getvalue() if hasattr(pdf, 'getvalue') else bytes(pdf)
+    safe_batch = ''.join(c if c.isalnum() or c in '-_' else '_' for c in batch_name) or 'batch'
+    return jsonify({
+        "success": True,
+        "filename": f"{safe_batch}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+        "pdf_b64": base64.b64encode(data).decode('ascii'),
+    })
 
 @faculty_bp.route('/faculty/student/<int:student_id>/profile')
 @login_required
+@staff_required
 def faculty_student_profile(student_id):
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
-    student = User.query.get_or_404(student_id)
-    student_exams = StudentExam.query.filter_by(student_id=student_id).all()
+    student = _managed_student_or_404(student_id)
+    # Only attempts on exams this faculty can see — not another department's marks
+    accessible = [e.id for e in _get_faculty_exams()]
+    student_exams = (StudentExam.query.filter(StudentExam.student_id == student_id,
+                                              StudentExam.exam_id.in_(accessible)).all()
+                     if accessible else [])
     return render_template('student/student_profile.html', student=student, student_exams=student_exams)
 
 @faculty_bp.route('/faculty/student/<int:student_id>/edit', methods=['GET', 'POST'])
 @login_required
+@staff_required
 def faculty_edit_student(student_id):
     if current_user.role not in ('faculty', 'admin'):
         flash('Access denied', 'error')
@@ -802,6 +977,8 @@ def faculty_edit_student(student_id):
     if student.role != 'student':
         flash('Only student accounts can be edited here.', 'error')
         return redirect(url_for('faculty.faculty_students'))
+    if not account_service.can_manage_student(current_user, student):
+        abort(404)
 
     if request.method == 'POST':
         full_name = (request.form.get('full_name') or '').strip()
@@ -823,6 +1000,7 @@ def faculty_edit_student(student_id):
 
 @faculty_bp.route('/faculty/download_template')
 @login_required
+@staff_required
 def download_template():
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
@@ -840,25 +1018,36 @@ def download_template():
 
 @faculty_bp.route('/faculty/change-student-password/<int:student_id>', methods=['POST'])
 @login_required
+@staff_required
 def faculty_change_student_password(student_id):
     if current_user.role not in ['faculty', 'admin']:
         return jsonify({"success": False, "message": "Unauthorized"}), 403
-    student = User.query.get_or_404(student_id)
+    student = User.query.get(student_id)
     # Never let faculty reset a staff password — that would hand over the account
-    if student.role != 'student':
+    if student is not None and student.role != 'student':
         return jsonify({"success": False, "message": "Only student passwords can be reset here."}), 403
-    student.password_hash = generate_password_hash("123456789", method='pbkdf2:sha256')
-    # Reset to a default password -> student must set their own again on next login
+    if not account_service.can_manage_student(current_user, student):
+        return jsonify({"success": False, "message": "Student not found."}), 404
+
+    # A fresh random password, shown to the faculty once. A fixed default
+    # would let anyone who knows it take the account before the student does.
+    temp_password = account_service.generate_temp_password()
+    student.password_hash = generate_password_hash(temp_password, method='pbkdf2:sha256')
     student.password_changed = False
     student.password_changed_at = None
     student.password_hint = None
     db.session.commit()
+    current_app.logger.info('user %s reset password of student %s', current_user.id, student.id)
     return jsonify({
         "success": True,
-        "message": "Password reset successfully. The student must set a new password on next login."
+        "temporary_password": temp_password,
+        "message": (f"Password reset. Temporary password: {temp_password}\n"
+                    "Give it to the student — it is not shown again. "
+                    "They must set their own password on next login."),
     })
 @faculty_bp.route('/faculty/split-questions')
 @login_required
+@staff_required
 def split_questions_page():
     """Standalone tool: split one question file into several set files."""
     if current_user.role not in ('faculty', 'admin'):
@@ -869,6 +1058,7 @@ def split_questions_page():
 
 @faculty_bp.route('/faculty/split-questions/preview', methods=['POST'])
 @login_required
+@staff_required
 def split_questions_preview():
     """Parse the uploaded bank and show how it would divide. Writes nothing."""
     if current_user.role not in ('faculty', 'admin'):
@@ -919,6 +1109,7 @@ def split_questions_preview():
 
 @faculty_bp.route('/faculty/split-questions/download', methods=['POST'])
 @login_required
+@staff_required
 def split_questions_download():
     """Split the uploaded bank and return the sets as a ZIP."""
     if current_user.role not in ('faculty', 'admin'):
@@ -965,6 +1156,7 @@ def split_questions_download():
 
 @faculty_bp.route('/faculty/student/<int:student_id>/reset-face', methods=['POST'])
 @login_required
+@staff_required
 def faculty_reset_student_face(student_id):
     """Clear a student's registered face so they can enrol again.
 
@@ -978,6 +1170,8 @@ def faculty_reset_student_face(student_id):
     student = User.query.get_or_404(student_id)
     if student.role != 'student':
         return jsonify({"success": False, "message": "Not a student account."}), 400
+    if not account_service.can_manage_student(current_user, student):
+        return jsonify({"success": False, "message": "Student not found."}), 404
 
     payload = request.get_json(silent=True) or request.form or {}
     reason = (payload.get('reason') or '').strip()
@@ -998,6 +1192,7 @@ def faculty_reset_student_face(student_id):
 
 @faculty_bp.route('/faculty/student/<int:student_id>/face-history')
 @login_required
+@staff_required
 def faculty_student_face_history(student_id):
     """Who changed this student's face template, and when."""
     if current_user.role not in ('faculty', 'admin'):
@@ -1011,7 +1206,7 @@ def faculty_student_face_history(student_id):
             .order_by(FaceAuditLog.created_at.desc())
             .limit(50).all())
 
-    student = User.query.get_or_404(student_id)
+    student = _managed_student_or_404(student_id)
     return jsonify({
         "success": True,
         "enrollment": face_service.enrollment_info(student),
@@ -1028,6 +1223,7 @@ def faculty_student_face_history(student_id):
 
 @faculty_bp.route('/api/faculty/batch-create-exams', methods=['POST'])
 @login_required
+@staff_required
 def batch_create_exams():
     """Create several exams at once, each optionally with its own question file.
 
@@ -1075,9 +1271,17 @@ def batch_create_exams():
             questions_count = 0
             upload = request.files.get(f'file_{index}')
             if upload and upload.filename:
-                ok, _message, questions = question_splitter.parse_questions(
+                questions, q_errors = question_splitter.validate_questions(
                     secure_filename(upload.filename), upload.read())
-                if ok:
+                if q_errors:
+                    # Same rule as a single upload: no half-built paper
+                    db.session.delete(new_exam)     # it was flushed for its id
+                    db.session.flush()
+                    failed.append({"row": index + 1,
+                                   "title": row.get('title') or f'Row {index + 1}',
+                                   "errors": q_errors[:8]})
+                    continue
+                if questions:
                     for order, q in enumerate(questions, start=1):
                         db.session.add(Question(
                             exam_id=new_exam.id,
@@ -1101,7 +1305,8 @@ def batch_create_exams():
     except Exception as e:
         db.session.rollback()
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.exception('request failed')
+        return jsonify({"success": False, "error": "The operation failed. Nothing was changed."}), 500
 
     if not created:
         return jsonify({"success": False,
@@ -1118,6 +1323,7 @@ def batch_create_exams():
 
 @faculty_bp.route('/faculty/delete_student/<int:student_id>', methods=['POST'])
 @login_required
+@staff_required
 def delete_student(student_id):
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "error": "Access denied"}), 403
@@ -1125,37 +1331,44 @@ def delete_student(student_id):
     student = User.query.get_or_404(student_id)
     if student.role != 'student':
         return jsonify({"success": False, "error": "Can only delete students"}), 400
-        
+
     try:
-        db.session.delete(student)
-        db.session.commit()
+        deleted, refused = account_service.delete_students([student_id], current_user)
+        if not deleted:
+            return jsonify({"success": False, "error": "Student not found."}), 404
         return jsonify({"success": True})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.exception('request failed')
+        return jsonify({"success": False, "error": "The operation failed. Nothing was changed."}), 500
 
 @faculty_bp.route('/faculty/delete_students', methods=['POST'])
 @login_required
+@staff_required
 def delete_students():
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "error": "Access denied"}), 403
         
-    data = request.get_json()
-    student_ids = data.get('ids', [])
-    
+    data = request.get_json(silent=True) or {}
+    try:
+        student_ids = [int(i) for i in (data.get('ids') or [])]
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid selection"}), 400
+
     if not student_ids:
         return jsonify({"success": False, "error": "No students selected"}), 400
-        
+
     try:
-        User.query.filter(User.id.in_(student_ids), User.role == 'student').delete(synchronize_session=False)
-        db.session.commit()
-        return jsonify({"success": True})
+        deleted, refused = account_service.delete_students(student_ids, current_user)
+        return jsonify({"success": True, "deleted": deleted, "skipped": len(refused)})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.exception('request failed')
+        return jsonify({"success": False, "error": "The operation failed. Nothing was changed."}), 500
 
 @faculty_bp.route('/faculty/export_students')
 @login_required
+@staff_required
 def export_students():
     if current_user.role not in ('faculty', 'admin'):
         flash('Access denied', 'error')
@@ -1167,8 +1380,8 @@ def export_students():
     dept = request.args.get('department', '')
     ids = request.args.getlist('ids')
     
-    query = User.query.filter_by(role='student')
-    
+    query = account_service.scoped_students_query(current_user)
+
     if ids:
         query = query.filter(User.id.in_(ids))
     else:
@@ -1214,6 +1427,7 @@ def export_students():
     )
 @faculty_bp.route('/faculty/exam/<int:exam_id>/preview_questions', methods=['POST'])
 @login_required
+@staff_required
 def preview_questions(exam_id):
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"error": "Access denied"}), 403
@@ -1241,11 +1455,13 @@ def preview_questions(exam_id):
         return jsonify({"rows": rows})
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        current_app.logger.exception('preview_questions failed')
+        return jsonify({"error": "Could not read the file."}), 500
     return jsonify({"error": "Invalid file format"}), 400
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/force_end', methods=['POST'])
 @login_required
+@staff_required
 def faculty_force_end_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1277,6 +1493,7 @@ def faculty_force_end_exam(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/force_end_student/<int:student_exam_id>', methods=['POST'])
 @login_required
+@staff_required
 def faculty_force_end_student(exam_id, student_exam_id):
     se = StudentExam.query.get_or_404(student_exam_id)
     exam = Exam.query.get_or_404(exam_id)
@@ -1299,6 +1516,7 @@ def faculty_force_end_student(exam_id, student_exam_id):
     return redirect(url_for('faculty.view_exam', exam_id=exam_id))
 @faculty_bp.route('/faculty/exam/<int:exam_id>/generate_key', methods=['POST'])
 @login_required
+@staff_required
 def generate_exam_key(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1315,6 +1533,7 @@ def generate_exam_key(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/clear_key', methods=['POST'])
 @login_required
+@staff_required
 def clear_exam_key(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1326,6 +1545,7 @@ def clear_exam_key(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/update_access', methods=['POST'])
 @login_required
+@staff_required
 def update_exam_access(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1360,6 +1580,7 @@ def update_exam_access(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/extend_time', methods=['POST'])
 @login_required
+@staff_required
 def faculty_extend_exam_time(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1377,6 +1598,9 @@ def faculty_extend_exam_time(exam_id):
         # For now, let's just log it or update the exam duration if that's the intent
         exam.duration_minutes += minutes
         db.session.commit()
+        # Open exam pages re-read their remaining time from the server
+        from backend.routes.exam import exam_room
+        socketio.emit('time_extended', {'exam_id': exam.id, 'minutes': minutes}, to=exam_room(exam.id))
         flash(f'Exam duration extended by {minutes} minutes.', 'success')
         
     return redirect(url_for('faculty.view_exam', exam_id=exam_id))
@@ -1417,6 +1641,7 @@ def _evidence_file(violation):
 
 @faculty_bp.route('/api/proctor/status/<int:student_exam_id>')
 @login_required
+@staff_required
 def proctor_status(student_exam_id):
     """Violation summary and timeline for one attempt (analytics review modal)."""
     se = _staff_attempt_or_none(student_exam_id)
@@ -1449,6 +1674,7 @@ def proctor_status(student_exam_id):
 
 @faculty_bp.route('/api/faculty/review-exam/<int:student_exam_id>', methods=['POST'])
 @login_required
+@staff_required
 def review_exam(student_exam_id):
     """Accept or invalidate an attempt after reviewing its proctoring flags."""
     se = _staff_attempt_or_none(student_exam_id)
@@ -1479,6 +1705,7 @@ def review_exam(student_exam_id):
 
 @faculty_bp.route('/faculty/violation/<int:violation_id>/evidence')
 @login_required
+@staff_required
 def violation_evidence(violation_id):
     """Serve an evidence image to staff who can access the exam."""
     v = ExamViolation.query.get_or_404(violation_id)
@@ -1492,6 +1719,7 @@ def violation_evidence(violation_id):
 
 @faculty_bp.route('/api/faculty/violation/<int:violation_id>/evidence', methods=['DELETE', 'POST'])
 @login_required
+@staff_required
 def delete_violation_evidence(violation_id):
     """Delete one evidence image. The violation row itself is kept."""
     v = ExamViolation.query.get_or_404(violation_id)

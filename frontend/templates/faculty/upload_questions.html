@@ -77,14 +77,6 @@
                 </div>
             </div>
 
-            <div class="uq-form-group" style="margin-top: 1.5rem;">
-                <label class="uq-checkbox-label">
-                    <input type="checkbox" name="enhance_with_ai" id="enhanceAI">
-                    <span><i class="bi bi-robot" style="color:var(--uq-blue);"></i> Enhance questions with AI (Optional)</span>
-                </label>
-                <span class="uq-hint" style="margin-left: 1.7rem;">Requires ANTHROPIC_API_KEY to be configured on the server.</span>
-            </div>
-
             <div class="uq-main-actions">
                 <a href="{{ url_for('faculty.faculty_dashboard') }}" class="uq-btn uq-btn-outline"><i class="bi bi-arrow-left"></i> Cancel</a>
                 <button type="submit" id="submitBtn" class="uq-btn uq-btn-primary"><i class="bi bi-upload"></i> Process & Upload Questions</button>
@@ -94,8 +86,8 @@
 </div>
 
 <!-- External libs for client parsing -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js" integrity crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='vendor/papaparse/papaparse.min.js') }}" integrity crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='vendor/xlsx/xlsx.full.min.js') }}" integrity crossorigin="anonymous"></script>
 
 <script>
     document.addEventListener("DOMContentLoaded", () => {

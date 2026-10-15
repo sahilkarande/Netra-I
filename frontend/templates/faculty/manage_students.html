@@ -8,6 +8,19 @@
 {% block content %}
 <div class="sm-container">
 
+    {% if credentials_token %}
+    <div class="sm-credentials-banner" role="alert" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 16px;margin-bottom:16px;border-radius:12px;border:1px solid rgba(245,158,11,0.45);background:rgba(245,158,11,0.10);">
+        <i class="bi bi-key-fill" style="font-size:1.3rem;color:#f59e0b;"></i>
+        <div style="flex:1;min-width:220px;">
+            <strong>Temporary passwords were generated for the students you just imported.</strong>
+            <div style="opacity:0.8;font-size:0.9rem;">Download the sheet and hand each student their own password. It can be downloaded once and is not stored anywhere else.</div>
+        </div>
+        <a class="sm-btn sm-btn-success" href="{{ url_for('faculty.download_credentials', token=credentials_token) }}">
+            <i class="bi bi-download"></i> Download credentials
+        </a>
+    </div>
+    {% endif %}
+
     <!-- Page Header -->
     <div class="sm-header">
         <div class="sm-header-left">

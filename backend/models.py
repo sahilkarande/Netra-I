@@ -52,6 +52,12 @@ class User(db.Model, UserMixin):
     default_results_published = db.Column(db.Boolean, default=False)
     default_show_leaderboard = db.Column(db.Boolean, default=True)
 
+    # Staff member who created this (student) account — scopes which faculty
+    # may manage it. NULL for self-registered and pre-existing accounts. Plain
+    # integer, not a foreign key: the relationships on this table are already
+    # keyed on users.id and a self-reference would make them ambiguous.
+    created_by = db.Column(db.Integer, nullable=True, index=True)
+
     @property
     def must_change_password(self):
         """Students logging in for the very first time must set their own password."""
@@ -287,10 +293,15 @@ class Question(db.Model):
 # ===========================
 class StudentExam(db.Model):
     __tablename__ = 'student_exam'
+    # One attempt per student per exam: a double-clicked Start must not split
+    # answers across two rows.
+    __table_args__ = (
+        db.UniqueConstraint('student_id', 'exam_id', name='uq_student_exam_student_exam'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    exam_id = db.Column(db.Integer, db.ForeignKey('exam.id', ondelete='CASCADE'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    exam_id = db.Column(db.Integer, db.ForeignKey('exam.id', ondelete='CASCADE'), nullable=False, index=True)
     started_at = db.Column(db.DateTime, default=datetime.utcnow)
     submitted_at = db.Column(db.DateTime)
     score = db.Column(db.Float)
@@ -357,6 +368,9 @@ class StudentExam(db.Model):
 # ===========================
 class StudentAnswer(db.Model):
     __tablename__ = 'student_answer'
+    __table_args__ = (
+        db.UniqueConstraint('student_exam_id', 'question_id', name='uq_student_answer_attempt_question'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     student_exam_id = db.Column(db.Integer, db.ForeignKey('student_exam.id'), nullable=False)

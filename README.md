@@ -51,9 +51,11 @@ machine on a campus LAN, with no cloud services and no per-student cost.
 - PDF result per student, batch report, CSV export, question-level analytics
 
 ### Security
-- Passwords hashed with PBKDF2; first-login password change for imported students, with a self-set hint
+- Passwords hashed with PBKDF2; imported students get a **random** temporary password (handed out from a one-time credentials sheet) and must set their own on first login
 - Throttling on password login, OTP codes, exam access keys and face sign-in (5 failures → 10-minute lockout)
-- Role checks on every route, and faculty can only act on exams they can access
+- CSRF tokens on every state-changing request
+- No long-lived login cookies: sessions end with the browser or after 60 idle minutes, which matters on shared lab PCs
+- Every faculty route is staff-only; faculty act only on their department's exams and students
 - Evidence photos are only served to staff who can access that exam
 - Socket.IO connections are same-origin only, and every event is checked against the logged-in student
 - Random per-installation session key when `SECRET_KEY` is not set
@@ -102,16 +104,16 @@ python app.py --ssl                 # or: bash scripts/start_lan_exam.sh
 
 See [docs/LAN_DEPLOYMENT_GUIDE.md](docs/LAN_DEPLOYMENT_GUIDE.md) for the student-side browser steps.
 
-> **Internet access needed for face checks.** face-api.js and its models load from public CDNs.
-> On a fully offline LAN, camera-proctored exams cannot start. The guide explains how to vendor
-> the files locally.
+> **Works with no internet.** Every library, font and face-recognition model is served from
+> `frontend/static/vendor/`, so an exam hall network needs no outside connection.
+> `tests/test_offline.py` fails if anything starts loading from the internet again.
 
 ---
 
 ## Typical workflow
 
 1. **Admin** creates faculty accounts (*Manage Faculty*).
-2. **Faculty** imports students from CSV/Excel (*Manage Students → Import*; a template is downloadable there). Each student gets a temporary password and must set their own, plus register their face, on first login.
+2. **Faculty** imports students from CSV/Excel (*Manage Students → Import*; a template is downloadable there). Students without a password in the file get a random temporary one: download the credentials sheet from the banner that appears after the import (it is offered once) and hand each student their line. On first login they set their own password and register their face.
 3. **Faculty** creates an exam, uploads questions (see [docs/samples/](docs/samples/)), picks proctoring strictness, and notes the generated access key.
 4. **Students** start the exam from their dashboard, enter the key, pass the equipment and identity check, and answer.
 5. **Faculty** watches live, then reviews flagged attempts on the exam's *Analytics* page and accepts or invalidates them.
@@ -131,7 +133,9 @@ All settings come from environment variables (or `.env`). See [.env.example](.en
 | `SECRET_KEY` | random, stored in `instance/.secret_key` | Signs session cookies |
 | `DATABASE_URL` | `sqlite:///exam_platform.db` (in `instance/`) | Any SQLAlchemy URL; use PostgreSQL for large cohorts |
 | `PORT` | `8800` | HTTP port |
-| `FLASK_DEBUG` | `True` | Debug mode (always off with `--ssl`) |
+| `FLASK_DEBUG` | `false` | Werkzeug debugger for local development only; when on, the server listens on 127.0.0.1 and other machines cannot connect. Never on with `--ssl` |
+| `HOST` | `0.0.0.0` | Interface to listen on (ignored in debug mode) |
+| `SESSION_IDLE_MINUTES` | `60` | Sign out a session idle this long |
 | `USE_SSL` | `false` | Mark session cookies HTTPS-only. Set to `true` when running behind an HTTPS proxy (nginx); `--ssl` sets this automatically |
 | `MAX_CONTENT_LENGTH` | 16 MB | Upload limit |
 | `SOCKETIO_CORS_ORIGINS` | *(same-origin only)* | Extra allowed Socket.IO origins, comma-separated |
@@ -159,6 +163,7 @@ Netra-I/
 │   ├── database.py           # SQLAlchemy + Flask-Login instances
 │   ├── models.py             # All tables (users, exams, attempts, violations, face data, audit)
 │   ├── socket_io.py          # Socket.IO instance and origin policy
+│   ├── security.py           # CSRF protection
 │   ├── routes/               # One blueprint per area
 │   │   ├── auth.py           #   login, registration/OTP, password change, face sign-in
 │   │   ├── student.py        #   dashboard, results, PDF, leaderboard, profile
@@ -171,6 +176,7 @@ Netra-I/
 │   │   ├── question_splitter.py  # one bank → several papers
 │   │   ├── proctor_service.py    # per-attempt vision instances, violation logging
 │   │   ├── proctor_vision/openvino_vision.py   # the computer-vision engine
+│   │   ├── account_service.py    # temp passwords, faculty scoping of students, safe deletion
 │   │   ├── face_service.py       # face enrolment, matching, lockout, audit
 │   │   ├── liveness_service.py   # liveness challenges and anti-spoof checks
 │   │   └── pdf_generator.py      # result and batch PDFs
@@ -180,11 +186,12 @@ Netra-I/
 │   ├── templates/            # Jinja2 pages: base.html, auth pages, admin/, faculty/, student/
 │   └── static/
 │       ├── css/  js/  images/
+│       ├── vendor/           # every third-party library, font and face model (offline)
 │       └── violations/       # evidence photos, written at runtime (gitignored, staff-only)
 │
 ├── ai_models/                # OpenVINO model files (not in git)
-├── tests/                    # pytest suite (48 tests)
-├── scripts/                  # create_admin.py, repair_proctor_settings.py, LAN cert + launcher
+├── tests/                    # pytest suite (128 tests)
+├── scripts/                  # create_admin, backup_db, repair_proctor_settings, LAN cert + launcher
 ├── deploy/                   # nginx reverse-proxy template + installer
 ├── docs/                     # Overview, technical reference, LAN guide, diagrams, samples
 ├── archive/                  # Old code no longer used, kept for reference (see archive/README.md)
@@ -204,10 +211,13 @@ pip install pytest
 python -m pytest
 ```
 
-The suite runs against a throwaway SQLite database and covers page rendering, result visibility,
-registration/OTP, login lockout, role and ownership checks, the access-key gate, answer saving
-rules, force-end, evidence access and Socket.IO authorisation. The camera and face-check
-screens need a real browser and webcam, so do a manual run before exam day.
+The suite runs against a throwaway SQLite database. Besides pages, results visibility,
+registration/OTP and Socket.IO authorisation, `tests/test_phase1_hardening.py` holds one regression
+test per finding of the [Phase 1 audit](docs/audit/PHASE1_AUDIT.md) — CSRF, sessions, role and
+department scoping, temporary passwords, deletion, deadlines, timer sync, answer durability,
+upload validation, backups — and `tests/test_offline.py` guards the no-internet requirement.
+The camera and face-check screens need a real browser and webcam, so do a manual run before
+exam day.
 
 ---
 
@@ -222,7 +232,9 @@ screens need a real browser and webcam, so do a manual run before exam day.
 Before a real exam:
 
 - Set `SECRET_KEY` explicitly if you run more than one process or restore from backup.
-- Keep `instance/` and `frontend/static/violations/` on persistent storage and back them up.
+- Keep `instance/` and `frontend/static/violations/` on persistent storage.
+- Back up the database before the exam and every few minutes during it:
+  `python scripts/backup_db.py` (safe while the server runs; `--dest` for a USB stick).
 - Run one full rehearsal exam on the actual hardware and network.
 
 Known limits: one server process handles roughly **250 concurrent camera-proctored students**

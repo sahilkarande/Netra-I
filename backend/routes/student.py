@@ -25,12 +25,17 @@ def student_dashboard():
     if current_user.role != 'student':
         return redirect(url_for('auth.index'))
     
+    # Close any of this student's attempts whose time ran out unattended
+    from backend.services.exam_service import finalize_overdue_attempts
+    finalize_overdue_attempts(student_id=current_user.id)
+
     # Get active and completed exams
     available_exams = Exam.query.filter_by(is_active=True).all()
     my_exams = StudentExam.query.filter_by(student_id=current_user.id).all()
     
     completed_exams = [se for se in my_exams if se.completed or se.status in ('submitted', 'completed')]
-    attempted_exam_ids = {se.exam_id for se in my_exams if se.completed or se.status in ('submitted', 'completed') or se.started_at is not None}
+    # Imported rows carry a started_at too, so only a finished attempt counts
+    attempted_exam_ids = {se.exam_id for se in my_exams if se.completed or se.status in ('submitted', 'completed')}
     
     for exam in available_exams:
         exam.attempted_by_current_user = (exam.id in attempted_exam_ids)
@@ -51,7 +56,11 @@ def student_dashboard():
         se.exam and se.exam.leaderboard_visible_to_students for se in completed_exams
     )
 
-    in_progress = StudentExam.query.filter_by(student_id=current_user.id, completed=False).first()
+    # Only an attempt the student actually started is "in progress". Rows
+    # pre-created at import are assignments, not attempts — resuming one would
+    # skip start_exam and open the paper with the clock already run down.
+    in_progress = StudentExam.query.filter_by(
+        student_id=current_user.id, completed=False, status='started').first()
     
     return render_template('student/dashboard.html', 
                          available_exams=available_exams, 
@@ -180,6 +189,8 @@ def global_leaderboard():
     # 3. Aggregate data by student
     student_data = {}
     for se in all_submitted:
+        if se.student is None:          # account removed; never crash the board
+            continue
         # Check batch filter at student level
         if batch_filter and se.student.batch != batch_filter:
             continue

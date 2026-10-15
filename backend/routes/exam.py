@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app, session
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room
+from sqlalchemy.exc import IntegrityError
 
 from backend.database import db
 from backend.models import Exam, Question, StudentExam, StudentAnswer, ActivityLog, ExamViolation, ExamCalibration
@@ -16,13 +17,13 @@ from backend.services.proctor_service import (
     log_proctor_event, _heartbeat_registry, _last_frame_processed,
     FRAME_INTERVAL_SEC, cleanup_proctor_instance
 )
-from backend.services.exam_service import calculate_student_score, assign_shuffle
+from backend.services.exam_service import (
+    calculate_student_score, assign_shuffle, ANSWER_GRACE_SEC,
+    finalize_overdue_attempts, remaining_seconds,
+)
 
 exam_bp = Blueprint('exam', __name__)
 
-# Answers arriving this long after the clock ran out are still accepted, so a
-# final autosave racing the auto-submit is not lost.
-ANSWER_GRACE_SEC = 120
 
 
 def exam_room(exam_id):
@@ -92,6 +93,8 @@ def start_exam(exam_id):
         exam_id=exam_id
     ).first()
 
+    if student_exam and not student_exam.completed:
+        finalize_overdue_attempts(attempt_id=student_exam.id)
     if student_exam and student_exam.completed:
         flash('You have already completed this exam.', 'info')
         return redirect(url_for('student.student_dashboard'))
@@ -113,7 +116,11 @@ def start_exam(exam_id):
             started_at=datetime.utcnow()
         )
         db.session.add(student_exam)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # A double-clicked Start already created the attempt; use that one
+            db.session.rollback()
     elif student_exam.status != 'started':
         # Pre-created at import time: the clock starts now, not at import.
         student_exam.status = 'started'
@@ -136,6 +143,13 @@ def take_exam(exam_id):
     ).first_or_404()
 
     if student_exam.completed:
+        return redirect(url_for('student.student_dashboard'))
+
+    # Only a started attempt may be shown. Anything else (pre-created at
+    # import) must go through start_exam, which checks the exam is open and
+    # starts the clock now.
+    if student_exam.status != 'started':
+        flash('Press Start on your dashboard to begin this exam.', 'info')
         return redirect(url_for('student.student_dashboard'))
 
     # The paper is only rendered once the access key has been accepted, so the
@@ -180,6 +194,36 @@ def take_exam(exam_id):
                            frame_interval_ms=int(FRAME_INTERVAL_SEC * 1000),
                            time_remaining=time_remaining)
 
+def _apply_answers(student_exam, answers_dict):
+    """Write an {question_id: answer} map onto an attempt (not committed).
+
+    Only questions on this exam's paper are accepted. A null value clears a
+    previously saved answer — without that, an answer the student removed would
+    still be marked.
+    """
+    valid_ids = {qid for (qid,) in db.session.query(Question.id).filter_by(exam_id=student_exam.exam_id)}
+    existing = {a.question_id: a for a in StudentAnswer.query.filter_by(student_exam_id=student_exam.id)}
+
+    for q_id_str, selected_answer in answers_dict.items():
+        try:
+            q_id = int(q_id_str)
+        except (ValueError, TypeError):
+            continue
+        if q_id not in valid_ids:
+            continue
+        value = str(selected_answer).strip().upper()[:10] if selected_answer not in (None, '') else None
+
+        answer = existing.get(q_id)
+        if answer is None:
+            if value is None:
+                continue
+            answer = StudentAnswer(student_exam_id=student_exam.id, question_id=q_id)
+            db.session.add(answer)
+            existing[q_id] = answer
+        answer.selected_answer = value
+        answer.answered_at = datetime.utcnow()
+
+
 @exam_bp.route('/api/save-answer', methods=['POST'])
 @login_required
 def save_answer():
@@ -210,33 +254,15 @@ def save_answer():
     if not isinstance(answers_dict, dict):
         return jsonify({"error": "No valid answers payload provided"}), 400
 
-    # Answers may only target questions on this exam's paper
-    valid_ids = {qid for (qid,) in db.session.query(Question.id).filter_by(exam_id=exam.id)}
+    _apply_answers(student_exam, answers_dict)
 
-    for q_id_str, selected_answer in answers_dict.items():
-        try:
-            q_id = int(q_id_str)
-        except (ValueError, TypeError):
-            continue
-        if q_id not in valid_ids:
-            continue
-
-        answer = StudentAnswer.query.filter_by(
-            student_exam_id=student_exam.id,
-            question_id=q_id
-        ).first()
-
-        if not answer:
-            answer = StudentAnswer(
-                student_exam_id=student_exam.id,
-                question_id=q_id
-            )
-            db.session.add(answer)
-
-        answer.selected_answer = str(selected_answer)[:10] if selected_answer is not None else None
-        answer.answered_at = datetime.utcnow()
-
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Two overlapping autosaves raced to insert the same answer row. The
+        # other request won; the client sends the full map again next tick.
+        db.session.rollback()
+        return jsonify({"success": False, "retry": True}), 409
     return jsonify({"success": True})
 
 @exam_bp.route('/submit_exam/<int:student_exam_id>', methods=['POST'])
@@ -248,6 +274,19 @@ def submit_exam(student_exam_id):
         return "Unauthorized", 403
 
     already_done = student_exam.completed
+
+    # The page sends its final answer map with the submit, so answers whose
+    # last autosave failed (Wi-Fi drop near the end) are still recorded.
+    if is_owner and not already_done:
+        raw = request.form.get('answers')
+        if raw and not _time_up(student_exam, student_exam.exam, grace_sec=ANSWER_GRACE_SEC):
+            try:
+                final_answers = json.loads(raw)
+            except (TypeError, ValueError):
+                final_answers = None
+            if isinstance(final_answers, dict):
+                _apply_answers(student_exam, final_answers)
+
     student_exam.completed = True
     student_exam.status = 'submitted'
     if not student_exam.submitted_at:
@@ -328,7 +367,9 @@ def api_check_exam_status(student_exam_id):
         return jsonify({"error": "Unauthorized"}), 403
 
     exam = student_exam.exam
+    finalize_overdue_attempts(attempt_id=student_exam.id)
     # Ended for everyone, or this one attempt was closed by the instructor
+    # (or by the overdue sweep)
     force_ended = bool(exam.force_ended) or bool(student_exam.completed)
 
     if student_exam.started_at and exam.duration_minutes:
@@ -340,6 +381,9 @@ def api_check_exam_status(student_exam_id):
     return jsonify({
         "force_ended": force_ended,
         "updated_end_time": updated_end_time,
+        # The client resyncs its countdown to this, so time extensions and
+        # clock drift are corrected without a page reload
+        "remaining_seconds": remaining_seconds(student_exam),
         "exam_status": exam.status or 'active'
     })
 

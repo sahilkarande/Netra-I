@@ -15,10 +15,10 @@
 (function (global) {
   'use strict';
 
-  const MODEL_URL = (global.NETRA_FACE_MODEL_URL ||
-    'https://justadudewhohacks.github.io/face-api.js/models');
-  const FACEAPI_SRC = (global.NETRA_FACEAPI_SRC ||
-    'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js');
+  /* Served locally (frontend/static/vendor) so face checks work offline.
+     base.html sets the exact URLs; these defaults match the default static path. */
+  const MODEL_URL = (global.NETRA_FACE_MODEL_URL || '/static/vendor/face-api/models');
+  const FACEAPI_SRC = (global.NETRA_FACEAPI_SRC || '/static/vendor/face-api/face-api.min.js');
 
   /* Frames are sent to the server for texture analysis, so they need more
      resolution than the 320x240 used for routine proctoring — moire and

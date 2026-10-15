@@ -151,6 +151,109 @@ def parse_questions(filename: str, raw: bytes) -> Tuple[bool, str, List[dict]]:
     return True, f'Read {len(questions)} questions{note}.', questions
 
 
+def _read_rows(filename: str, raw: bytes):
+    """Raw dict rows from a CSV / JSON / Excel upload, or raise ValueError."""
+    name = (filename or '').lower()
+    if name.endswith('.json'):
+        data = json.loads(raw.decode('utf-8-sig'))
+        if isinstance(data, dict):
+            data = data.get('questions') or data.get('data') or []
+        if not isinstance(data, list):
+            raise ValueError('JSON must be a list of question objects.')
+        return data
+    if name.endswith(('.xlsx', '.xls')):
+        import pandas as pd
+        return pd.read_excel(io.BytesIO(raw), dtype=str).to_dict(orient='records')
+    if name.endswith(('.csv', '.txt')):
+        try:
+            text = raw.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            text = raw.decode('latin-1')
+        return list(csv.DictReader(io.StringIO(text, newline=None)))
+    raise ValueError('Upload a CSV, JSON or Excel file.')
+
+
+def validate_questions(filename: str, raw: bytes) -> Tuple[List[dict], List[str]]:
+    """Strict reader for questions that go straight onto an exam paper.
+
+    Unlike parse_questions() (which tolerates a messy bank before splitting),
+    nothing here is guessed: a missing or invalid answer key, an answer that
+    points at an empty option, or bad marks is reported with its row number
+    instead of being silently turned into something else. Missing options C/D
+    are stored empty, never as the text "None" or "nan".
+
+    Returns (questions, errors). Callers should refuse the whole file when
+    errors is non-empty, so a paper is never half-uploaded.
+    """
+    try:
+        rows = _read_rows(filename, raw)
+    except ValueError as e:
+        return [], [str(e)]
+    except Exception:
+        return [], ['Could not read the file. Check it is a valid CSV, JSON or Excel file.']
+
+    questions, errors = [], []
+    first_data_row = 2 if (filename or '').lower().endswith(('.csv', '.txt', '.xlsx', '.xls')) else 1
+
+    for offset, row in enumerate(rows):
+        n = offset + first_data_row
+        if not isinstance(row, dict):
+            errors.append(f'Row {n}: not a question object.')
+            continue
+        text = _first(row, 'question', 'question_text', 'text', 'Question')
+        if not text:
+            if any(_first(row, k) for k in row.keys() if k):
+                errors.append(f'Row {n}: question text is missing.')
+            continue                       # fully blank rows are ignored
+
+        options = {
+            'A': _first(row, 'a', 'option_a', 'option1', 'Option A', 'optiona'),
+            'B': _first(row, 'b', 'option_b', 'option2', 'Option B', 'optionb'),
+            'C': _first(row, 'c', 'option_c', 'option3', 'Option C', 'optionc'),
+            'D': _first(row, 'd', 'option_d', 'option4', 'Option D', 'optiond'),
+        }
+        if not options['A'] or not options['B']:
+            errors.append(f'Row {n}: options A and B are required.')
+            continue
+
+        answer = (_first(row, 'answer', 'correct_answer', 'correct', 'Answer') or '').strip().upper()
+        if not answer:
+            errors.append(f'Row {n}: correct answer is missing (use A, B, C or D).')
+            continue
+        if answer not in options:
+            errors.append(f'Row {n}: correct answer "{answer[:10]}" is not A, B, C or D.')
+            continue
+        if not options[answer]:
+            errors.append(f'Row {n}: correct answer is {answer}, but option {answer} is empty.')
+            continue
+
+        raw_points = _first(row, 'points', 'score', 'marks')
+        try:
+            points = float(raw_points) if raw_points is not None else 1.0
+        except (TypeError, ValueError):
+            errors.append(f'Row {n}: points "{str(raw_points)[:10]}" is not a number.')
+            continue
+        if not 0 < points <= 1000:
+            errors.append(f'Row {n}: points must be greater than 0.')
+            continue
+
+        questions.append({
+            'question': text,
+            'option_a': options['A'],
+            'option_b': options['B'],
+            'option_c': options['C'] or None,
+            'option_d': options['D'] or None,
+            'correct_answer': answer,
+            'points': points,
+        })
+        if len(questions) >= MAX_QUESTIONS:
+            break
+
+    if not questions and not errors:
+        errors.append('No questions found in the file.')
+    return questions, errors
+
+
 # ── Splitting ───────────────────────────────────────────────────────────────
 
 def split_questions(questions: List[dict], num_sets: int,

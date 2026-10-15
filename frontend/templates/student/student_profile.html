@@ -383,8 +383,8 @@
         <form id="passwordResetForm">
             <div style="background: var(--card-bg, #f8fafc); border: 1px dashed var(--border, #cbd5e1); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; text-align: center;">
                 <p style="margin: 0; color: var(--text-primary, #334155); font-size: 1.1rem;">
-                    New password will be set to: <br>
-                    <strong style="font-size: 1.5rem; letter-spacing: 2px; color: var(--primary-color, #4f46e5); display: block; margin-top: 0.5rem;">123456789</strong>
+                    <span id="tempPwLabel">A new random temporary password will be generated and shown here once.</span> <br>
+                    <strong id="tempPwValue" style="font-size: 1.5rem; letter-spacing: 2px; color: var(--primary-color, #4f46e5); display: block; margin-top: 0.5rem; user-select: all;"></strong>
                 </p>
             </div>
 
@@ -434,7 +434,7 @@
         const submitBtn = document.getElementById('submitBtn');
         
         // Confirm action
-        if (!confirm('Are you sure you want to reset this student\'s password to 123456789?')) {
+        if (!confirm('Reset this student\'s password to a new random temporary password?')) {
             return;
         }
         
@@ -452,13 +452,13 @@
             const data = await response.json();
             
             if (data.success) {
-                alert('✅ ' + data.message);
-                closePasswordModal();
-                
-                // Update password status badge on page
-                setTimeout(() => {
-                    location.reload();
-                }, 1000);
+                /* Shown once, here, so the faculty can copy it — never in an alert */
+                document.getElementById('tempPwLabel').textContent = 'Temporary password (give it to the student; it is not shown again):';
+                document.getElementById('tempPwValue').textContent = data.temporary_password || '';
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-check2"></i> Done';
+                submitBtn.type = 'button';
+                submitBtn.onclick = () => location.reload();
             } else {
                 alert('❌ ' + data.message);
                 submitBtn.disabled = false;
