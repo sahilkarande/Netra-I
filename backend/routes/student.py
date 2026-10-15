@@ -25,6 +25,10 @@ def student_dashboard():
     if current_user.role != 'student':
         return redirect(url_for('auth.index'))
     
+    # Close any of this student's attempts whose time ran out unattended
+    from backend.services.exam_service import finalize_overdue_attempts
+    finalize_overdue_attempts(student_id=current_user.id)
+
     # Get active and completed exams
     available_exams = Exam.query.filter_by(is_active=True).all()
     my_exams = StudentExam.query.filter_by(student_id=current_user.id).all()

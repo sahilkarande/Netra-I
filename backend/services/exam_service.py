@@ -100,3 +100,99 @@ def assign_shuffle(student_exam):
     student_exam.question_order = json.dumps(q_order)
     student_exam.option_mapping = json.dumps(option_mapping)
     db.session.commit()
+
+
+# ── Deadlines ───────────────────────────────────────────────────────────────
+
+# Answers arriving this long after the clock ran out are still accepted, so a
+# final autosave racing the auto-submit is not lost. Overdue attempts are
+# closed once this grace has passed too.
+ANSWER_GRACE_SEC = 120
+
+
+def attempt_deadline(student_exam):
+    """When this attempt's time runs out (None if it has no clock)."""
+    from datetime import timedelta
+    exam = student_exam.exam
+    if not student_exam.started_at or not exam or not exam.duration_minutes:
+        return None
+    return student_exam.started_at + timedelta(minutes=exam.duration_minutes)
+
+
+def remaining_seconds(student_exam, now=None):
+    deadline = attempt_deadline(student_exam)
+    if deadline is None:
+        return None
+    now = now or datetime.utcnow()
+    return max(0, int((deadline - now).total_seconds()))
+
+
+def finalize_overdue_attempts(exam_ids=None, student_id=None, attempt_id=None, now=None):
+    """Score and close attempts whose time (plus grace) has run out.
+
+    A student who closes the browser, loses power or never presses Submit must
+    still get a result from the answers they saved. The attempt is marked
+    submitted at its deadline, not at the moment the sweep happened to run.
+    Returns how many attempts were closed.
+    """
+    from datetime import timedelta
+    from backend.models import Exam
+
+    now = now or datetime.utcnow()
+    query = StudentExam.query.join(Exam, StudentExam.exam_id == Exam.id).filter(
+        StudentExam.status == 'started',
+        db.or_(StudentExam.completed == False, StudentExam.completed.is_(None)),  # noqa: E712
+    )
+    if exam_ids is not None:
+        if not exam_ids:
+            return 0
+        query = query.filter(StudentExam.exam_id.in_(list(exam_ids)))
+    if student_id is not None:
+        query = query.filter(StudentExam.student_id == student_id)
+    if attempt_id is not None:
+        query = query.filter(StudentExam.id == attempt_id)
+
+    closed = 0
+    for se in query.all():
+        deadline = attempt_deadline(se)
+        if deadline is None or now <= deadline + timedelta(seconds=ANSWER_GRACE_SEC):
+            continue
+        se.completed = True
+        se.status = 'submitted'
+        se.submitted_at = se.submitted_at or deadline
+        db.session.commit()
+        calculate_student_score(se.id)
+        try:
+            from backend.services.proctor_service import cleanup_proctor_instance
+            cleanup_proctor_instance(se.id)
+        except Exception:
+            pass
+        closed += 1
+    return closed
+
+
+def start_attempt_sweeper(app, socketio, interval_sec=60):
+    """Background task: close overdue attempts every `interval_sec` seconds.
+
+    Lazy finalisation on page views covers most cases; this catches attempts
+    nobody looks at (a student who never comes back, a faculty who never opens
+    the exam page) so results and reports are complete.
+    """
+    if getattr(app, '_attempt_sweeper_started', False):
+        return
+    app._attempt_sweeper_started = True
+
+    def loop():
+        import logging
+        log = logging.getLogger('netra.sweeper')
+        while True:
+            socketio.sleep(interval_sec)
+            try:
+                with app.app_context():
+                    closed = finalize_overdue_attempts()
+                    if closed:
+                        log.info('closed %d overdue attempt(s)', closed)
+            except Exception:
+                log.exception('attempt sweeper failed')
+
+    socketio.start_background_task(loop)

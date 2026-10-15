@@ -738,8 +738,47 @@ DRAGGABLE FLOATING CAMERA WIDGET
 
   /* seed existing answers */
   {% for qid, ans in existing_answers.items() %}
-  S.answers[{{ qid }}] = "{{ ans }}";
+  {% if ans %}S.answers[{{ qid }}] = {{ ans|tojson }};{% endif %}
   {% endfor %}
+
+  /* ══════════════════════════════════
+     LOCAL ANSWER JOURNAL
+     Every change is mirrored to localStorage first, so a crash, a refresh or
+     a Wi-Fi drop never loses an answer the server has not acknowledged yet.
+     On load, local edits are re-applied over what the server returned and
+     pushed again.
+  ══════════════════════════════════ */
+  S.cleared = new Set();          /* answers removed locally, sent as null */
+  S.unsaved = false;
+  S._saveFails = 0;
+  const JOURNAL_KEY = `netra:answers:${CFG.seId}`;
+
+  function writeJournal() {
+    try {
+      localStorage.setItem(JOURNAL_KEY, JSON.stringify({
+        answers: S.answers, cleared: Array.from(S.cleared), ts: Date.now()
+      }));
+    } catch (_) { /* storage blocked — the server copy still applies */ }
+  }
+
+  function restoreJournal() {
+    let j = null;
+    try { j = JSON.parse(localStorage.getItem(JOURNAL_KEY) || 'null'); } catch (_) { }
+    if (!j || typeof j.answers !== 'object') return false;
+    (j.cleared || []).forEach(qid => { delete S.answers[qid]; S.cleared.add(Number(qid)); });
+    Object.entries(j.answers).forEach(([qid, key]) => { if (key) S.answers[qid] = key; });
+    return true;
+  }
+
+  function clearJournal() { try { localStorage.removeItem(JOURNAL_KEY); } catch (_) { } }
+
+  function answersPayload() {
+    const payload = Object.assign({}, S.answers);
+    S.cleared.forEach(qid => { if (payload[qid] === undefined) payload[qid] = null; });
+    return payload;
+  }
+
+  const _journalRestored = restoreJournal();
 
   /* ══════════════════════════════════
      OPTION SHUFFLING
@@ -770,7 +809,8 @@ DRAGGABLE FLOATING CAMERA WIDGET
       const ob = el.dataset.ob || '';
       const oc = el.dataset.oc || '';
       const od = el.dataset.od || '';
-      const sel = el.dataset.sel || '';  /* previously saved answer key */
+      /* saved answer: local journal first (may be newer), then the server's */
+      const sel = (S.answers[qid] !== undefined ? S.answers[qid] : '') || '';
 
       const keys = ['A', 'B', 'C', 'D'];
       const texts = { A: oa, B: ob, C: oc, D: od };
@@ -932,6 +972,9 @@ DRAGGABLE FLOATING CAMERA WIDGET
     });
 
     /* ── EXAM REACTIVATED ── */
+    /* ── TIME EXTENDED: re-read the remaining time from the server ── */
+    S.socket.on('time_extended', d => { pollStatus(); });
+
     S.socket.on('exam_reactivated', d => {
       const banner = document.getElementById('force-end-banner');
       if (banner) banner.remove();
@@ -1192,6 +1235,9 @@ DRAGGABLE FLOATING CAMERA WIDGET
     startTimer();
     S._autoT = setInterval(pushAnswers, 20000);
     S._pollT = setInterval(pollStatus, 15000);
+    /* Local edits from before a refresh or crash go back to the server now */
+    if (_journalRestored) triggerSave();
+    pollStatus();
     startFrameLoop();
     setupAntiCheat();
     enterFS();
@@ -1247,6 +1293,8 @@ DRAGGABLE FLOATING CAMERA WIDGET
   ══════════════════════════════════ */
   function pickAns(idx, qid, origKey, el) {
     S.answers[qid] = origKey;
+    S.cleared.delete(qid);
+    writeJournal();
 
     /* deselect all in this slide */
     document.querySelectorAll(`#opts${idx} .opt-row`).forEach(r => r.classList.remove('opt-selected'));
@@ -1264,6 +1312,8 @@ DRAGGABLE FLOATING CAMERA WIDGET
     if (!slide) return;
     const qid = parseInt(slide.dataset.qid);
     delete S.answers[qid];
+    S.cleared.add(qid);
+    writeJournal();
     document.querySelectorAll(`#opts${idx} .opt-row`).forEach(r => r.classList.remove('opt-selected'));
     const nc = g(`qnb${idx}`);
     if (nc) nc.classList.remove('qn-ans');
@@ -1341,18 +1391,42 @@ DRAGGABLE FLOATING CAMERA WIDGET
 
   async function pushAnswers() {
     if (S.done) return;
+    clearTimeout(S._retryT);
     setAS('saving', 'Saving…');
+    let r = null;
     try {
-      const r = await fetch(CFG.urls.save, {
+      r = await fetch(CFG.urls.save, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_exam_id: CFG.seId, answers: S.answers })
+        body: JSON.stringify({ student_exam_id: CFG.seId, answers: answersPayload() })
       });
-      if (r.ok) {
-        const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        setAS('saved', `Saved ${t}`);
-        setTimeout(() => setAS('', 'All changes saved'), 3000);
-      }
-    } catch { setAS('', 'Save failed — retrying'); }
+    } catch (_) { r = null; }
+
+    if (r && r.ok) {
+      S.unsaved = false;
+      S._saveFails = 0;
+      S.cleared.clear();
+      writeJournal();
+      const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setAS('saved', `Saved ${t}`);
+      setTimeout(() => { if (!S.unsaved) setAS('', 'All changes saved'); }, 3000);
+      return;
+    }
+
+    /* Exam closed server-side: stop retrying, the status poll will submit */
+    let body = {};
+    try { body = r ? await r.json() : {}; } catch (_) { }
+    if (r && r.status === 409 && !body.retry) {
+      setAS('', 'Exam closed — submitting');
+      pollStatus();
+      return;
+    }
+
+    /* Network or server trouble: keep the journal, retry with backoff */
+    S.unsaved = true;
+    S._saveFails += 1;
+    const wait = Math.min(30000, 2000 * Math.pow(2, S._saveFails - 1));
+    setAS('', `Not saved yet — retrying in ${Math.round(wait / 1000)}s (answers kept on this device)`);
+    S._retryT = setTimeout(pushAnswers, wait);
   }
 
   /* ══════════════════════════════════
@@ -1362,7 +1436,15 @@ DRAGGABLE FLOATING CAMERA WIDGET
     if (S.done) return;
     try {
       const d = await (await fetch(CFG.urls.status)).json();
-      if (d.force_ended || d.exam_status === 'ended') { addLog('Exam force-ended by instructor', 'le'); autoSubmit('Exam ended by instructor'); }
+      if (d.force_ended || d.exam_status === 'ended') { addLog('Exam force-ended by instructor', 'le'); autoSubmit('Exam ended by instructor'); return; }
+      /* The server's clock is authoritative: picks up time extensions and
+         corrects drift in this browser's countdown */
+      if (typeof d.remaining_seconds === 'number' && Math.abs(d.remaining_seconds - S.secs) > 2) {
+        const gained = d.remaining_seconds - S.secs;
+        S.secs = d.remaining_seconds;
+        renderTimer();
+        if (gained > 30) toast('Time Extended', `Your instructor added ${Math.round(gained / 60)} minute(s).`, 'ti');
+      }
     } catch { }
   }
 
@@ -1634,12 +1716,19 @@ DRAGGABLE FLOATING CAMERA WIDGET
     S.done = true;
     await pushAnswers();
     [S._timerT, S._autoT, S._pollT, S._frameT, S._heartbeatT].forEach(clearInterval);
+    clearTimeout(S._retryT);
     if (_audioInterval) clearInterval(_audioInterval);
     if (_audioCtx) { try { _audioCtx.close(); } catch(e) {} }
     if (S.stream) S.stream.getTracks().forEach(t => t.stop());
     if (document.exitFullscreen) document.exitFullscreen().catch(() => { });
     const form = document.createElement('form');
     form.method = 'POST'; form.action = CFG.urls.submit;
+    /* Carry the final answers with the submit itself, so answers whose last
+       autosave failed are still recorded */
+    const ans = document.createElement('input');
+    ans.type = 'hidden'; ans.name = 'answers'; ans.value = JSON.stringify(answersPayload());
+    form.appendChild(ans);
+    clearJournal();
     document.body.appendChild(form); form.submit();
   }
 

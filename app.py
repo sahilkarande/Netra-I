@@ -489,7 +489,9 @@ if __name__ == '__main__':
     # ⚠️ CRITICAL: USE SOCKETIO.RUN() NOT APP.RUN()
     # ──────────────────────────────────────────────────────────────
     from backend.socket_io import socketio
-    
+    from backend.services.exam_service import start_attempt_sweeper
+    start_attempt_sweeper(app, socketio)
+
     run_kwargs = {
         "debug": debug,
         "host": opts['host'],

@@ -409,3 +409,140 @@ def test_p1_10_indexes_added_to_existing_database(tmp_path):
     con = sqlite3.connect(path)
     names = {r[0] for r in con.execute("select name from sqlite_master where type='index'")}
     assert {'uq_student_exam_student_exam', 'uq_student_answer_attempt_question'} <= names
+
+
+# ── P1-2: attempts whose time ran out are closed and scored ─────────────────
+
+@pytest.fixture
+def started_attempt(app, seed):
+    """Student 2 started the 30-minute exam and saved one correct answer."""
+    client = app.test_client()
+    login(client, 'stud2')
+    client.post(f"/start-exam/{seed['exam']}")
+    with app.app_context():
+        se = StudentExam.query.filter_by(student_id=seed['s2'], exam_id=seed['exam']).one()
+        sid = se.id
+    client.post('/api/save-answer', json={'student_exam_id': sid,
+                                          'answers': {str(seed['q1']): 'A'}})
+    return client, sid
+
+
+def _age(app, sid, minutes):
+    _set(app, StudentExam, sid, started_at=datetime.utcnow() - timedelta(minutes=minutes))
+
+
+@pytest.mark.parametrize('trigger', ['dashboard', 'faculty_view', 'status', 'sweep'])
+def test_p1_2_overdue_attempt_is_finalised(app, seed, started_attempt, trigger):
+    client, sid = started_attempt
+    _age(app, sid, 45)                                   # 30 min exam + 2 min grace passed
+    if trigger == 'dashboard':
+        client.get('/student/dashboard')
+    elif trigger == 'faculty_view':
+        fac = app.test_client()
+        login(fac, 'faca')
+        fac.get(f"/faculty/exam/{seed['exam']}")
+    elif trigger == 'status':
+        assert client.get(f'/api/check-exam-status/{sid}').get_json()['force_ended'] is True
+    else:
+        from backend.services.exam_service import finalize_overdue_attempts
+        with app.app_context():
+            assert finalize_overdue_attempts() == 1
+
+    with app.app_context():
+        se = db.session.get(StudentExam, sid)
+        assert se.completed and se.status == 'submitted'
+        assert se.score == 1 and se.total_points == 2      # the saved answer counted
+        deadline = se.started_at + timedelta(minutes=30)
+        assert abs((se.submitted_at - deadline).total_seconds()) < 1
+
+
+def test_p1_2_attempt_within_grace_is_left_alone(app, seed, started_attempt):
+    client, sid = started_attempt
+    _age(app, sid, 31)                                   # past the clock, inside grace
+    client.get('/student/dashboard')
+    with app.app_context():
+        assert db.session.get(StudentExam, sid).status == 'started'
+
+
+def test_p1_2_overdue_attempt_cannot_be_resumed(app, seed, started_attempt):
+    client, sid = started_attempt
+    _age(app, sid, 45)
+    client.post(f"/start-exam/{seed['exam']}")
+    assert client.get(f"/exam/{seed['exam']}/take").status_code == 302
+    with app.app_context():
+        assert db.session.get(StudentExam, sid).completed
+
+
+# ── P1-4: the countdown follows the server ──────────────────────────────────
+
+def test_p1_4_status_reports_remaining_time_and_extension(app, seed, started_attempt):
+    client, sid = started_attempt
+    before = client.get(f'/api/check-exam-status/{sid}').get_json()['remaining_seconds']
+    assert 29 * 60 < before <= 30 * 60
+
+    fac = app.test_client()
+    login(fac, 'faca')
+    fac.post(f"/faculty/exam/{seed['exam']}/extend_time", data={'minutes': '10'})
+    after = client.get(f'/api/check-exam-status/{sid}').get_json()['remaining_seconds']
+    assert after - before >= 10 * 60 - 5
+
+
+def test_p1_4_extension_is_pushed_to_open_pages(app, seed, started_attempt):
+    from backend.socket_io import socketio
+    client, sid = started_attempt
+    sock = socketio.test_client(app, flask_test_client=client)
+    sock.emit('join_exam', {'exam_id': seed['exam'], 'student_exam_id': sid})
+    sock.get_received()
+    fac = app.test_client()
+    login(fac, 'faca')
+    fac.post(f"/faculty/exam/{seed['exam']}/extend_time", data={'minutes': '5'})
+    events = [m for m in sock.get_received() if m['name'] == 'time_extended']
+    assert events and events[0]['args'][0]['minutes'] == 5
+    sock.disconnect()
+
+
+# ── P1-5: answers survive a failed autosave ─────────────────────────────────
+
+def _answers(app, sid):
+    from backend.models import StudentAnswer
+    with app.app_context():
+        return {a.question_id: a.selected_answer
+                for a in StudentAnswer.query.filter_by(student_exam_id=sid)}
+
+
+def test_p1_5_submit_carries_final_answers(app, seed, started_attempt):
+    import json
+    client, sid = started_attempt
+    final = {str(seed['q1']): 'A', str(seed['q2']): 'b', '999999': 'C'}
+    client.post(f'/submit_exam/{sid}', data={'answers': json.dumps(final)})
+    saved = _answers(app, sid)
+    assert saved[seed['q2']] == 'B'                       # stored, normalised
+    assert 999999 not in saved                            # foreign question ignored
+    with app.app_context():
+        assert db.session.get(StudentExam, sid).score == 2
+
+
+def test_p1_5_submit_payload_ignored_after_time_up(app, seed, started_attempt):
+    import json
+    client, sid = started_attempt
+    _age(app, sid, 40)
+    client.post(f'/submit_exam/{sid}', data={'answers': json.dumps({str(seed['q2']): 'B'})})
+    assert seed['q2'] not in _answers(app, sid) or _answers(app, sid)[seed['q2']] in (None, '0')
+
+
+def test_p1_5_cleared_answer_is_not_marked(app, seed, started_attempt):
+    client, sid = started_attempt
+    client.post('/api/save-answer', json={'student_exam_id': sid,
+                                          'answers': {str(seed['q1']): None}})
+    assert _answers(app, sid)[seed['q1']] is None
+    client.post(f'/submit_exam/{sid}')
+    with app.app_context():
+        assert db.session.get(StudentExam, sid).score == 0
+
+
+def test_p1_5_exam_page_journals_answers_locally(app, seed, started_attempt):
+    client, _sid = started_attempt
+    html = client.get(f"/exam/{seed['exam']}/take").data.decode()
+    assert 'localStorage.setItem(JOURNAL_KEY' in html
+    assert "ans.name = 'answers'" in html                  # submit carries answers
+    assert 'remaining_seconds' in html                     # countdown resync

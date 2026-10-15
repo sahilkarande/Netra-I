@@ -17,7 +17,7 @@ from backend.database import db
 from backend.models import User, Exam, Question, StudentExam, StudentAnswer, ExamViolation
 from backend.services.pdf_generator import generate_batch_report_pdf
 from backend.services.proctor_service import PROCTOR_INSTANCES, _heartbeat_registry, _last_frame_processed
-from backend.services.exam_service import assign_shuffle
+from backend.services.exam_service import assign_shuffle, finalize_overdue_attempts
 from backend.socket_io import socketio
 from backend.services import account_service
 
@@ -113,6 +113,7 @@ def faculty_dashboard():
     exams = _get_faculty_exams()
     
     exam_ids = [e.id for e in exams]
+    finalize_overdue_attempts(exam_ids=exam_ids)
     
     # Calculate statistics for the dashboard
     total_attempts = StudentExam.query.filter(StudentExam.exam_id.in_(exam_ids)).count() if exam_ids else 0
@@ -559,7 +560,8 @@ def view_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
         return redirect(url_for('faculty.faculty_dashboard'))
-    
+    finalize_overdue_attempts(exam_ids=[exam.id])
+
     # Get all students for the selection modal
     all_students = account_service.scoped_students_query(current_user).order_by(User.full_name).all()
     
@@ -597,7 +599,8 @@ def exam_analytics(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
         return redirect(url_for('faculty.faculty_dashboard'))
-    
+    finalize_overdue_attempts(exam_ids=[exam.id])
+
     student_exams = StudentExam.query.filter_by(exam_id=exam_id).all()
     
     total_attempts = len(student_exams)
@@ -1543,6 +1546,9 @@ def faculty_extend_exam_time(exam_id):
         # For now, let's just log it or update the exam duration if that's the intent
         exam.duration_minutes += minutes
         db.session.commit()
+        # Open exam pages re-read their remaining time from the server
+        from backend.routes.exam import exam_room
+        socketio.emit('time_extended', {'exam_id': exam.id, 'minutes': minutes}, to=exam_room(exam.id))
         flash(f'Exam duration extended by {minutes} minutes.', 'success')
         
     return redirect(url_for('faculty.view_exam', exam_id=exam_id))
