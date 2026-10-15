@@ -177,10 +177,21 @@ The script fills in this checkout's path for the certificates, installs the site
 config and restarts nginx. Behind nginx, start the app **without** `--ssl` (nginx proxies plain
 HTTP to `127.0.0.1:8800`).
 
-## Offline LAN warning
+## Offline operation
 
-Face sign-in and the pre-exam identity check load face-api.js and its models from public CDNs
-(`cdn.jsdelivr.net`, `justadudewhohacks.github.io`). On a network with no internet access, those
-fail to load, and **camera-proctored exams cannot start** because the identity check cannot run.
-Either allow those hosts through the firewall, or vendor the files into `frontend/static/` and
-point `frontend/static/js/face_liveness.js` and `student/take_exam.html` at the local copies.
+Netra-I needs no internet access. Every library, font and face-recognition model is served from
+`frontend/static/vendor/` (see the README there for versions and sources), and
+`tests/test_offline.py` fails if a page starts loading anything from outside again.
+
+Before an exam, rehearse with the WAN cable unplugged: log in as a student, pass the system
+check and identity check, answer a question, and submit.
+
+## Backups during an exam
+
+```bash
+python scripts/backup_db.py --dest /media/usb/netra-backups
+```
+
+The copy is consistent even while students are writing (SQLite online backup) and is
+integrity-checked. Run it before the exam and every few minutes during it (cron example in the
+script header).

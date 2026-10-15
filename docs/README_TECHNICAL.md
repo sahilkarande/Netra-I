@@ -47,7 +47,7 @@ installation and configuration, read the main **[README](../README.md)**.
 | Vision fallback / image ops | opencv-python | 4.13.0.90 |
 | Numerics / imports | numpy / pandas | 2.3.5 / 3.0.0 |
 | PDF | reportlab / fpdf | 4.4.9 / 1.7.2 |
-| Client-side face descriptors | face-api.js (CDN) | 0.22.2 |
+| Client-side face descriptors | face-api.js (vendored, `static/vendor/face-api`) | 0.22.2 |
 | Database | SQLite by default, any SQLAlchemy URL | — |
 | Tests | pytest | not pinned |
 
@@ -66,6 +66,7 @@ Netra-I/
 │   ├── database.py                 # db = SQLAlchemy(), login_manager, SQLite WAL pragma
 │   ├── models.py                   # 11 models (556 lines)
 │   ├── socket_io.py                # SocketIO() singleton + origin policy
+│   ├── security.py                 # CSRF token issue + check
 │   ├── routes/                     # 5 blueprints (~3 400 lines)
 │   │   ├── auth.py      (760)      #   login, register/OTP, password change, face sign-in & checks
 │   │   ├── admin.py     (348)      #   faculty CRUD, all students/exams, SQL console
@@ -74,7 +75,8 @@ Netra-I/
 │   │   └── exam.py      (503)      #   exam runtime + Socket.IO handlers
 │   ├── services/
 │   │   ├── exam_builder.py      (260)   # one validation path for single + batch exam creation
-│   │   ├── exam_service.py      (102)   # scoring, per-student shuffle
+│   │   ├── exam_service.py              # scoring, shuffle, deadlines, overdue-attempt sweeper
+│   │   ├── account_service.py           # temp passwords, student scoping, safe deletion
 │   │   ├── question_splitter.py (281)   # split one bank into N papers (stateless)
 │   │   ├── proctor_service.py   (197)   # per-attempt engine registry, violation logging
 │   │   ├── face_service.py      (537)   # enrolment, matching, lockout, audit
@@ -93,13 +95,14 @@ Netra-I/
 │   │   └── admin/ faculty/ student/
 │   └── static/
 │       ├── css/  (10 files; style.css is ~16 700 lines)
-│       ├── js/   (analytics, face_liveness, student_management, socket.io.min)
+│       ├── js/   (analytics, face_liveness, student_management)
+│       ├── vendor/                 # all third-party JS/CSS/fonts + face-api models (offline)
 │       ├── images/
 │       └── violations/             # evidence JPEGs, runtime-only, gitignored, staff-only
 │
 ├── ai_models/                      # OpenVINO IR files (~12 MB, gitignored)
-├── tests/                          # pytest suite — conftest + 3 modules, 48 tests
-├── scripts/                        # create_admin, repair_proctor_settings, LAN cert + launcher
+├── tests/                          # pytest suite — 5 modules, 128 tests
+├── scripts/                        # create_admin, backup_db, repair_proctor_settings, LAN cert + launcher
 ├── deploy/                         # nginx template + installer
 ├── docs/                           # this file, overview, LAN guide, diagrams/, samples/, project/
 ├── archive/                        # retired code, not imported (see archive/README.md)
@@ -181,6 +184,12 @@ is a prerequisite for a multi-environment deployment.
 
 ```python
 @app.before_request
+def csrf_protect():               # backend/security.py — token on every POST/PUT/PATCH/DELETE
+
+@app.before_request
+def enforce_idle_timeout():       # sign out after SESSION_IDLE_MINUTES without a request
+
+@app.before_request
 def protect_violation_evidence():
     # /static/violations/* → 403 unless the user is faculty or admin
 
@@ -209,6 +218,7 @@ One table for all three roles, discriminated by `role`.
 | `password_changed` / `_at` / `password_hint` | first-login flow; `must_change_password` is a derived property |
 | `default_results_published` / `default_show_leaderboard` | faculty preferences inherited by new exams |
 | `otp` / `otp_created_at` | 6 digits from `secrets`, 600 s TTL enforced in `verify_otp()` |
+| `created_by` | staff member who created a student account (import); scopes faculty access. `NULL` for self-registered and pre-existing accounts |
 
 ### `exam`
 
@@ -246,6 +256,10 @@ The attempt — the hub every runtime table hangs off.
   `proctoring_status` (`active` | `terminated`), `calibration_completed`
 - **Review:** `is_invalidated`, `faculty_review_note`, `reviewed_by`, `reviewed_at`
 - `result_visible_to_student` — published *and* not invalidated
+- **Constraints:** unique `(student_id, exam_id)`; `student_answer` is unique on
+  `(student_exam_id, question_id)`. Both are added to existing databases at start-up by
+  `ensure_schema_indexes()`, together with indexes on the hot foreign keys. SQLite foreign keys
+  are enforced (`PRAGMA foreign_keys=ON`).
 
 ### Runtime tables
 
@@ -286,6 +300,14 @@ Failures are counted per identifier (`pw:<identifier>`); after **5** the identif
 > `roll_id` is not unique. If two students share one, `.first()` picks one arbitrarily — prefer
 > username, email or PRN.
 
+### Sessions
+
+Sessions are browser-session cookies (`HttpOnly`, `SameSite=Lax`, `Secure` under `--ssl`). No
+"remember me" cookie is issued, so closing the browser ends the login, and
+`enforce_idle_timeout` signs out a session idle for `SESSION_IDLE_MINUTES` (default 60) — the
+exam page polls, so an exam in progress never looks idle. Login and logout clear the session.
+This matters because lab PCs are shared between exam batches.
+
 ### Self-registration and OTP
 
 `POST /register` **always creates a `student`** — any posted `role` is ignored. Faculty are
@@ -315,8 +337,14 @@ for students, ≤ 255 characters, and rejected if it contains the new password. 
 /password-hint` returns one generic 404 for "no account" and "no hint", so it cannot enumerate
 users, and the client renders the hint with `textContent`.
 
-A faculty reset (`/faculty/change-student-password/<id>`, students only) sets the password to a
-default and clears `password_changed`, `password_changed_at` and `password_hint`.
+Imported students without a password column get a **random** 10-character temporary password
+(`account_service.generate_temp_password`). The generated list is written once to
+`instance/credentials/<token>.csv`, bound to the importing session, and deleted when downloaded
+from the banner on *Manage Students*.
+
+A faculty reset (`/faculty/change-student-password/<id>`, students in scope only) sets a new
+random temporary password, returned once in the response and shown in the modal, and clears
+`password_changed`, `password_changed_at` and `password_hint`.
 
 ### Face enrolment and sign-in
 
@@ -377,9 +405,20 @@ evidence images, force-end, staff submission, enrolment during import — goes t
 `_faculty_can_access_exam`. Force-ending a single attempt additionally requires that the attempt
 belongs to the exam in the URL.
 
-Account-level actions are constrained by **target role**: faculty may edit, reset or delete only
-`student` accounts, never staff. Students are not owned by a particular faculty member in the
-schema, so any faculty member can manage any student account (see §13).
+Every faculty route carries `@staff_required`, and both helpers return nothing for non-staff —
+students carry course/department fields too, so the department match must never be reached for
+them.
+
+Account-level actions are constrained by **target role** (only `student` accounts) and by
+**scope** (`account_service.scoped_students_query`): a faculty member sees and manages students
+created by their department (`users.created_by`), students who sat one of the department's exams,
+and accounts with no recorded owner (pre-existing or self-registered). Out-of-scope IDs return
+404. This applies to the student list, export, profile, edit, password reset, face reset/history,
+deletion, exam assignment and the batch report. Admin is unrestricted.
+
+Deletion goes through `account_service.delete_students` / `delete_faculty`, which remove or
+detach every dependent row (attempts, answers, logs, violations and their evidence files, face
+data) in one transaction. A faculty member who still owns exams cannot be deleted.
 
 Student-to-exam assignment is `Exam.is_assigned`, a property that reads `current_user` directly
 and splits `allowed_students` (a comma-separated ID string — cannot be indexed or joined; an
@@ -437,6 +476,10 @@ sequenceDiagram
 
 ### Starting
 
+Pre-created attempts (from import) are assignments, not attempts: they are not shown as
+"in progress", and `/take` redirects anything not in `started` back to the dashboard, so the
+clock always starts at Start and a closed or force-ended exam cannot be opened.
+
 `/start-exam/<id>` acts only on **POST** (a GET redirects to the dashboard), so a link on another
 site cannot start a student's clock. Only students may start. A new attempt requires the exam to
 be active, inside its `start_time`/`end_time` window, and not force-ended; an attempt already in
@@ -460,6 +503,26 @@ not grant time. The client countdown is display only. `extend_time` adds minutes
 `/api/save-answer` accepts writes only from the student who owns the attempt, only while it is
 not completed, and only until `started_at + duration + 120 s`. Question IDs not on this exam's
 paper are ignored; values are truncated to 10 characters.
+
+### Deadlines and abandoned attempts
+
+`exam_service.finalize_overdue_attempts()` closes any `started` attempt whose
+`started_at + duration + 120 s` has passed: it is marked submitted *at its deadline* and scored
+from the answers saved so far. It runs lazily on the student dashboard, faculty exam views, the
+status poll and Start, and as a background task every 60 s (`start_attempt_sweeper`, started by
+`app.py` and `wsgi.py`).
+
+The status endpoint returns `remaining_seconds` computed on the server; the exam page resyncs
+its countdown to it on every poll, and `extend_time` emits `time_extended` so open pages poll at
+once.
+
+### Answer durability
+
+Every change is written to `localStorage` (`netra:answers:<attempt>`) before it is sent. On
+load, local edits are re-applied over the server's copy and pushed again. Failed saves retry
+with exponential backoff (2 s → 30 s) behind a visible "not saved yet" message. Cleared answers
+are sent as `null` and cleared on the server. The submit form carries the full answer map, which
+is saved in the same request as scoring (refused after the deadline + grace).
 
 ### Scoring
 
@@ -715,7 +778,11 @@ endpoints require login.
 `POST /faculty/change-student-password/<id>` · `POST /faculty/student/<id>/reset-face` ·
 `GET /faculty/student/<id>/face-history`
 
-*Reports* — `GET /faculty/student_report` · `POST /faculty/student_report/pdf` (placeholder, §13)
+*Reports* — `GET /faculty/student_report` · `POST /faculty/student_report/pdf` (returns
+`{pdf_b64, filename}`, built from the same rows as the page; hand edits are flagged "(edited)")
+
+*Credentials* — `GET /faculty/credentials/<token>` (one-time download of temporary passwords
+from the last import, bound to the importing session)
 
 ### Admin — [admin.py](../backend/routes/admin.py)
 
@@ -738,6 +805,12 @@ Sample files are in [docs/samples/](samples/).
 | Threat | Control |
 |---|---|
 | Forged session cookies | No hard-coded secret; random per-installation key or `SECRET_KEY` |
+| Cross-site request forgery | Per-session token on every POST/PUT/PATCH/DELETE (`backend/security.py`), added automatically to fetch and forms by `base.html` |
+| Shared lab PCs | No remember-me cookie; session ends with the browser or after `SESSION_IDLE_MINUTES` idle |
+| Remote code execution via debugger | Debug off by default; when on, bound to 127.0.0.1 only |
+| Students acting as staff | `@staff_required` on every faculty route; access helpers reject non-staff |
+| Predictable first-login passwords | Random per-student temporary passwords on import and reset |
+| Clickjacking / MIME sniffing | `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`, `nosniff`, `Referrer-Policy: same-origin` |
 | Privilege escalation via signup | `/register` creates students only |
 | Staff account takeover by faculty | Edit / password reset / delete restricted to `role == 'student'`; edit rejects duplicate emails |
 | Password / OTP / access-key / face guessing | Per-identifier 5-failure, 10-minute lockouts (in-process) |
@@ -758,20 +831,22 @@ Sample files are in [docs/samples/](samples/).
 
 ## 13. Known gaps
 
-- **No CSRF tokens.** `SameSite=Lax` cookies and POST-only state changes block the common
-  cross-site cases, but there is no Flask-WTF token on forms or JSON endpoints.
-- **Student accounts are not owned by faculty.** Any faculty member can edit, reset or delete any
-  student. Adding an owning faculty/department to `users` would close this.
+Open items from the [Phase 1 audit](audit/PHASE1_AUDIT.md) (P2) and longer-term work:
+
+- **No Alembic.** Additive schema changes are applied at start-up (`ensure_schema_columns`,
+  `ensure_schema_indexes`); anything else needs a migration tool.
 - **Department-level sharing.** Faculty in the same course/department see each other's exams and
   results. If per-teacher isolation is wanted, tighten `_faculty_can_access_exam`.
+- **Unowned students are visible to all faculty.** Accounts created before `created_by` existed,
+  and self-registered ones, have no owner; admin can assign one with the SQL console.
 - **Lockouts are in-process.** They reset on restart and are not shared between workers.
 - **`roll_id` is non-unique** but accepted as a login identifier.
-- **Face checks depend on CDNs.** face-api.js and its models load from `cdn.jsdelivr.net` and
-  `justadudewhohacks.github.io`; offline, camera exams cannot pass the identity gate.
-- **No heartbeat sweeper.** `HEARTBEAT_TIMEOUT` is recorded but nothing acts on a silent client;
-  an abandoned attempt keeps its in-memory state until restart.
-- **Placeholders.** `POST /faculty/student_report/pdf` returns a stub string, and the "Enhance
-  questions with AI" checkbox on the upload page is not wired to any backend logic.
+- **Logout is a GET.** A cross-site page can log a user out (not in).
+- **Password hints are public by PRN.** `/password-hint` reveals a hint to anyone who knows the
+  identifier.
+- **Leaderboard scope.** Students see names and PRNs from every published exam with the board on.
+- **Evidence is deleted on publish**, and exam deletion is a hard delete.
+- **One account, two devices.** Nothing stops the same attempt being open on two machines.
 - **Redis is declared but unused** (`docker-compose.yml`), so Socket.IO cannot scale past one worker.
 
 ---
@@ -881,7 +956,9 @@ restarts nginx. nginx terminates TLS and proxies to `127.0.0.1:8800`, forwarding
 - [ ] `SECRET_KEY` set explicitly (or `instance/.secret_key` preserved across redeploys)
 - [ ] `DATABASE_URL` → PostgreSQL for large cohorts
 - [ ] `instance/` and `frontend/static/violations/` on persistent, backed-up storage
-- [ ] face-api.js reachable (or vendored) from every exam machine
+- [ ] Offline rehearsal with the WAN unplugged (all assets are vendored; `tests/test_offline.py`)
+- [ ] `python scripts/backup_db.py` before the exam and on a schedule during it
+- [ ] `FLASK_DEBUG` unset
 - [ ] Model files present in `ai_models/` — check the start-up banner for degraded detectors
 - [ ] Measure `check_frame` latency on exam-day hardware (§14)
 - [ ] Full rehearsal exam with real webcams
@@ -905,7 +982,8 @@ python app.py                       # http://localhost:8800, reloader on
 python -m pytest
 ```
 
-`tests/conftest.py` points `DATABASE_URL` at a temporary SQLite file, rebuilds the schema for
+`tests/conftest.py` points `DATABASE_URL` and the instance folder at a temporary directory,
+disables CSRF for the general suite (the CSRF tests switch it back on), rebuilds the schema for
 every test, clears in-memory lockouts, and seeds an admin, two faculty in different departments,
 two students and one exam with a submitted attempt. `as_user('<username>')` returns a logged-in
 test client; Socket.IO is tested with `socketio.test_client(app, flask_test_client=…)` so the
@@ -916,6 +994,8 @@ socket shares the HTTP session.
 | `test_pages.py` | pages that render (dashboards, results, PDF, profiles, admin lists, SQL console), visibility properties, escaping on analytics, activity-log writes |
 | `test_security.py` | registration role, OTP delivery/expiry/lockout, login lockout, secret key, account-role restrictions, SQL console access, cross-department access, review/invalidate, evidence access and path containment |
 | `test_exam_runtime.py` | POST-only start/submit, exam window, import clock, access-key gate and lockout, answer rules, tab count, force-end (exam and student), Socket.IO ownership and room delivery |
+| `test_phase1_hardening.py` | one test group per Phase 1 audit finding (`test_p0_1_*` … `test_p2_12_*`): staff-only routes, debug defaults, sessions, temp passwords, deletion, scoping, unique constraints, CSRF, deadlines, timer sync, answer durability, report PDF, upload validation, backups, headers |
+| `test_offline.py` | no external hosts in templates/scripts/styles, every vendored file present and served, face models complete |
 
 Not automated: the camera, liveness and face-match flows in a real browser.
 
@@ -926,6 +1006,7 @@ Not automated: the camera, liveness and face-match flows in a real browser.
 | Script | Purpose |
 |---|---|
 | `scripts/create_admin.py` | create (or promote) an admin: `--username --email --password --name`. Gitignored locally because it carries default credentials |
+| `scripts/backup_db.py` | online, integrity-checked SQLite backup into `backup/` (or `--dest`), keeps the newest `--keep` (default 20); safe during an exam |
 | `scripts/repair_proctor_settings.py` | repair exams whose `camera_enabled` was saved `false` by an earlier create-exam bug; dry run by default, `--apply` to write |
 | `scripts/generate_lan_cert.sh` | self-signed certificate for LAN HTTPS into `certs/` |
 | `scripts/start_lan_exam.sh` | generate certs if missing, then `python app.py --ssl` |

@@ -110,8 +110,14 @@ graph LR
 Questions come from a CSV or Excel file — one row per question, with the question text, four
 options, and which one is correct. A hundred questions is one file and one upload.
 
-Student lists work the same way. Each student gets an account automatically, with a temporary
-password they are forced to change the first time they log in.
+Student lists work the same way. Each student gets an account automatically, with their own
+random temporary password. Right after the import the teacher downloads a sheet listing those
+passwords (it can be downloaded once) and hands each student their line. Students must change
+the password the first time they log in. Nobody shares a default password, so nobody can sign in
+as a classmate who hasn't logged in yet.
+
+On shared lab computers a login never outlives the browser: closing it signs the student out,
+and a session left idle for an hour ends by itself, so the next person at that seat starts fresh.
 
 ### During the exam — the student's journey
 
@@ -417,16 +423,16 @@ strictness levels exist largely to compensate for this.
 handles roughly **250 concurrent students** before camera checks start falling behind. 300 is
 within reach but needs the next round of work — see the technical README.
 
-**The face check needs internet access.** The face-recognition library is downloaded from the
-internet when the page opens. On a completely offline campus network, exams that use the camera
-cannot start until those files are copied onto the server. The deployment guide explains how.
+**No internet needed.** Everything the exam pages use, including the face-recognition files, is
+served by the exam server itself, so an exam hall network can be completely cut off from the
+internet.
 
 **Storage grows between publications.** Every flagged moment is a JPEG on disk. They are removed
 when results are published, but an exam whose results are never published keeps its photos.
 
-**Faculty can manage any student account.** Students are not tied to a particular teacher in the
-database, so any faculty member can edit, reset or delete any student. Exams and results are
-separated by department; student accounts are not.
+**Older student accounts are shared.** Students imported from now on belong to the department
+that imported them. Accounts created before that, and students who registered themselves, have
+no owner yet, so every teacher can see them until an administrator assigns one.
 
 ---
 

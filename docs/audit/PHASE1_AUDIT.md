@@ -383,9 +383,57 @@ introduced it. Do not edit §3–§5 except to mark items fixed.
 
 ### Fix tracking
 
-| ID | Fixed in | Test |
-|---|---|---|
-| — | — | — |
+Branch `fix/phase1-hardening`. Tests live in `tests/test_phase1_hardening.py` (named
+`test_<id>_…`) and `tests/test_offline.py`.
+
+| ID | Status | Commit | Regression tests |
+|---|---|---|---|
+| P0-1 | Fixed | `78cf211` | `test_p0_1_*` — 9 routes × same-department student, helpers, every faculty route decorated |
+| P0-2 | Fixed | `78cf211` | `test_p0_2_*` — default not debug, debug binds loopback, never with `--ssl` |
+| P0-3 | Fixed | `78cf211` | `test_p0_3_*` — no remember cookie, session cookie attributes, idle timeout, logout |
+| P0-4 | Fixed | `6ba044c` | `test_p0_4_*` — random distinct import passwords, one-time sheet bound to session, reset |
+| P0-5 | Fixed | `dbca43b` | `tests/test_offline.py` — no external hosts, vendor files exist, models complete, served |
+| P0-6 | Fixed | `78cf211` | `test_p0_6_*` — imported attempt not "in progress", `take` needs Start, full time |
+| P0-7 | Fixed | `6ba044c` | `test_p0_7_*` — delete with attempts, bulk delete + leaderboard, faculty with exams, FK pragma |
+| P1-1 | Fixed | `c2e2987` | `test_p1_1_*` — login and state changes need the token, wrong token, pages carry hook |
+| P1-2 | Fixed | `0dcbd40` | `test_p1_2_*` — dashboard / faculty view / status / sweep close overdue attempts |
+| P1-3 | Fixed | `78cf211` | `test_p1_3_*` |
+| P1-4 | Fixed | `0dcbd40` | `test_p1_4_*` — `remaining_seconds`, extension pushed over Socket.IO |
+| P1-5 | Fixed | `0dcbd40` | `test_p1_5_*` — submit carries answers, ignored after time-up, cleared answers |
+| P1-6 | Fixed | `c2e2987` | `test_p1_6_*` |
+| P1-7 | Fixed (removed) | `c2e2987` | `test_p1_7_*` |
+| P1-8 | Fixed | `c2e2987` | `test_p1_8_*` — five invalid row types, empty options, batch create |
+| P1-9 | Fixed | `6ba044c` | `test_p1_9_*` — six actions out of scope → 404, lists/exports scoped |
+| P1-10 | Fixed | `6ba044c` | `test_p1_10_*` — unique attempt/answer, constraints added to an old database |
+| P1-11 | Partly fixed | `6ba044c`, `c2e2987` | `test_p1_11_*` — backups; FK enforcement in P0-7. **Alembic not introduced** (see below) |
+| P1-12 | Fixed | `78cf211` | `test_p1_12_*` |
+| P2-1 | Fixed | `c2e2987` | `test_p2_1_*` |
+| P2-2 | Fixed | `c2e2987` | `test_p2_2_*` |
+| P2-3 | Fixed | `c2e2987` | `test_p2_3_*` |
+| P2-9 | Fixed | `6ba044c` | covered by `test_p1_10_indexes_added_to_existing_database` |
+| P2-12 | Fixed | `c2e2987` | `test_p2_12_*` |
+| P2-4, 5, 6, 7, 8, 10, 11, 13, 14 | Open | — | Phase 2 |
+
+**Test suite:** 48 at baseline → **128 passing** after these fixes.
+
+**Not done, deliberately:**
+- *Alembic* (P1-11). Schema changes in this round were additive and are applied at start-up by
+  `ensure_schema_columns()` / `ensure_schema_indexes()`, which were tested against an old-style
+  database. Alembic is still recommended before running more than one environment.
+- *Faculty-supervised face enrolment* (optional part of P0-4). Random temporary passwords remove
+  the takeover path; supervised enrolment would add defence in depth.
+
+**Behaviour changes to know about:**
+- `python app.py` no longer runs in debug mode; set `FLASK_DEBUG=true` for local debugging (it then
+  listens on 127.0.0.1 only).
+- Logins no longer survive closing the browser, and idle sessions end after
+  `SESSION_IDLE_MINUTES` (default 60).
+- Students imported without a password column get random passwords — download the credentials
+  sheet from the banner on *Manage Students* right after importing; it is offered once.
+- Faculty see students created by their department, students who sat their exams, and older
+  accounts with no recorded owner. Admin still sees everyone.
+- A question file with any invalid row is rejected as a whole, with row numbers in the message.
+- A faculty member who still owns exams cannot be deleted.
 
 ---
 
