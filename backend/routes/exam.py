@@ -138,6 +138,13 @@ def take_exam(exam_id):
     if student_exam.completed:
         return redirect(url_for('student.student_dashboard'))
 
+    # Only a started attempt may be shown. Anything else (pre-created at
+    # import) must go through start_exam, which checks the exam is open and
+    # starts the clock now.
+    if student_exam.status != 'started':
+        flash('Press Start on your dashboard to begin this exam.', 'info')
+        return redirect(url_for('student.student_dashboard'))
+
     # The paper is only rendered once the access key has been accepted, so the
     # key actually protects the questions rather than just hiding them.
     if _needs_access_key(exam):

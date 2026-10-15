@@ -214,7 +214,11 @@ def login():
                 flash('Please verify your email first.', 'warning')
                 return redirect(url_for('auth.verify_otp'))
                 
-            login_user(user, remember=True)
+            # No persistent cookie: on a shared lab PC the next person must not
+            # inherit this account. The session cookie dies with the browser and
+            # an idle timeout (app.enforce_idle_timeout) covers browsers left open.
+            session.clear()
+            login_user(user, remember=False)
 
             # First-time student login -> force a password change before anything else
             if user.must_change_password:
@@ -238,6 +242,7 @@ def login():
 @login_required
 def logout():
     logout_user()
+    session.clear()
     return redirect(url_for('auth.login'))
 
 @auth_bp.route('/change-password', methods=['GET', 'POST'])
@@ -295,7 +300,8 @@ def change_password():
 
         except Exception as e:
             db.session.rollback()
-            flash(f'Error changing password: {str(e)}', 'error')
+            current_app.logger.exception('change_password failed')
+            flash('Could not change your password. Please try again.', 'error')
             return render_template(
                 'change_password.html',
                 is_forced=is_forced,
@@ -615,6 +621,7 @@ def face_login():
     _log_face(login_input, 'login', user_id=user.id, success=True,
               distance=distance, reason='match', liveness_passed=True, detail=detail)
 
+    session.clear()
     login_user(user, remember=False)
 
     if user.must_change_password:

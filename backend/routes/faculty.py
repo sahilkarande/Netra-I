@@ -7,6 +7,7 @@ import shutil
 import traceback
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app
+from functools import wraps
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
@@ -21,8 +22,34 @@ from backend.socket_io import socketio
 
 faculty_bp = Blueprint('faculty', __name__)
 
+STAFF_ROLES = ('faculty', 'admin')
+
+
+def _is_staff():
+    return current_user.is_authenticated and current_user.role in STAFF_ROLES
+
+
+def staff_required(view):
+    """Faculty/admin only. Every faculty route carries this, so a missing role
+    check inside a view can never hand a student staff powers."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not _is_staff():
+            wants_json = (request.is_json
+                          or request.accept_mimetypes.best == 'application/json'
+                          or request.path.startswith('/api/'))
+            if wants_json or request.method != 'GET':
+                return jsonify({"success": False, "error": "Access denied"}), 403
+            flash('Access denied', 'error')
+            return redirect(url_for('auth.index'))
+        return view(*args, **kwargs)
+    return wrapped
+
+
 def _get_faculty_exams():
     """Retrieve exams accessible to current faculty (own exams + same course/department exams) or all if admin"""
+    if not _is_staff():
+        return []
     if current_user.role == 'admin':
         return Exam.query.order_by(Exam.created_at.desc()).all()
     user_course = current_user.course or current_user.department
@@ -38,7 +65,9 @@ def _get_faculty_exams():
 
 def _faculty_can_access_exam(exam):
     """Check if current user can access/manage the exam"""
-    if not exam:
+    # Students carry course/department too, so the department match below must
+    # never be reached for them.
+    if not exam or not _is_staff():
         return False
     if current_user.role == 'admin':
         return True
@@ -64,6 +93,7 @@ def _faculty_can_access_student(student_id):
 
 @faculty_bp.route('/faculty/dashboard')
 @login_required
+@staff_required
 def faculty_dashboard():
     if current_user.role != 'faculty' and current_user.role != 'admin':
         return redirect(url_for('auth.index'))
@@ -147,6 +177,7 @@ def _visibility_state(exams):
 
 @faculty_bp.route('/faculty/visibility-state')
 @login_required
+@staff_required
 def faculty_visibility_state():
     """Current results / leaderboard visibility for this faculty's exams."""
     if current_user.role not in ('faculty', 'admin'):
@@ -158,6 +189,7 @@ def faculty_visibility_state():
 
 @faculty_bp.route('/faculty/set_leaderboard', methods=['POST'])
 @login_required
+@staff_required
 def faculty_set_leaderboard():
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "message": "Unauthorized"}), 403
@@ -201,6 +233,7 @@ def faculty_set_leaderboard():
 
 @faculty_bp.route('/faculty/set_results_visibility', methods=['POST'])
 @login_required
+@staff_required
 def faculty_set_results_visibility():
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "message": "Unauthorized"}), 403
@@ -253,6 +286,7 @@ def faculty_set_results_visibility():
 
 @faculty_bp.route('/faculty/exam/create', methods=['GET', 'POST'])
 @login_required
+@staff_required
 def create_exam():
     """Create a single exam.
 
@@ -279,7 +313,8 @@ def create_exam():
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            flash(f'Could not create the exam: {e}', 'error')
+            current_app.logger.exception('create_exam failed')
+            flash('Could not create the exam. Please try again.', 'error')
             return render_template('faculty/create_exam.html',
                                    form=request.form), 500
 
@@ -294,6 +329,7 @@ def create_exam():
 
 @faculty_bp.route('/faculty/import_students', methods=['POST'])
 @login_required
+@staff_required
 def import_students():
     if current_user.role != 'faculty' and current_user.role != 'admin':
         flash('Access denied', 'error')
@@ -387,7 +423,8 @@ def import_students():
 
                 added += 1
             except Exception as e:
-                errors.append(f"Row {index + 2}: {str(e)}")
+                current_app.logger.warning("import row %s failed: %s", index + 2, e)
+                errors.append(f"Row {index + 2}: could not be imported")
                 skipped += 1
                 db.session.rollback()
 
@@ -397,11 +434,13 @@ def import_students():
 
     except Exception as e:
         db.session.rollback()
-        flash(f"Error processing file: {str(e)}", 'error')
+        current_app.logger.exception('import_students failed')
+        flash("Could not read the file. Check it is a valid CSV, Excel or JSON file.", 'error')
         return redirect(url_for('faculty.faculty_students'))
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/delete', methods=['POST'])
 @login_required
+@staff_required
 def delete_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -415,6 +454,7 @@ def delete_exam(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/upload', methods=['GET', 'POST'])
 @login_required
+@staff_required
 def upload_questions(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -476,13 +516,15 @@ def upload_questions(exam_id):
         except Exception as e:
             db.session.rollback()
             traceback.print_exc()
-            flash(f'Error processing file: {str(e)}', 'error')
+            current_app.logger.exception('upload_questions failed')
+            flash('Could not read the question file. Check its columns and values.', 'error')
             return redirect(request.url)
             
     return render_template('faculty/upload_questions.html', exam=exam)
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>')
 @login_required
+@staff_required
 def view_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -520,6 +562,7 @@ def view_exam(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/analytics')
 @login_required
+@staff_required
 def exam_analytics(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -564,6 +607,7 @@ def exam_analytics(exam_id):
 
 @faculty_bp.route('/api/faculty/publish-results/<int:exam_id>', methods=['POST'])
 @login_required
+@staff_required
 def faculty_publish_results(exam_id):
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"error": "Access denied"}), 403
@@ -614,6 +658,7 @@ def faculty_publish_results(exam_id):
 
 @faculty_bp.route('/faculty/students')
 @login_required
+@staff_required
 def faculty_students():
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
@@ -667,6 +712,7 @@ def faculty_students():
 
 @faculty_bp.route('/faculty/student_report', methods=['GET'])
 @login_required
+@staff_required
 def faculty_student_report():
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
@@ -777,12 +823,14 @@ def faculty_student_report():
 
 @faculty_bp.route('/faculty/student_report/pdf', methods=['POST'])
 @login_required
+@staff_required
 def faculty_student_report_pdf():
     # Placeholder for PDF generation
     return "PDF Report generation triggered"
 
 @faculty_bp.route('/faculty/student/<int:student_id>/profile')
 @login_required
+@staff_required
 def faculty_student_profile(student_id):
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
@@ -792,6 +840,7 @@ def faculty_student_profile(student_id):
 
 @faculty_bp.route('/faculty/student/<int:student_id>/edit', methods=['GET', 'POST'])
 @login_required
+@staff_required
 def faculty_edit_student(student_id):
     if current_user.role not in ('faculty', 'admin'):
         flash('Access denied', 'error')
@@ -823,6 +872,7 @@ def faculty_edit_student(student_id):
 
 @faculty_bp.route('/faculty/download_template')
 @login_required
+@staff_required
 def download_template():
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
@@ -840,6 +890,7 @@ def download_template():
 
 @faculty_bp.route('/faculty/change-student-password/<int:student_id>', methods=['POST'])
 @login_required
+@staff_required
 def faculty_change_student_password(student_id):
     if current_user.role not in ['faculty', 'admin']:
         return jsonify({"success": False, "message": "Unauthorized"}), 403
@@ -859,6 +910,7 @@ def faculty_change_student_password(student_id):
     })
 @faculty_bp.route('/faculty/split-questions')
 @login_required
+@staff_required
 def split_questions_page():
     """Standalone tool: split one question file into several set files."""
     if current_user.role not in ('faculty', 'admin'):
@@ -869,6 +921,7 @@ def split_questions_page():
 
 @faculty_bp.route('/faculty/split-questions/preview', methods=['POST'])
 @login_required
+@staff_required
 def split_questions_preview():
     """Parse the uploaded bank and show how it would divide. Writes nothing."""
     if current_user.role not in ('faculty', 'admin'):
@@ -919,6 +972,7 @@ def split_questions_preview():
 
 @faculty_bp.route('/faculty/split-questions/download', methods=['POST'])
 @login_required
+@staff_required
 def split_questions_download():
     """Split the uploaded bank and return the sets as a ZIP."""
     if current_user.role not in ('faculty', 'admin'):
@@ -965,6 +1019,7 @@ def split_questions_download():
 
 @faculty_bp.route('/faculty/student/<int:student_id>/reset-face', methods=['POST'])
 @login_required
+@staff_required
 def faculty_reset_student_face(student_id):
     """Clear a student's registered face so they can enrol again.
 
@@ -998,6 +1053,7 @@ def faculty_reset_student_face(student_id):
 
 @faculty_bp.route('/faculty/student/<int:student_id>/face-history')
 @login_required
+@staff_required
 def faculty_student_face_history(student_id):
     """Who changed this student's face template, and when."""
     if current_user.role not in ('faculty', 'admin'):
@@ -1028,6 +1084,7 @@ def faculty_student_face_history(student_id):
 
 @faculty_bp.route('/api/faculty/batch-create-exams', methods=['POST'])
 @login_required
+@staff_required
 def batch_create_exams():
     """Create several exams at once, each optionally with its own question file.
 
@@ -1101,7 +1158,8 @@ def batch_create_exams():
     except Exception as e:
         db.session.rollback()
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.exception('request failed')
+        return jsonify({"success": False, "error": "The operation failed. Nothing was changed."}), 500
 
     if not created:
         return jsonify({"success": False,
@@ -1118,6 +1176,7 @@ def batch_create_exams():
 
 @faculty_bp.route('/faculty/delete_student/<int:student_id>', methods=['POST'])
 @login_required
+@staff_required
 def delete_student(student_id):
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "error": "Access denied"}), 403
@@ -1132,10 +1191,12 @@ def delete_student(student_id):
         return jsonify({"success": True})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.exception('request failed')
+        return jsonify({"success": False, "error": "The operation failed. Nothing was changed."}), 500
 
 @faculty_bp.route('/faculty/delete_students', methods=['POST'])
 @login_required
+@staff_required
 def delete_students():
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "error": "Access denied"}), 403
@@ -1152,10 +1213,12 @@ def delete_students():
         return jsonify({"success": True})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.exception('request failed')
+        return jsonify({"success": False, "error": "The operation failed. Nothing was changed."}), 500
 
 @faculty_bp.route('/faculty/export_students')
 @login_required
+@staff_required
 def export_students():
     if current_user.role not in ('faculty', 'admin'):
         flash('Access denied', 'error')
@@ -1214,6 +1277,7 @@ def export_students():
     )
 @faculty_bp.route('/faculty/exam/<int:exam_id>/preview_questions', methods=['POST'])
 @login_required
+@staff_required
 def preview_questions(exam_id):
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"error": "Access denied"}), 403
@@ -1241,11 +1305,13 @@ def preview_questions(exam_id):
         return jsonify({"rows": rows})
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        current_app.logger.exception('preview_questions failed')
+        return jsonify({"error": "Could not read the file."}), 500
     return jsonify({"error": "Invalid file format"}), 400
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/force_end', methods=['POST'])
 @login_required
+@staff_required
 def faculty_force_end_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1277,6 +1343,7 @@ def faculty_force_end_exam(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/force_end_student/<int:student_exam_id>', methods=['POST'])
 @login_required
+@staff_required
 def faculty_force_end_student(exam_id, student_exam_id):
     se = StudentExam.query.get_or_404(student_exam_id)
     exam = Exam.query.get_or_404(exam_id)
@@ -1299,6 +1366,7 @@ def faculty_force_end_student(exam_id, student_exam_id):
     return redirect(url_for('faculty.view_exam', exam_id=exam_id))
 @faculty_bp.route('/faculty/exam/<int:exam_id>/generate_key', methods=['POST'])
 @login_required
+@staff_required
 def generate_exam_key(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1315,6 +1383,7 @@ def generate_exam_key(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/clear_key', methods=['POST'])
 @login_required
+@staff_required
 def clear_exam_key(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1326,6 +1395,7 @@ def clear_exam_key(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/update_access', methods=['POST'])
 @login_required
+@staff_required
 def update_exam_access(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1360,6 +1430,7 @@ def update_exam_access(exam_id):
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/extend_time', methods=['POST'])
 @login_required
+@staff_required
 def faculty_extend_exam_time(exam_id):
     exam = Exam.query.get_or_404(exam_id)
     if not _faculty_can_access_exam(exam):
@@ -1417,6 +1488,7 @@ def _evidence_file(violation):
 
 @faculty_bp.route('/api/proctor/status/<int:student_exam_id>')
 @login_required
+@staff_required
 def proctor_status(student_exam_id):
     """Violation summary and timeline for one attempt (analytics review modal)."""
     se = _staff_attempt_or_none(student_exam_id)
@@ -1449,6 +1521,7 @@ def proctor_status(student_exam_id):
 
 @faculty_bp.route('/api/faculty/review-exam/<int:student_exam_id>', methods=['POST'])
 @login_required
+@staff_required
 def review_exam(student_exam_id):
     """Accept or invalidate an attempt after reviewing its proctoring flags."""
     se = _staff_attempt_or_none(student_exam_id)
@@ -1479,6 +1552,7 @@ def review_exam(student_exam_id):
 
 @faculty_bp.route('/faculty/violation/<int:violation_id>/evidence')
 @login_required
+@staff_required
 def violation_evidence(violation_id):
     """Serve an evidence image to staff who can access the exam."""
     v = ExamViolation.query.get_or_404(violation_id)
@@ -1492,6 +1566,7 @@ def violation_evidence(violation_id):
 
 @faculty_bp.route('/api/faculty/violation/<int:violation_id>/evidence', methods=['DELETE', 'POST'])
 @login_required
+@staff_required
 def delete_violation_evidence(violation_id):
     """Delete one evidence image. The violation row itself is kept."""
     v = ExamViolation.query.get_or_404(violation_id)

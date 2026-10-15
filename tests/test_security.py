@@ -182,8 +182,9 @@ def test_review_exam_scoped_to_exam_access(seed, as_user):
     resp = as_user('facb').post(f"/api/faculty/review-exam/{seed['attempt']}",
                                 json={'action': 'invalidate', 'note': 'x'})
     assert resp.status_code == 404
+    # Students are stopped by staff_required before any lookup happens
     assert as_user('stud1').post(f"/api/faculty/review-exam/{seed['attempt']}",
-                                 json={'action': 'accept'}).status_code == 404
+                                 json={'action': 'accept'}).status_code == 403
 
 
 # ── Evidence images ─────────────────────────────────────────────────────────

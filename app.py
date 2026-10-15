@@ -13,6 +13,7 @@ from flask_login import login_required, current_user, logout_user
 import os
 import sys
 import socket
+import time
 from dotenv import load_dotenv
 from sqlalchemy import text
 from backend.database import db, login_manager
@@ -127,8 +128,17 @@ def load_secret_key(instance_path):
 STAFF_ROLES = ('faculty', 'admin')
 
 
+def _configure_logging():
+    """INFO-level logs to stderr unless the host already configured logging."""
+    import logging
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO,
+                            format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+
+
 def create_app():
     """Application factory"""
+    _configure_logging()
     app = Flask(
         __name__,
         template_folder='frontend/templates',
@@ -152,6 +162,14 @@ def create_app():
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['PERMANENT_SESSION_LIFETIME'] = 3600       # 1 hour
     app.config['SESSION_REFRESH_EACH_REQUEST'] = True
+
+    # Lab PCs are shared between exam batches, so a login must never outlive
+    # the browser session. No long-lived "remember me" cookie is issued; these
+    # settings harden it anyway in case anything ever sets one.
+    app.config['REMEMBER_COOKIE_DURATION'] = timedelta(hours=1)
+    app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+    app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
+    app.config['REMEMBER_COOKIE_SECURE'] = use_ssl
 
     # ──────────────────────────────────────────────────────────────
     # INITIALIZE EXTENSIONS
@@ -214,6 +232,20 @@ def create_app():
         return response
 
     # ──────────────────────────────────────────────────────────────
+    # ERRORS — never show internals to the user
+    # ──────────────────────────────────────────────────────────────
+    @app.errorhandler(500)
+    def internal_error(err):
+        db.session.rollback()
+        app.logger.exception('Unhandled error on %s %s', request.method, request.path)
+        if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+            return jsonify({'success': False, 'error': 'Something went wrong. Please try again.'}), 500
+        return ('<!doctype html><title>Something went wrong</title>'
+                '<div style="font-family:sans-serif;max-width:480px;margin:15vh auto;text-align:center">'
+                '<h2>Something went wrong</h2><p>The error has been logged. '
+                '<a href="/">Return to your dashboard</a>.</p></div>'), 500
+
+    # ──────────────────────────────────────────────────────────────
     # LOGIN MANAGER HELPERS
     # ──────────────────────────────────────────────────────────────
     @login_manager.user_loader
@@ -238,6 +270,27 @@ def create_app():
     # ──────────────────────────────────────────────────────────────
     # FIRST-LOGIN PASSWORD CHANGE ENFORCEMENT
     # ──────────────────────────────────────────────────────────────
+    idle_limit = timedelta(minutes=int(os.getenv('SESSION_IDLE_MINUTES', '60')))
+
+    @app.before_request
+    def enforce_idle_timeout():
+        """Sign out a session that has been idle too long.
+
+        Covers a lab browser left open after someone walks away. The exam page
+        polls the server, so an active exam never looks idle.
+        """
+        if request.path.startswith(('/static', '/socket.io')) or not current_user.is_authenticated:
+            return None
+        now = time.time()
+        last = session.get('_last_seen')
+        if last is not None and now - last > idle_limit.total_seconds():
+            logout_user()
+            session.clear()
+            flash('You were signed out after a period of inactivity.', 'info')
+            return redirect(url_for('auth.login'))
+        session['_last_seen'] = now
+        return None
+
     @app.before_request
     def protect_violation_evidence():
         """Evidence photos are served from /static but must not be public.
@@ -309,22 +362,41 @@ def create_app():
     return app
 
 
+def resolve_run_options(argv, env):
+    """How `python app.py` should serve.
+
+    Debug mode wraps the app in Werkzeug's interactive debugger, which shows
+    source on every error and offers a Python console. It is therefore off
+    unless asked for, never combined with --ssl, and when on it only listens on
+    the loopback interface so nobody else on the LAN can reach it.
+    """
+    use_ssl = '--ssl' in argv or str(env.get('USE_SSL', 'false')).lower() == 'true'
+    debug = (not use_ssl) and str(env.get('FLASK_DEBUG', 'false')).lower() in ('1', 'true', 'yes')
+    host = '127.0.0.1' if debug else env.get('HOST', '0.0.0.0')
+    return {
+        'use_ssl': use_ssl,
+        'debug': debug,
+        'host': host,
+        'port': int(env.get('PORT', 8800)),
+        'use_reloader': debug,
+    }
+
+
 # ──────────────────────────────────────────────────────────────────
 # MAIN ENTRY POINT
 # ──────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     app = create_app()
-    
-    # Parse CLI args
-    use_ssl = '--ssl' in sys.argv
-    port = int(os.getenv('PORT', 8800))
+
+    opts = resolve_run_options(sys.argv, os.environ)
+    use_ssl = opts['use_ssl']
+    port = opts['port']
+    debug = opts['debug']
     lan_ip = get_lan_ip()
 
-    if use_ssl:
-        debug = False
-        print("ℹ️  Debug mode disabled (required for SSL stability)")
-    else:
-        debug = os.getenv('FLASK_DEBUG', 'True') == 'True'
+    if debug:
+        print("⚠️  DEBUG MODE: interactive debugger enabled, listening on 127.0.0.1 only.")
+        print("    Never use FLASK_DEBUG for an exam — other machines cannot connect.")
     
     # SSL context
     ssl_context = None
@@ -373,10 +445,9 @@ if __name__ == '__main__':
     
     run_kwargs = {
         "debug": debug,
-        "host": '0.0.0.0',
+        "host": opts['host'],
         "port": port,
-        "allow_unsafe_werkzeug": True,
-        "use_reloader": not use_ssl
+        "use_reloader": opts['use_reloader'],
     }
     
     if use_ssl and ssl_context:
