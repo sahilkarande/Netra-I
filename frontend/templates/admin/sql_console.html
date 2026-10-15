@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block title %}SQL Console - Admin Panel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1.5rem 1rem;
+    }
+
+    .admin-nav {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        padding: 0.75rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+    }
+
+    .admin-nav a {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 1rem;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+
+    .admin-nav a:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .admin-nav a.active {
+        background: var(--primary-color);
+        color: #fff;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .page-header h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .filters-bar {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .filters-bar input,
+    .filters-bar select {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--text-primary);
+        font-size: 0.85rem;
+    }
+
+    .filters-bar input {
+        min-width: 250px;
+    }
+
+    .btn-filter {
+        background: var(--primary-color);
+        color: #fff;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .section-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .admin-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .admin-table th {
+        background: var(--bg-secondary);
+        padding: 0.65rem 1rem;
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+    }
+
+    .admin-table td {
+        padding: 0.7rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.88rem;
+        color: var(--text-primary);
+    }
+
+    .admin-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .admin-table tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .name-cell {
+        font-weight: 600;
+    }
+
+    .sub-text {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+    }
+
+    .badge-sm {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .badge-green {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-blue {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .total-badge {
+        background: var(--primary-color);
+        color: #fff;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .empty-row {
+        text-align: center;
+        padding: 2.5rem;
+        color: var(--text-secondary);
+    }
+
+    .sql-input {
+        width: 100%;
+        min-height: 140px;
+        padding: 0.8rem 1rem;
+        font-family: monospace;
+        font-size: 0.9rem;
+        border-radius: 10px;
+        border: 1px solid rgba(127, 127, 127, 0.35);
+        background: transparent;
+        color: inherit;
+        resize: vertical;
+    }
+
+    .sql-actions {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        margin: 0.8rem 0 1.2rem;
+        flex-wrap: wrap;
+    }
+
+    .sql-warning {
+        font-size: 0.85rem;
+        opacity: 0.75;
+    }
+
+    .sql-status { margin-bottom: 0.6rem; font-size: 0.9rem; }
+    .sql-status.error { color: #ef4444; }
+    .sql-status.ok { color: #10b981; }
+    .sql-output { overflow-x: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+    <div class="admin-nav">
+        <a href="{{ url_for('admin.admin_dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="{{ url_for('admin.manage_faculty') }}"><i class="bi bi-person-badge"></i> Manage Faculty</a>
+        <a href="{{ url_for('admin.admin_students') }}"><i class="bi bi-people"></i> All Students</a>
+        <a href="{{ url_for('admin.admin_all_exams') }}"><i class="bi bi-journal-text"></i> All Exams</a>
+        <a href="{{ url_for('student.global_leaderboard') }}"><i class="bi bi-trophy"></i> Leaderboard</a>
+        <a href="{{ url_for('admin.admin_sql_console') }}" class="active"><i class="bi bi-terminal"></i> SQL Console</a>
+    </div>
+
+    <div class="page-header">
+        <h1><i class="bi bi-terminal"></i> SQL Console</h1>
+    </div>
+
+    <div class="section-card" style="padding: 1.2rem;">
+        <textarea id="sqlQuery" class="sql-input" spellcheck="false"
+                  placeholder="SELECT id, username, role FROM users LIMIT 20;"></textarea>
+        <div class="sql-actions">
+            <button type="button" class="btn-filter" id="sqlRun"><i class="bi bi-play-fill"></i> Run</button>
+            <span class="sql-warning"><i class="bi bi-exclamation-triangle"></i>
+                Statements other than SELECT change the live database immediately.</span>
+        </div>
+        <div id="sqlStatus" class="sql-status"></div>
+        <div id="sqlOutput" class="sql-output"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const input = document.getElementById('sqlQuery');
+        const runBtn = document.getElementById('sqlRun');
+        const status = document.getElementById('sqlStatus');
+        const output = document.getElementById('sqlOutput');
+
+        function setStatus(text, cls) {
+            status.textContent = text;
+            status.className = 'sql-status ' + (cls || '');
+        }
+
+        /* Results are rendered with textContent only: cell values come straight
+           from the database and may contain user-supplied markup. */
+        function renderTable(columns, rows) {
+            const table = document.createElement('table');
+            table.className = 'admin-table';
+            const head = table.createTHead().insertRow();
+            columns.forEach(c => {
+                const th = document.createElement('th');
+                th.textContent = c;
+                head.appendChild(th);
+            });
+            const body = table.createTBody();
+            rows.forEach(r => {
+                const tr = body.insertRow();
+                columns.forEach(c => {
+                    tr.insertCell().textContent = r[c] === null ? 'NULL' : String(r[c]);
+                });
+            });
+            output.replaceChildren(table);
+        }
+
+        async function run() {
+            const sql = input.value.trim();
+            if (!sql) { setStatus('Enter a SQL statement first.', 'error'); return; }
+            if (!/^\s*(select|pragma|with)\b/i.test(sql) &&
+                !confirm('This statement can modify the database. Run it?')) return;
+
+            runBtn.disabled = true;
+            setStatus('Running…');
+            output.replaceChildren();
+            try {
+                const res = await fetch("{{ url_for('admin.admin_sql_run') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sql })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    setStatus('Error: ' + (data.error || 'Query failed'), 'error');
+                } else if (data.type === 'select') {
+                    setStatus(`${data.rowcount} row(s) returned`, 'ok');
+                    renderTable(data.columns, data.rows);
+                } else {
+                    setStatus(data.message, 'ok');
+                }
+            } catch (e) {
+                setStatus('Error: ' + e.message, 'error');
+            }
+            runBtn.disabled = false;
+        }
+
+        runBtn.addEventListener('click', run);
+        input.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run();
+        });
+    })();
+</script>
+{% endblock %}

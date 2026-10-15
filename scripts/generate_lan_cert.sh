@@ -15,18 +15,19 @@
 #   chmod +x scripts/generate_lan_cert.sh
 #   ./scripts/generate_lan_cert.sh
 #
-# Output: cert.pem and key.pem in the project root directory
+# Output: certs/cert.pem and certs/key.pem
 # ============================================================================
 
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CERT_FILE="$PROJECT_DIR/cert.pem"
-KEY_FILE="$PROJECT_DIR/key.pem"
+CERT_DIR="$PROJECT_DIR/certs"
+CERT_FILE="$CERT_DIR/cert.pem"
+KEY_FILE="$CERT_DIR/key.pem"
 DAYS_VALID=365
 
 echo "============================================"
-echo " ProctoGuard LAN SSL Certificate Generator"
+echo " Netra-I LAN SSL Certificate Generator"
 echo "============================================"
 echo ""
 
@@ -88,9 +89,9 @@ distinguished_name = dn
 C = IN
 ST = Maharashtra
 L = Pune
-O = ProctoGuard Exam Platform
+O = Netra-I Exam Platform
 OU = IT Department
-CN = ProctoGuard LAN Server
+CN = Netra-I LAN Server
 
 [v3_req]
 subjectAltName = $SAN_ENTRIES
@@ -100,6 +101,7 @@ extendedKeyUsage = serverAuth
 EOF
 
 # Generate certificate
+mkdir -p "$CERT_DIR"
 openssl req -x509 -nodes \
     -days $DAYS_VALID \
     -newkey rsa:2048 \

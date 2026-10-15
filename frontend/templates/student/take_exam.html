@@ -5,6 +5,7 @@
 {% block body_class %}exam-mode{% endblock %}
 
 {% block content %}
+<script src="{{ url_for('static', filename='js/face_liveness.js') }}"></script>
 <style>
   /* Hide all question slides; only the .active one is shown */
   .question-slide { display: none !important; }
@@ -99,7 +100,7 @@ ACCESS KEY OVERLAY (shown only when exam requires a key)
       keyBtn.textContent = 'Verifying…';
 
       try {
-        const resp = await fetch('{{ url_for("verify_exam_key", exam_id=exam.id) }}', {
+        const resp = await fetch('{{ url_for("exam.verify_exam_key", exam_id=exam.id) }}', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: 'access_key=' + encodeURIComponent(key)
@@ -232,10 +233,10 @@ SYSTEM CHECK OVERLAY — combined calibration, mic test, checks
         <div class="sc-progress-fill" id="scProgressFill" style="width:0%"></div>
       </div>
 
-      <!-- Check grid -->
-      <div class="sc-grid">
+      <!-- Check list, grouped so it reads as three short sections -->
+      <div class="sc-grid" id="scGrid">
 
-
+        <div class="sc-group-label">Connection</div>
         <div class="sc-item" id="sci-network">
           <div class="sc-item-icon-wrap si-blue"><i class="bi bi-globe2"></i></div>
           <div class="sc-item-body">
@@ -253,7 +254,7 @@ SYSTEM CHECK OVERLAY — combined calibration, mic test, checks
           <div class="sc-item-status" id="sci-internet-st"><div class="sc-spin"></div></div>
         </div>
 
-
+        <div class="sc-group-label">This device</div>
         <div class="sc-item" id="sci-camera">
           <div class="sc-item-icon-wrap si-green"><i class="bi bi-camera-video-fill"></i></div>
           <div class="sc-item-body">
@@ -279,7 +280,7 @@ SYSTEM CHECK OVERLAY — combined calibration, mic test, checks
           <div class="sc-item-status" id="sci-devices-st"><div class="sc-spin"></div></div>
         </div>
 
-
+        <div class="sc-group-label">Monitored during the exam</div>
         <div class="sc-item" id="sci-screen">
           <div class="sc-item-icon-wrap si-purple"><i class="bi bi-display-fill"></i></div>
           <div class="sc-item-body">
@@ -296,13 +297,11 @@ SYSTEM CHECK OVERLAY — combined calibration, mic test, checks
           </div>
           <div class="sc-item-status" id="sci-apps-st"><div class="sc-spin"></div></div>
         </div>
-
-
         <div class="sc-item" id="sci-identity">
           <div class="sc-item-icon-wrap si-teal"><i class="bi bi-person-badge-fill"></i></div>
           <div class="sc-item-body">
             <div class="sc-item-name">Identity Verification</div>
-            <div class="sc-item-desc" id="sci-identity-desc">Face reference will be captured via AI…</div>
+            <div class="sc-item-desc" id="sci-identity-desc">Liveness + match against your registered face…</div>
           </div>
           <div class="sc-item-status" id="sci-identity-st"><div class="sc-spin"></div></div>
         </div>
@@ -530,6 +529,7 @@ MAIN EXAM UI (2-col: left nav + main)
             <div class="opts-list" id="opts{{ loop.index0 }}" data-qid="{{ q.id }}" data-idx="{{ loop.index0 }}"
               data-oa="{{ q.option_a|e }}" data-ob="{{ q.option_b|e }}"
               data-oc="{{ q.option_c|e if q.option_c else '' }}" data-od="{{ q.option_d|e if q.option_d else '' }}"
+              data-omap="{{ (option_mapping.get(q.id|string) or [])|join(',') }}"
               data-sel="{{ existing_answers.get(q.id, '') }}">
             </div>
           </div>
@@ -705,36 +705,16 @@ DRAGGABLE FLOATING CAMERA WIDGET
     maxTabs: {{ exam.max_tab_switches or 5 }},
     maxViol: {{ exam.max_violations if exam.max_violations else 25 }},
     examMode: "{{ exam.exam_mode or 'classroom' }}",
-    /* Faculty-driven proctoring settings — safe defaults if not set */
-    proctor: (() => {
-      const SAFE_DEFAULTS = {
-        camera_enabled: true,
-        face_detection: true,
-        head_pose: false,
-        object_detection: false,
-        voice_detection: false,
-        tab_switch: true,
-        max_warnings: 25,
-        max_tab_switches: 5,
-        sensitivity: 'medium'
-      };
-      try {
-        /* Use tojson to safely embed OR fix escaped quotes from | e filter */
-        let raw = '{{ exam.proctor_settings | default("{}", true) }}'.replace(/&quot;/g, '"').replace(/&#34;/g, '"').replace(/&amp;/g, '&');
-        if (!raw || raw === 'None' || raw === 'null') raw = '{}';
-        const parsed = JSON.parse(raw);
-        console.log('✅ Proctor settings loaded:', parsed);
-        return { ...SAFE_DEFAULTS, ...parsed };
-      } catch (e) {
-        console.warn('⚠️ Could not parse proctor_settings, using safe defaults:', e);
-        return SAFE_DEFAULTS;
-      }
-    })(),
+    /* Faculty-driven proctoring settings, merged with defaults server-side.
+       Falls back to the exam's own getter if the view did not pass them in. */
+    proctor: {{ (proctor_settings if proctor_settings is defined and proctor_settings else exam.get_proctor_settings()) | tojson }},
+    /* Capture cadence, dictated by the server so we never upload discarded frames */
+    frameIntervalMs: {{ frame_interval_ms | default(4000, true) }},
     urls: {
       save: "{{ url_for('exam.save_answer') }}",
-      tabUpd: "{{ url_for('api_update_tabcount', student_exam_id=student_exam.id) }}",
-      logAct: "{{ url_for('api_log_activity',   student_exam_id=student_exam.id) }}",
-      status: "{{ url_for('api_check_exam_status', student_exam_id=student_exam.id) }}",
+      tabUpd: "{{ url_for('exam.api_update_tabcount', student_exam_id=student_exam.id) }}",
+      logAct: "{{ url_for('exam.api_log_activity',   student_exam_id=student_exam.id) }}",
+      status: "{{ url_for('exam.api_check_exam_status', student_exam_id=student_exam.id) }}",
       submit: "{{ url_for('exam.submit_exam', student_exam_id=student_exam.id) }}"
     }
   };
@@ -798,9 +778,21 @@ DRAGGABLE FLOATING CAMERA WIDGET
       /* only include keys that have non-empty text */
       const available = keys.filter(k => texts[k].trim() !== '');
 
-      /* deterministic shuffle: seed = student_exam_id * 1000 + qid */
-      const seed = (CFG.seId * 1000 + qid) % 2147483647;
-      const shuffled = seededShuffle([...available], seed);
+      /* The server decides the order and stores it on the attempt, so the paper
+         is stable across refreshes and the arrangement is not derivable from
+         anything the student can see. The seeded client shuffle below is only a
+         fallback for exams with randomisation turned off or legacy attempts
+         that have no stored mapping. */
+      const serverOrder = (el.dataset.omap || '').split(',').filter(Boolean)
+        .filter(k => available.includes(k));
+
+      let shuffled;
+      if (serverOrder.length === available.length) {
+        shuffled = serverOrder;
+      } else {
+        const seed = (CFG.seId * 1000 + qid) % 2147483647;
+        shuffled = seededShuffle([...available], seed);
+      }
 
       /* store mapping: canonical key → display position letter */
       const displayMap = {}; /* e.g. {A→'B', B→'D', ...} display label → original key */
@@ -831,6 +823,14 @@ DRAGGABLE FLOATING CAMERA WIDGET
   /* ══════════════════════════════════
      SOCKET.IO
   ══════════════════════════════════ */
+  function stopAudioStream() {
+    if (S.audioStream) {
+      try { S.audioStream.getTracks().forEach(t => t.stop()); } catch(_){}
+      S.audioStream = null;
+    }
+  }
+  window.addEventListener('beforeunload', stopAudioStream);
+
   function initSocket() {
     S.socket = io();
 
@@ -1383,7 +1383,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
         cvs.toBlob(blob => blob && blob.arrayBuffer().then(buf =>
           S.socket.emit('frameBinary', { studentExamId: CFG.seId, frame: buf })
         ), 'image/jpeg', 0.6);
-      }, 3000);  // 3 seconds — balanced between performance and detection
+      }, CFG.frameIntervalMs);  // matches the server-side inspection interval
     }
 
     // ── Heartbeat for network security (every 10s) ──
@@ -2347,6 +2347,38 @@ DRAGGABLE FLOATING CAMERA WIDGET
     }, 500);
   }
 
+  /* Server-side check against the student's REGISTERED face.
+     compareExamFace() below only compares against the reference captured at
+     calibration, which is self-referential — if a substitute sits down before
+     calibration they become their own reference. This closes that hole. */
+  async function verifyAgainstRegisteredFace() {
+    if (S.done || !window.faceapi || !S.stream) return;
+    try {
+      const v = g('monitor-video');
+      if (!v || v.readyState < 2 || !v.videoWidth) return;
+
+      const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.4 });
+      const det = await faceapi.detectSingleFace(v, opts).withFaceDescriptor().catch(() => null);
+      if (!det || !det.descriptor) return;
+
+      const res = await fetch("{{ url_for('auth.face_exam_check') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ descriptor: Array.from(det.descriptor), student_exam_id: CFG.seId })
+      });
+      const data = await res.json();
+
+      if (data.checked && data.match === false) {
+        addLog('Face does not match the registered student', 'le');
+        S.viol++; updateViolUI();
+        safeToast('Identity Alert',
+          'The face at the camera does not match the student registered for this account. '
+          + 'This has been reported to your instructor.',
+          'td', 'registered_face_mismatch');
+      }
+    } catch (e) { /* network hiccup — the next tick retries */ }
+  }
+
   /* Face identity comparison during exam — called every 30s */
   async function compareExamFace() {
     if (!S.refDescriptor || !window.faceapi || S.done) return;
@@ -2374,8 +2406,36 @@ DRAGGABLE FLOATING CAMERA WIDGET
      Note: _audioCtx is already declared above by the exam audio monitor — reused here
   ══════════════════════════════════ */
   async function initScAudio() {
-    if (!S.stream) return;
-    const audioTracks = S.stream.getAudioTracks();
+    /* Voice monitoring must not depend on the camera. When faculty disable the
+       camera but leave voice detection on, acquire an audio-only stream here
+       rather than relying on the camera stream's audio track. */
+    if (!S.stream || !S.stream.getAudioTracks().length) {
+      const wantVoice = CFG.proctor.voice_detection !== false;
+      if (wantVoice) {
+        try {
+          S.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        } catch (e) {
+          S._micReady = true;
+          g('scAudioStatus').textContent = 'Microphone blocked — voice monitoring unavailable';
+          scSetStatus('mic', 'warn', 'Microphone permission denied');
+          checkAllReady();
+          return;
+        }
+      }
+    }
+
+    /* Prefer the camera stream's audio; otherwise the dedicated audio stream. */
+    const audioSource = (S.stream && S.stream.getAudioTracks().length) ? S.stream : S.audioStream;
+
+    if (!audioSource) {
+      S._micReady = true;
+      g('scAudioStatus').textContent = 'Microphone not available — skipped';
+      scSetStatus('mic', 'warn', 'No microphone available');
+      checkAllReady();
+      return;
+    }
+
+    const audioTracks = audioSource.getAudioTracks();
     if (!audioTracks.length) {
       /* No mic — auto-pass */
       S._micReady = true;
@@ -2385,7 +2445,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
     }
     try {
       _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const src = _audioCtx.createMediaStreamSource(S.stream);
+      const src = _audioCtx.createMediaStreamSource(audioSource);
       const analyser = _audioCtx.createAnalyser();
       analyser.fftSize = 256;
       src.connect(analyser);
@@ -2520,7 +2580,98 @@ DRAGGABLE FLOATING CAMERA WIDGET
     }, 360);
   }
 
-  g('scProceedBtn').addEventListener('click', proceedToExam);
+  /* ══════════════════════════════════
+     PRE-EXAM IDENTITY GATE
+     Before the paper opens, the server must confirm (a) a live person is at
+     the camera and (b) that person matches the face registered for this
+     account. A photo or a screen is rejected, so an exam cannot be handed to
+     a substitute. Verdict is entirely server-side.
+  ══════════════════════════════════ */
+  async function runExamIdentityGate() {
+    const btn = g('scProceedBtn');
+    const stage = g('scCamWrap') || g('scCamStage');
+
+    if (typeof NetraFaceLiveness === 'undefined') {
+      scSetStatus('identity', 'warn', 'Identity check unavailable — proctor notified');
+      return { ok: false, message: 'Identity verification is unavailable on this device.' };
+    }
+
+    /* Borrow the pre-exam preview element already on screen. */
+    const video = g('calib-video');
+    if (!video) return { ok: false, message: 'Camera preview not available.' };
+
+    const liveness = new NetraFaceLiveness({
+      video: video,
+      onPrompt: (text, i, total) => {
+        const label = total ? ('Step ' + (i + 1) + '/' + total + ' — ' + text) : text;
+        try { setCalibMsg(label, true); } catch (_) {}
+        try { scSetStatus('identity', 'pending', label); } catch (_) {}
+      }
+    });
+
+    let payload;
+    try {
+      payload = await liveness.runChallenge('exam', "{{ url_for('auth.face_challenge') }}");
+    } catch (e) {
+      return { ok: false, message: e.message || 'Liveness check could not be completed.' };
+    }
+
+    try {
+      const res = await fetch("{{ url_for('auth.face_verify_exam') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ ...payload, student_exam_id: CFG.seId })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        scSetStatus('identity', 'ok',
+          'Live identity confirmed' + (data.distance ? ' (match ' + data.distance + ')' : ''));
+        return { ok: true };
+      }
+
+      scSetStatus('identity', 'warn', data.message || 'Identity check failed');
+      if (data.not_enrolled) {
+        return { ok: false, notEnrolled: true, message: data.message };
+      }
+      return { ok: false, message: data.message || 'Identity check failed.' };
+    } catch (e) {
+      return { ok: false, message: 'Could not reach the server for identity verification.' };
+    }
+  }
+
+  g('scProceedBtn').addEventListener('click', async function () {
+    const btn = g('scProceedBtn');
+    const txt = g('scProceedTxt');
+
+    /* Faculty can disable the camera entirely; with no camera there is no
+       identity gate to run, and the exam proceeds as before. */
+    if (CFG.proctor.camera_enabled === false) { proceedToExam(); return; }
+
+    btn.disabled = true;
+    const original = txt ? txt.textContent : '';
+    if (txt) txt.textContent = 'Verifying your identity…';
+
+    const verdict = await runExamIdentityGate();
+
+    if (verdict.ok) {
+      if (txt) txt.textContent = 'Identity confirmed — starting…';
+      proceedToExam();
+      return;
+    }
+
+    btn.disabled = false;
+    if (txt) txt.textContent = original || 'Proceed to Exam →';
+
+    try { addLog('Pre-exam identity check failed: ' + (verdict.message || ''), 'le'); } catch (_) {}
+    try {
+      safeToast('Identity check failed', verdict.message ||
+        'We could not confirm a live person matching your registration.',
+        'td', 'identity_gate');
+    } catch (_) {
+      alert(verdict.message || 'Identity check failed.');
+    }
+  });
 
   /* ══════════════════════════════════
      BOOT — script is at bottom of <body>, DOM is already ready.
@@ -2553,8 +2704,18 @@ DRAGGABLE FLOATING CAMERA WIDGET
           try { initFaceApi(); } catch(e){ S._faceReady=true; checkAllReady(); }
         });
     } else {
-      S._calibReady = true; S._faceReady = true; S._micReady = true;
+      S._calibReady = true; S._faceReady = true;
       try { setChip('cr', 'Camera Off'); setCalibMsg('Camera monitoring off.', true); } catch(_){}
+
+      /* Camera off does not mean microphone off — voice detection is its own
+         faculty setting and must still run. */
+      if (CFG.proctor.voice_detection !== false) {
+        try { initScAudio(); }
+        catch(e){ console.error('initScAudio failed:', e); S._micReady = true; checkAllReady(); }
+      } else {
+        S._micReady = true;
+      }
+      checkAllReady();
     }
 
     /* ── System checks (runs in parallel with camera) ── */
@@ -2563,6 +2724,8 @@ DRAGGABLE FLOATING CAMERA WIDGET
     /* ── Periodic background tasks ── */
     setInterval(() => { try { pollExternalDevices(); } catch(_){} }, 3000);
     setInterval(() => { try { compareExamFace();    } catch(_){} }, 30000);
+    /* Registered-face check, offset so the two do not fire together */
+    setInterval(() => { try { verifyAgainstRegisteredFace(); } catch(_){} }, 45000);
   })();
 </script>
 

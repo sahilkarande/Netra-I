@@ -5,7 +5,7 @@
 <div class="container">
     <!-- Back Button -->
     <div style="margin-bottom: 1.5rem;">
-        <a href="{{ url_for('faculty.faculty_dashboard') }}" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+        <a href="{{ url_for('auth.index') }}" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
             <i class="bi bi-arrow-left"></i>
             Back to Dashboard
         </a>
@@ -75,11 +75,13 @@
                     </div>
                 {% endif %}
                 
+                {% if current_user.role in ('faculty', 'admin') %}
                 <!-- Reset Password Button -->
                 <button class="student-action-btn" onclick="openPasswordModal()">
                     <i class="bi bi-key-fill"></i>
                     Reset Password
                 </button>
+                {% endif %}
             </div>
         </div>
         

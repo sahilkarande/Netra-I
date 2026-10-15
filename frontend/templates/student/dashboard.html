@@ -125,6 +125,25 @@
       background: var(--card-bg);
       color: var(--text-primary);
   }
+  .results-locked-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin: 0 0 1.5rem;
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      background: rgba(245, 158, 11, 0.12);
+      border-left: 4px solid #f59e0b;
+      color: var(--text-primary);
+      font-size: 0.92rem;
+      line-height: 1.6;
+  }
+  .results-locked-note i {
+      font-size: 1.25rem;
+      color: #f59e0b;
+      flex-shrink: 0;
+      margin-top: 2px;
+  }
 </style>
 
 <div class="container">
@@ -133,9 +152,16 @@
     <div class="student-profile-banner">
       <div class="welcome-content">
         <h1>Welcome back, {{ current_user.full_name or current_user.username }}!</h1>
+        {% if leaderboard_available %}
         <a href="{{ url_for('student.global_leaderboard') }}" class="btn-outline" style="background: transparent; border: 1px solid var(--border); border-radius: 8px;">
           <i class="bi bi-trophy"></i> Leaderboard
         </a>
+        {% else %}
+        <span class="btn-outline" style="background: transparent; border: 1px dashed var(--border); border-radius: 8px; opacity: 0.6; cursor: not-allowed;"
+              title="Your instructor has closed the leaderboard">
+          <i class="bi bi-lock-fill"></i> Leaderboard closed
+        </span>
+        {% endif %}
       </div>
 
       <div class="banner-info-grid">
@@ -180,6 +206,18 @@
     </div>
   </div>
 
+  {% if hidden_results_count %}
+  <div class="results-locked-note">
+    <i class="bi bi-hourglass-split"></i>
+    <div>
+      <strong>{{ hidden_results_count }} of your {{ total_exams_taken }} submitted exam{{ 's' if total_exams_taken != 1 else '' }}
+        {{ 'have' if hidden_results_count != 1 else 'has' }} results on hold.</strong>
+      Your instructor has not published {{ 'them' if hidden_results_count != 1 else 'it' }} yet, so the score,
+      result page and PDF stay locked. The stats below only count released results.
+    </div>
+  </div>
+  {% endif %}
+
   <div class="dashboard-wrapper">
     <!-- 1. OVERVIEW SECTION -->
     <div class="dashboard-overview">
@@ -195,14 +233,14 @@
           <div class="stat-icon purple"><i class="bi bi-trophy"></i></div>
           <div class="stat-value">{{ "%.1f"|format(avg_score or 0) }}%</div>
           <div class="stat-label">Average Score</div>
-          <div class="stat-change" style="color: #8b5cf6;"><i class="bi bi-arrow-up"></i> {{ "%.1f"|format((avg_score or 0) * 0.1) }}%</div>
+          <div class="stat-change" style="color: #8b5cf6;"><i class="bi bi-check2-square"></i> {{ published_count or 0 }} released</div>
         </div>
 
         <div class="stat-card">
           <div class="stat-icon green"><i class="bi bi-percent"></i></div>
-          <div class="stat-value">{{ passed_count or 0 }}/{{ total_exams_taken or 0 }}</div>
+          <div class="stat-value">{{ passed_count or 0 }}/{{ published_count or 0 }}</div>
           <div class="stat-label">Pass Rate</div>
-          <div class="stat-change" style="color: #10b981;"><i class="bi bi-check-circle"></i> {{ "%.0f"|format((passed_count or 0) / (total_exams_taken or 1) * 100) }}%</div>
+          <div class="stat-change" style="color: #10b981;"><i class="bi bi-check-circle"></i> {{ "%.0f"|format((passed_count or 0) / (published_count or 1) * 100) }}%</div>
         </div>
 
         <div class="stat-card">
@@ -226,13 +264,17 @@
               <div class="activity-date">{{ exam.submitted_at.strftime('%b %d, %H:%M') if exam.submitted_at else 'N/A' }}</div>
             </div>
             <div>
-              {% if exam.exam.show_leaderboard %}
+              {% if exam.result_visible_to_student %}
               <span class="badge" style="background: {% if exam.passed %}rgba(16, 185, 129, 0.1); color: #10b981;{% else %}rgba(239, 68, 68, 0.1); color: #ef4444;{% endif %} border: 1px solid currentColor; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: bold; font-size: 0.85rem; display: inline-block;">
-                {{ exam.percentage }}%
+                {{ '%.1f'|format(exam.percentage or 0) }}%
+              </span>
+              {% elif exam.is_invalidated %}
+              <span class="badge" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid currentColor; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: bold; font-size: 0.85rem; display: inline-block;" title="This attempt was invalidated by your instructor">
+                <i class="bi bi-x-octagon"></i> Invalidated
               </span>
               {% else %}
-              <span class="badge" style="background: rgba(137, 145, 168, 0.1); color: #8991a8; border: 1px solid currentColor; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: bold; font-size: 0.85rem; display: inline-block;" title="Results hidden by instructor">
-                <i class="bi bi-eye-slash"></i> Hidden
+              <span class="badge" style="background: rgba(137, 145, 168, 0.1); color: #8991a8; border: 1px solid currentColor; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: bold; font-size: 0.85rem; display: inline-block;" title="Results not published yet">
+                <i class="bi bi-hourglass-split"></i> Awaiting release
               </span>
               {% endif %}
             </div>
@@ -521,18 +563,24 @@
             <tr style="border-bottom: 1px solid var(--border);">
               <td style="text-align: left; font-weight: 600;">{{ student_exam.exam.title }}</td>
               <td>
-                {% if student_exam.exam.show_leaderboard %}
+                {% if student_exam.result_visible_to_student %}
                 <span class="badge" style="background: {% if student_exam.passed %}rgba(16, 185, 129, 0.1); color: #10b981;{% else %}rgba(239, 68, 68, 0.1); color: #ef4444;{% endif %} border: 1px solid currentColor; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: bold;">
-                  {{ student_exam.percentage }}%
+                  {{ '%.1f'|format(student_exam.percentage or 0) }}%
+                </span>
+                {% elif student_exam.is_invalidated %}
+                <span class="badge" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid currentColor; padding: 0.3rem 0.8rem; border-radius: 999px;" title="This attempt was invalidated by your instructor">
+                  <i class="bi bi-x-octagon"></i> Invalidated
                 </span>
                 {% else %}
-                <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border); padding: 0.3rem 0.8rem; border-radius: 999px;" title="Results hidden by instructor">
-                  <i class="bi bi-eye-slash"></i> Hidden
+                <span class="badge" style="background: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border); padding: 0.3rem 0.8rem; border-radius: 999px;" title="Results not published yet">
+                  <i class="bi bi-hourglass-split"></i> Awaiting release
                 </span>
                 {% endif %}
               </td>
               <td>
-                {% if student_exam.passed %}
+                {% if not student_exam.result_visible_to_student %}
+                <span style="color: var(--text-muted); font-weight: 600;"><i class="bi bi-lock-fill"></i> Not released</span>
+                {% elif student_exam.passed %}
                 <span style="color: #10b981; font-weight: 600;"><i class="bi bi-check-circle-fill"></i> Passed</span>
                 {% else %}
                 <span style="color: #ef4444; font-weight: 600;"><i class="bi bi-x-circle-fill"></i> Failed</span>
@@ -545,14 +593,14 @@
               </td>
               <td>
                 <div style="display:flex; gap:0.5rem;">
-                  {% if student_exam.exam.show_leaderboard and student_exam.exam.post_exam_redirect != 'dashboard' %}
-                  <a href="{{ url_for('exam_result', student_exam_id=student_exam.id) }}" class="btn-preview"
+                  {% if student_exam.result_visible_to_student %}
+                  <a href="{{ url_for('student.student_exam_result', student_exam_id=student_exam.id) }}" class="btn-preview"
                     title="View Result"><i class="bi bi-eye"></i></a>
-                  <a href="{{ url_for('download_result_pdf', student_exam_id=student_exam.id) }}" class="btn-preview"
+                  <a href="{{ url_for('student.download_result_pdf', student_exam_id=student_exam.id) }}" class="btn-preview"
                     title="Download PDF"><i class="bi bi-download"></i></a>
                   {% else %}
-                  <button class="btn-preview" style="opacity:0.5; cursor:not-allowed;" title="Results restricted by instructor" disabled><i class="bi bi-eye-slash"></i></button>
-                  <button class="btn-preview" style="opacity:0.5; cursor:not-allowed;" title="PDF restricted by instructor" disabled><i class="bi bi-file-earmark-lock"></i></button>
+                  <button class="btn-preview" style="opacity:0.5; cursor:not-allowed;" title="{% if student_exam.is_invalidated %}This attempt was invalidated{% else %}Results not published by your instructor yet{% endif %}" disabled><i class="bi bi-eye-slash"></i></button>
+                  <button class="btn-preview" style="opacity:0.5; cursor:not-allowed;" title="{% if student_exam.is_invalidated %}This attempt was invalidated{% else %}PDF available once results are published{% endif %}" disabled><i class="bi bi-file-earmark-lock"></i></button>
                   {% endif %}
                 </div>
               </td>

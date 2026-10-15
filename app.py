@@ -36,6 +36,97 @@ def get_lan_ip():
         return "0.0.0.0"
 
 
+# Columns added after a table's first creation. db.create_all() creates missing
+# TABLES but never adds columns to a table that already exists, so anything
+# introduced later has to be ALTERed in here.
+LATE_COLUMNS = {
+    'users': {
+        'password_changed': 'BOOLEAN DEFAULT 0',
+        'password_changed_at': 'DATETIME',
+        'password_hint': 'VARCHAR(255)',
+        'default_results_published': 'BOOLEAN DEFAULT 0',
+        'default_show_leaderboard': 'BOOLEAN DEFAULT 1',
+    },
+    'face_enrollment': {
+        'is_locked': 'BOOLEAN DEFAULT 1',
+        'enrolled_by': 'INTEGER',
+        'reset_by': 'INTEGER',
+        'reset_at': 'DATETIME',
+        'liveness_score': 'FLOAT',
+        'liveness_method': 'VARCHAR(40)',
+    },
+    'face_login_attempt': {
+        'liveness_passed': 'BOOLEAN',
+        'spoof_score': 'FLOAT',
+        'liveness_detail': 'TEXT',
+        'stage': 'VARCHAR(20)',
+    },
+}
+
+
+def ensure_schema_columns():
+    """Lightweight additive migration for columns added after first deploy."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+
+    for table, additions in LATE_COLUMNS.items():
+        if table not in tables:
+            continue        # create_all() will have made it with every column
+
+        existing = {col['name'] for col in inspector.get_columns(table)}
+        for name, ddl in additions.items():
+            if name in existing:
+                continue
+            try:
+                db.session.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))
+                db.session.commit()
+                print(f"✅ Added {table}.{name}")
+            except Exception as e:
+                db.session.rollback()
+                print(f"⚠️  Could not add {table}.{name}: {e}")
+
+
+# Kept as an alias so older call sites keep working.
+ensure_user_columns = ensure_schema_columns
+
+
+def load_secret_key(instance_path):
+    """SECRET_KEY from the environment, else a random key persisted on disk.
+
+    A hard-coded fallback would let anyone who has read this repository forge
+    session cookies, so the fallback is generated once per installation.
+    """
+    key = os.getenv('SECRET_KEY')
+    if key:
+        return key
+
+    import secrets
+    os.makedirs(instance_path, exist_ok=True)
+    key_file = os.path.join(instance_path, '.secret_key')
+    try:
+        with open(key_file) as f:
+            key = f.read().strip()
+        if key:
+            return key
+    except FileNotFoundError:
+        pass
+
+    key = secrets.token_hex(32)
+    with open(key_file, 'w') as f:
+        f.write(key)
+    try:
+        os.chmod(key_file, 0o600)
+    except OSError:
+        pass
+    print(f"🔑 Generated a new SECRET_KEY in {key_file}")
+    return key
+
+
+STAFF_ROLES = ('faculty', 'admin')
+
+
 def create_app():
     """Application factory"""
     app = Flask(
@@ -45,7 +136,7 @@ def create_app():
     )
     
     # Configuration
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+    app.config['SECRET_KEY'] = load_secret_key(app.instance_path)
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///exam_platform.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
@@ -67,7 +158,7 @@ def create_app():
     # ──────────────────────────────────────────────────────────────
     db.init_app(app)
     login_manager.init_app(app)
-    login_manager.login_view = 'login'
+    login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Please log in to access this page.'
     login_manager.login_message_category = 'info'
     login_manager.session_protection = 'strong'
@@ -141,7 +232,65 @@ def create_app():
         from backend.routes import register_blueprints
         register_blueprints(app)
         db.create_all()
+        ensure_schema_columns()
         print("✅ Database initialized!")
+
+    # ──────────────────────────────────────────────────────────────
+    # FIRST-LOGIN PASSWORD CHANGE ENFORCEMENT
+    # ──────────────────────────────────────────────────────────────
+    @app.before_request
+    def protect_violation_evidence():
+        """Evidence photos are served from /static but must not be public.
+
+        They are filed under guessable paths (exam title + PRN), so without this
+        anyone on the network could fetch another student's webcam frames.
+        Staff view them through faculty.violation_evidence, which also checks
+        exam ownership.
+        """
+        if not request.path.startswith('/static/violations'):
+            return None
+        if current_user.is_authenticated and current_user.role in STAFF_ROLES:
+            return None
+        return 'Forbidden', 403
+
+    @app.before_request
+    def force_password_change():
+        """Students logging in for the first time must set their own password."""
+        if request.path.startswith('/socket.io') or request.path.startswith('/static'):
+            return None
+
+        if not current_user.is_authenticated:
+            return None
+
+        if not getattr(current_user, 'must_change_password', False):
+            return None
+
+        allowed = {
+            'static',
+            'auth.change_password',
+            'auth.check_password_status',
+            'auth.logout',
+            'auth.login',
+            'auth.password_hint',
+            # Face enrolment lives on the change-password page itself
+            'auth.face_enroll',
+            'auth.face_status',
+            'auth.face_delete',
+            'auth.face_challenge',
+        }
+        if (request.endpoint or 'static') in allowed:
+            return None
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
+                request.accept_mimetypes.best == 'application/json':
+            return jsonify({
+                'success': False,
+                'must_change_password': True,
+                'redirect': url_for('auth.change_password')
+            }), 403
+
+        flash('Please set your own password before continuing.', 'warning')
+        return redirect(url_for('auth.change_password'))
 
 
 
@@ -181,15 +330,16 @@ if __name__ == '__main__':
     ssl_context = None
     protocol = "http"
     if use_ssl:
-        cert_file = os.path.join(os.path.dirname(__file__), 'cert.pem')
-        key_file = os.path.join(os.path.dirname(__file__), 'key.pem')
+        cert_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'certs')
+        cert_file = os.path.join(cert_dir, 'cert.pem')
+        key_file = os.path.join(cert_dir, 'key.pem')
         
         if os.path.exists(cert_file) and os.path.exists(key_file):
             ssl_context = (cert_file, key_file)
             protocol = "https"
-            print("✅ SSL enabled with cert.pem / key.pem")
+            print("✅ SSL enabled with certs/cert.pem + certs/key.pem")
         else:
-            print("⚠️  SSL flag set but cert.pem/key.pem not found!")
+            print("⚠️  SSL flag set but certs/cert.pem / certs/key.pem not found!")
             print("    Run: bash scripts/generate_lan_cert.sh")
             print("    Falling back to HTTP (camera may not work over LAN)")
             print("")
@@ -201,40 +351,18 @@ if __name__ == '__main__':
     print(f"  Network URL: {protocol}://{lan_ip}:{port}")
     print(f"  Protocol:    {protocol.upper()}")
     if use_ssl:
-        print(f"  Camera:      ENABLED (secure context via HTTPS)")
+        print(f"")
     else:
-        print(f"  Camera:      Localhost only (use --ssl for LAN)")
-    print("")
-    print("  Features:")
-    print("   ✓ PRN Validation (12-digit)")
-    print("   ✓ Roll ID & Employee ID Support")
-    print("   ✓ OTP Email Verification")
-    print("   ✓ Smart Session Management")
-    print("   ✓ Back Button Fix (no reload to login)")
-    print("   ✓ PDF Result Download")
-    print("   ✓ Student Analytics Dashboard")
-    print("   ✓ Real-time Binary Proctoring (Socket.IO)")
-    print("   ✓ Fast Face Calibration (<0.5s)")
-    print("   ✓ Violation Detection & Auto-Submit")
-    print("   ✓ Admin SQL Console")
-    print("   ✓ Bulk Import/Export (CSV/Excel)")
-    print("   ✓ Multi-Faculty Data Isolation")
-    print("   ✓ Secure Cache Control")
+        print(f"")
+
     if use_ssl:
-        print("   ✓ HTTPS / SSL for LAN camera access")
-        print("   ✓ Permissions-Policy camera headers")
+        print("")
     print("")
     if not use_ssl:
         print("  ⚠️  To enable camera over LAN, start with:")
-        print(f"     python app.py --ssl")
-        print(f"     OR bash scripts/start_lan_exam.sh")
-        print("")
     else:
-        print("  Student Instructions:")
-        print(f"    1. Open Chrome/Edge browser")
         print(f"    2. Navigate to: {protocol}://{lan_ip}:{port}")
-        print(f"    3. Click 'Advanced' > 'Proceed to site'")
-        print(f"    4. Allow camera when prompted")
+
         print("")
     print("=" * 70 + "\n")
 

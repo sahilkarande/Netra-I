@@ -472,7 +472,7 @@
                         </td>
                         <td>
                             {% if se.total_violations > 0 %}
-                                <button onclick="viewViolations({{ se.id }}, '{{ se.student.full_name or se.student.username }}')" class="score-badge {{ 'badge-danger' if se.total_violations >= 5 else 'badge-warning' }}">
+                                <button onclick='viewViolations({{ se.id }}, {{ (se.student.full_name or se.student.username)|tojson }})' class="score-badge {{ 'badge-danger' if se.total_violations >= 5 else 'badge-warning' }}">
                                     <i class="bi bi-shield-exclamation"></i> {{ se.total_violations }} | View
                                 </button>
                             {% else %}
@@ -608,6 +608,28 @@ function filterTable() {
     }
 }
 
+/* Everything below is built with innerHTML, and names, notes and messages are
+   user-controlled — escape them so a crafted name cannot run script here. */
+function escHtml(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+async function deleteEvidence(violationId, btn) {
+    if (!confirm('Delete this evidence image permanently?')) return;
+    try {
+        const res = await fetch(`/api/faculty/violation/${violationId}/evidence`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            const wrap = btn.closest('.position-relative');
+            if (wrap) wrap.remove();
+        } else {
+            alert(data.error || 'Could not delete the image.');
+        }
+    } catch (e) { alert(e.message); }
+}
+
 async function viewViolations(studentExamId, studentName) {
     _currentStudentExamId = studentExamId;
     const modal = document.getElementById('violations-modal');
@@ -623,11 +645,12 @@ async function viewViolations(studentExamId, studentName) {
     empty.style.display = 'none';
     summary.innerHTML = '';
     reviewActions.style.display = 'none';
-    document.getElementById('modal-student-name').innerHTML = `<i class="bi bi-shield-lock"></i> ${studentName} - Proctoring Review`;
+    document.getElementById('modal-student-name').innerHTML = `<i class="bi bi-shield-lock"></i> ${escHtml(studentName)} - Proctoring Review`;
 
     try {
         const response = await fetch(`/api/proctor/status/${studentExamId}`);
         const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to load');
         
         loading.style.display = 'none';
         
@@ -635,11 +658,11 @@ async function viewViolations(studentExamId, studentName) {
             <div class="summary-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 0;">
                 <div class="stat-card" style="padding: 1rem;">
                     <div class="small text-muted mb-1">Total Violations</div>
-                    <div class="h4 fw-bold mb-0">${data.total_violations}</div>
+                    <div class="h4 fw-bold mb-0">${escHtml(data.total_violations)}</div>
                 </div>
                 <div class="stat-card" style="padding: 1rem;">
                     <div class="small text-muted mb-1">Current Status</div>
-                    <div class="h4 fw-bold mb-0 text-uppercase">${data.proctoring_status}</div>
+                    <div class="h4 fw-bold mb-0 text-uppercase">${escHtml(data.proctoring_status)}</div>
                 </div>
                 <div class="stat-card" style="padding: 1rem;">
                     <div class="small text-muted mb-1">Calibration</div>
@@ -651,9 +674,9 @@ async function viewViolations(studentExamId, studentName) {
         reviewActions.style.display = 'block';
         const reviewBadge = document.getElementById('review-status-badge');
         if (data.is_invalidated) {
-            reviewBadge.innerHTML = `<span class="score-badge badge-danger"><i class="bi bi-x-circle"></i> INVALIDATED: ${data.faculty_review_note || 'Failed Review'}</span>`;
+            reviewBadge.innerHTML = `<span class="score-badge badge-danger"><i class="bi bi-x-circle"></i> INVALIDATED: ${escHtml(data.faculty_review_note || 'Failed Review')}</span>`;
         } else if (data.faculty_review_note) {
-            reviewBadge.innerHTML = `<span class="score-badge badge-success"><i class="bi bi-check-circle"></i> ACCEPTED: ${data.faculty_review_note}</span>`;
+            reviewBadge.innerHTML = `<span class="score-badge badge-success"><i class="bi bi-check-circle"></i> ACCEPTED: ${escHtml(data.faculty_review_note)}</span>`;
         } else {
             reviewBadge.innerHTML = `<span class="score-badge badge-warning"><i class="bi bi-clock-history"></i> Awaiting Review</span>`;
         }
@@ -674,15 +697,15 @@ async function viewViolations(studentExamId, studentName) {
                             </div>
                             <div class="flex-grow-1">
                                 <div class="d-flex justify-content-between">
-                                    <span class="fw-bold">${v.type}</span>
+                                    <span class="fw-bold">${escHtml(v.type)}</span>
                                     <span class="small text-muted">${new Date(v.timestamp).toLocaleTimeString()}</span>
                                 </div>
-                                <div class="small text-muted mb-2">${v.message}</div>
+                                <div class="small text-muted mb-2">${escHtml(v.message)}</div>
                                 ${v.evidence_url ? `
                                     <div class="position-relative">
-                                        <img src="${v.evidence_url}" class="rounded-3 img-fluid" style="max-height: 200px; border: 1px solid var(--vx-border);" onclick="window.open(this.src)">
+                                        <img src="${escHtml(v.evidence_url)}" class="rounded-3 img-fluid" style="max-height: 200px; border: 1px solid var(--vx-border);" onclick="window.open(this.src)">
                                         <div class="position-absolute top-0 end-0 p-2">
-                                            <button onclick="deleteEvidence(${v.id}, this)" class="btn btn-sm btn-danger opacity-75"><i class="bi bi-trash"></i></button>
+                                            <button onclick="deleteEvidence(${Number(v.id)}, this)" class="btn btn-sm btn-danger opacity-75"><i class="bi bi-trash"></i></button>
                                         </div>
                                     </div>
                                 ` : ''}

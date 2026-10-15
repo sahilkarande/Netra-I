@@ -11,13 +11,14 @@
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CERT_FILE="$PROJECT_DIR/cert.pem"
-KEY_FILE="$PROJECT_DIR/key.pem"
+CERT_DIR="$PROJECT_DIR/certs"
+CERT_FILE="$CERT_DIR/cert.pem"
+KEY_FILE="$CERT_DIR/key.pem"
 PORT=${PORT:-8800}
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║          ProctoGuard - LAN Exam Server Launcher             ║"
+echo "║            Netra-I - LAN Exam Server Launcher               ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 

@@ -5,6 +5,41 @@
 {% endblock %}
 
 {% block content %}
+<style>
+    .vx-visibility { display: flex; flex-direction: column; gap: 10px; }
+    .vx-visibility-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--vx-text-muted, #94a3b8);
+        margin-bottom: 2px;
+    }
+    .vx-toggle-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+    }
+    .vx-pill {
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        border: 1px solid currentColor;
+    }
+    .vx-pill.on { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .vx-visibility-note {
+        margin: 2px 0 6px;
+        font-size: 0.78rem;
+        line-height: 1.55;
+        color: var(--vx-text-muted, #94a3b8);
+    }
+</style>
 <div class="vx-dashboard">
     
     <!-- --- Dashboard Header --- -->
@@ -141,7 +176,7 @@
                                 <td>
                                     <div style="display:flex; gap:6px;">
                                         {% if se.status == 'started' %}
-                                        <form method="POST" action="{{ url_for('faculty.faculty_force_end_student', exam_id=exam.id, student_id=se.student_id) }}" style="display:inline;">
+                                        <form method="POST" action="{{ url_for('faculty.faculty_force_end_student', exam_id=exam.id, student_exam_id=se.id) }}" style="display:inline;">
                                             <button type="submit" class="vx-btn-danger" style="padding:4px 8px; border-radius:4px; font-size:11px; border:none; cursor:pointer;" onclick="return confirm('Force end this students exam?')">
                                                 End
                                             </button>
@@ -209,11 +244,33 @@
                     <i class="bi bi-plus-lg"></i> Add Questions
                 </button>
                 
-                <form method="POST" action="{{ url_for('faculty.faculty_publish_results', exam_id=exam.id) }}">
-                    <button type="submit" class="vx-control-btn {{ 'vx-btn-primary' if not exam.results_published else 'vx-btn-outline' }}">
-                        <i class="bi bi-megaphone"></i> {{ 'Publish Results' if not exam.results_published else 'Results Published' }}
+                <hr style="border:0; border-top:1px solid var(--vx-border); margin:20px 0;">
+
+                <div class="vx-visibility" id="examVisibility"
+                     data-results="{{ '1' if exam.results_published else '0' }}"
+                     data-leaderboard="{{ '1' if exam.show_leaderboard else '0' }}">
+                    <div class="vx-visibility-title">
+                        <i class="bi bi-eye"></i> What students can see
+                    </div>
+
+                    <button type="button" class="vx-control-btn vx-toggle-btn" id="btnResultsToggle"
+                            onclick="toggleExamVisibility('results')">
+                        <span><i class="bi bi-megaphone"></i> Results</span>
+                        <span class="vx-pill" id="pillResults"></span>
                     </button>
-                </form>
+
+                    <button type="button" class="vx-control-btn vx-toggle-btn" id="btnLeaderboardToggle"
+                            onclick="toggleExamVisibility('leaderboard')">
+                        <span><i class="bi bi-award"></i> Leaderboard</span>
+                        <span class="vx-pill" id="pillLeaderboard"></span>
+                    </button>
+
+                    <p class="vx-visibility-note" id="visibilityNote"></p>
+
+                    <button type="button" class="vx-control-btn vx-btn-outline" onclick="publishAndClearEvidence()">
+                        <i class="bi bi-shield-check"></i> Publish &amp; clear proctoring evidence
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -312,12 +369,14 @@
                     <div id="specific-student-selector" style="{{ 'display:none;' if exam.allow_all_students }}">
                         <div class="selection-status">
                             <i class="bi bi-info-circle"></i>
-                            <span>{{ (exam.allowed_students or '').split(',')|length if exam.allowed_students else 0 }} students currently selected</span>
+                            <span id="eligibility-count-text">{{ (exam.allowed_students or '').split(',')|length if exam.allowed_students else 0 }} students currently selected</span>
                         </div>
                         <button type="button" class="vx-btn-primary vx-control-btn open-student-selection" style="width:100%;">
                             <i class="bi bi-pencil-square"></i> Modify Selection
                         </button>
                     </div>
+
+                    <input type="hidden" name="allowed_students" id="allowed-students-input" value="{{ exam.allowed_students or '' }}">
 
                     <div style="margin-top:25px; display:flex; gap:10px;">
                         <button type="button" class="vx-btn-outline close-access-modal" style="flex:1;">Cancel</button>
@@ -484,13 +543,9 @@
 
             <div class="modal-footer">
                 <button id="modal-cancel-btn" class="vx-btn-outline" style="padding:10px 20px;">Cancel</button>
-                <form method="POST" action="{{ url_for('faculty.update_exam_access', exam_id=exam.id) }}" id="modal-save-form" style="margin:0;">
-                    <input type="hidden" name="access_mode" value="specific">
-                    <input type="hidden" name="allowed_students" id="allowed-students-input">
-                    <button type="submit" class="vx-btn-primary" style="padding:10px 25px; border:none; border-radius:8px;">
-                        <i class="bi bi-save"></i> Save Selection
-                    </button>
-                </form>
+                <button type="button" id="modal-confirm-btn" class="vx-btn-primary" style="padding:10px 25px; border:none; border-radius:8px;">
+                    <i class="bi bi-check-lg"></i> Confirm Selection
+                </button>
             </div>
         </div>
     </div>
@@ -552,7 +607,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/view_exam.js') }}"></script>
 
 <style>
     :root {
@@ -1082,23 +1136,83 @@
     }
 
     /* ── Post-Exam Settings ── */
-    async function savePostSetting(field, value) {
-        const body = {};
-        body[field] = value;
-        const resp = await fetch('/faculty/exam/{{ exam.id }}/post-settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        const data = await resp.json();
-        if (!data.success) alert('Save failed: ' + (data.error || 'Unknown error'));
+    /* ── Per-exam result / leaderboard visibility ── */
+    const VX_EXAM_ID = {{ exam.id }};
+    const VX_URLS = {
+        results: '{{ url_for("faculty.faculty_set_results_visibility") }}',
+        leaderboard: '{{ url_for("faculty.faculty_set_leaderboard") }}',
+        publish: '{{ url_for("faculty.faculty_publish_results", exam_id=exam.id) }}'
+    };
+
+    function paintExamVisibility() {
+        const box = document.getElementById('examVisibility');
+        if (!box) return;
+
+        const resultsOn = box.dataset.results === '1';
+        const lbOn = box.dataset.leaderboard === '1';
+
+        const pillR = document.getElementById('pillResults');
+        const pillL = document.getElementById('pillLeaderboard');
+        pillR.textContent = resultsOn ? 'PUBLISHED' : 'HIDDEN';
+        pillR.classList.toggle('on', resultsOn);
+        pillL.textContent = lbOn ? 'OPEN' : 'CLOSED';
+        pillL.classList.toggle('on', lbOn);
+
+        const note = document.getElementById('visibilityNote');
+        if (!resultsOn) {
+            note.textContent = 'Students cannot see their score, result page or PDF for this exam.';
+        } else if (!lbOn) {
+            note.textContent = 'Students can see their own result, but this exam stays off the leaderboard.';
+        } else {
+            note.textContent = 'Students can see their own result and this exam appears on the leaderboard.';
+        }
     }
 
-    function setPostRedirect(mode) {
-        savePostSetting('post_exam_redirect', mode);
-        document.getElementById('btn-post-results').className = 'btn ' + (mode === 'results' ? 'btn-primary' : 'btn-secondary');
-        document.getElementById('btn-post-dashboard').className = 'btn ' + (mode === 'dashboard' ? 'btn-primary' : 'btn-secondary');
+    async function toggleExamVisibility(kind) {
+        const box = document.getElementById('examVisibility');
+        const key = kind === 'results' ? 'results' : 'leaderboard';
+        const next = box.dataset[key] !== '1';
+        const body = kind === 'results'
+            ? { exam_id: VX_EXAM_ID, show_results: next, visible: next, enabled: next }
+            : { exam_id: VX_EXAM_ID, show_leaderboard: next, enabled: next };
+
+        try {
+            const resp = await fetch(VX_URLS[kind], {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify(body)
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) throw new Error(data.message || 'Could not save');
+
+            box.dataset[key] = next ? '1' : '0';
+            paintExamVisibility();
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
     }
+
+    async function publishAndClearEvidence() {
+        if (!confirm('Publish results for this exam and permanently delete the stored proctoring evidence images?\n\nThis cannot be undone.')) {
+            return;
+        }
+        try {
+            const resp = await fetch(VX_URLS.publish, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) throw new Error(data.error || data.message || 'Failed');
+
+            document.getElementById('examVisibility').dataset.results = '1';
+            paintExamVisibility();
+            alert(data.message || 'Results published.');
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', paintExamVisibility);
 
     /* ── UI Enhancements ── */
     document.addEventListener("DOMContentLoaded", () => {
@@ -1420,13 +1534,62 @@
             });
         });
 
+        // Function to sync checkboxes from the hidden input field value
+        function syncCheckboxesFromHidden() {
+            const allowedInput = document.getElementById('allowed-students-input');
+            const allowedIds = allowedInput && allowedInput.value 
+                ? allowedInput.value.split(',').map(id => id.trim()) 
+                : [];
+            document.querySelectorAll('.student-checkbox').forEach(cb => {
+                cb.checked = allowedIds.includes(cb.value);
+            });
+            syncStudentCards();
+        }
+
         // Specific trigger for the selection modal within the access modal
         const selectionBtn = document.querySelector('.open-student-selection');
         if (selectionBtn) {
             selectionBtn.addEventListener('click', () => {
+                syncCheckboxesFromHidden();
+                document.getElementById('exam-access-modal').style.display = 'none';
                 document.getElementById('student-selection-modal').style.display = 'flex';
-                // Also close the access modal to avoid overlapping confusion if needed
-                // document.getElementById('exam-access-modal').style.display = 'none';
+            });
+        }
+
+        // Confirm Selection button inside selection modal
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                const selected = [...document.querySelectorAll(".student-checkbox:checked")]
+                    .map(cb => cb.value);
+                
+                const allowedInput = document.getElementById('allowed-students-input');
+                if (allowedInput) {
+                    allowedInput.value = selected.join(",");
+                }
+                
+                const countText = document.getElementById('eligibility-count-text');
+                if (countText) {
+                    countText.textContent = `${selected.length} students currently selected`;
+                }
+                
+                document.getElementById('student-selection-modal').style.display = 'none';
+                document.getElementById('exam-access-modal').style.display = 'flex';
+            });
+        }
+
+        // Reopen access modal when selection modal is closed/cancelled
+        const selectionModal = document.getElementById('student-selection-modal');
+        const accessModal = document.getElementById('exam-access-modal');
+        if (selectionModal && accessModal) {
+            const selCancel = selectionModal.querySelector('#modal-cancel-btn');
+            const selClose = selectionModal.querySelector('#modal-close-btn');
+            [selCancel, selClose].forEach(btn => {
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        accessModal.style.display = 'flex';
+                    });
+                }
             });
         }
 
@@ -1483,6 +1646,41 @@
                 if (resp.ok) location.reload();
             } catch (e) { console.error(e); }
         };
+
+        // Safe auto-refresh for attempts table and stats bar
+        setInterval(async () => {
+            // Do not auto-refresh if any modal is currently visible to prevent focus loss/flickering
+            const visibleModals = [...document.querySelectorAll('.custom-modal')].filter(
+                m => m.style.display === 'flex' || m.classList.contains('active')
+            );
+            if (visibleModals.length > 0) return;
+
+            try {
+                const r = await fetch(window.location.href);
+                if (!r.ok) return;
+                const html = await r.text();
+                const newDoc = new DOMParser().parseFromString(html, "text/html");
+                
+                // Update table body
+                const newTbody = newDoc.querySelector("#attemptsTable tbody");
+                const oldTbody = document.querySelector("#attemptsTable tbody");
+                if (newTbody && oldTbody) {
+                    oldTbody.innerHTML = newTbody.innerHTML;
+                }
+                
+                // Update stats bar
+                const newStats = newDoc.querySelector(".vx-stats-bar");
+                const oldStats = document.querySelector(".vx-stats-bar");
+                if (newStats && oldStats) {
+                    oldStats.innerHTML = newStats.innerHTML;
+                }
+            } catch (e) {
+                console.error("Auto-refresh failed:", e);
+            }
+        }, 3000);
     });
 </script>
+
+
+
 {% endblock %}

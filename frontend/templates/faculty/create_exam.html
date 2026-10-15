@@ -1,1971 +1,1002 @@
 {% extends "base.html" %}
+{% block title %}Create Exam - Netra-I{% endblock %}
 
-{% block title %}Create Exam{% endblock %}
+{# Sticky-form values. Defaulted here so the page still renders if a caller
+   omits `form` — templates hot-reload but Python does not under --ssl. #}
+{% set form = form if form is defined and form else {} %}
 
 {% block extra_css %}
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap');
-
-    :root {
-        --primary: #6366f1;
-        --primary-dark: #4f46e5;
-        --primary-glow: rgba(99, 102, 241, 0.12);
-        --surface: #ffffff;
-        --surface-2: #f8fafc;
-        --surface-3: #f1f5f9;
-        --border: #e2e8f0;
-        --text-1: #0f172a;
-        --text-2: #475569;
-        --text-3: #94a3b8;
-        --success: #10b981;
-        --danger: #ef4444;
-        --amber: #f59e0b;
-        --blue: #3b82f6;
-        --font-head: 'Syne', sans-serif;
-        --font-body: 'DM Sans', sans-serif;
-    }
-
-    [data-theme="dark"] {
-        --surface: #1e293b;
-        --surface-2: #172033;
-        --surface-3: #0f172a;
-        --border: rgba(255, 255, 255, 0.08);
-        --text-1: #f1f5f9;
-        --text-2: #94a3b8;
-        --text-3: #475569;
-    }
-
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-    }
-
-    body,
-    .ce-root {
-        font-family: var(--font-body);
-        color: var(--text-1);
-    }
-
-    /* ── Page Shell ── */
-    .ce-root {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 2rem 1.25rem 4rem;
-    }
-
-    /* ── Page Header ── */
-    .ce-pg-header {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        margin-bottom: 2.5rem;
-        gap: 1rem;
-        flex-wrap: wrap;
-    }
-
-    .ce-pg-header-left {}
-
-    .ce-pg-eyebrow {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--primary);
-        margin-bottom: 0.4rem;
-    }
-
-    .ce-pg-eyebrow span {
-        display: inline-block;
-        width: 24px;
-        height: 2px;
-        background: var(--primary);
-        border-radius: 2px;
-    }
-
-    .ce-pg-title {
-        font-family: var(--font-head);
-        font-size: 2rem;
-        font-weight: 800;
-        color: var(--text-1);
-        line-height: 1.1;
-        letter-spacing: -0.02em;
-    }
-
-    .ce-pg-sub {
-        font-size: 0.88rem;
-        color: var(--text-2);
-        margin-top: 0.4rem;
-    }
-
-    /* Progress Steps */
-    .ce-steps {
-        display: flex;
-        align-items: center;
-        gap: 0;
-    }
-
-    .ce-step {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: var(--text-3);
-    }
-
-    .ce-step.done .step-num {
-        background: var(--success);
-        color: #fff;
-    }
-
-    .ce-step.active .step-num {
-        background: var(--primary);
-        color: #fff;
-    }
-
-    .ce-step.active {
-        color: var(--text-1);
-    }
-
-    .step-num {
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        border: 2px solid var(--border);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.72rem;
-        font-weight: 800;
-        flex-shrink: 0;
-        transition: all 0.3s;
-    }
-
-    .step-line {
-        width: 32px;
-        height: 2px;
-        background: var(--border);
-        margin: 0 4px;
-    }
-
-    /* ── Tab Row ── */
-    .ce-tab-row {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 1.75rem;
-        background: var(--surface-3);
-        padding: 5px;
-        border-radius: 14px;
-        width: fit-content;
-    }
-
-    .ce-tab-btn {
-        padding: 0.55rem 1.1rem;
-        border-radius: 10px;
-        border: none;
-        background: transparent;
-        font-family: var(--font-body);
-        font-size: 0.83rem;
-        font-weight: 600;
-        color: var(--text-2);
-        cursor: pointer;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-    }
-
-    .ce-tab-btn.active {
-        background: var(--surface);
-        color: var(--primary);
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
-    }
-
-    .ce-tab-btn .new-badge {
-        font-size: 0.58rem;
-        font-weight: 800;
-        background: var(--primary);
-        color: #fff;
-        padding: 2px 5px;
-        border-radius: 5px;
-        letter-spacing: 0.03em;
-    }
-
-    /* ── Content Panels ── */
-    .ce-panel {
-        display: none;
-    }
-
-    .ce-panel.active {
-        display: block;
-        animation: slideUp 0.3s ease;
-    }
-
-    @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    /* ── Two-Column Layout ── */
-    .ce-layout {
-        display: grid;
-        grid-template-columns: 1fr 340px;
-        gap: 1.5rem;
-        align-items: start;
-    }
-
-    /* ── Form Sections ── */
-    .ce-section {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        overflow: hidden;
-        margin-bottom: 1.25rem;
-    }
-
-    .ce-section-head {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 1.1rem 1.5rem;
-        border-bottom: 1px solid var(--border);
-        background: var(--surface-2);
-    }
-
-    .ce-section-icon {
-        width: 34px;
-        height: 34px;
-        border-radius: 9px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.9rem;
-        flex-shrink: 0;
-    }
-
-    .si-indigo {
-        background: rgba(99, 102, 241, 0.1);
-        color: var(--primary);
-    }
-
-    .si-blue {
-        background: rgba(59, 130, 246, 0.1);
-        color: var(--blue);
-    }
-
-    .si-amber {
-        background: rgba(245, 158, 11, 0.1);
-        color: var(--amber);
-    }
-
-    .ce-section-head-text h3 {
-        font-family: var(--font-head);
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: var(--text-1);
-    }
-
-    .ce-section-head-text p {
-        font-size: 0.72rem;
-        color: var(--text-3);
-        margin-top: 1px;
-    }
-
-    .ce-section-body {
-        padding: 1.5rem;
-    }
-
-    /* ── Form Fields ── */
-    .f-group {
-        margin-bottom: 1.1rem;
-    }
-
-    .f-group:last-child {
-        margin-bottom: 0;
-    }
-
-    .f-label {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-1);
-        margin-bottom: 0.4rem;
-    }
-
-    .f-label .req {
-        color: var(--danger);
-    }
-
-    .f-label .help-icon {
-        width: 15px;
-        height: 15px;
-        border-radius: 50%;
-        background: var(--surface-3);
-        border: 1px solid var(--border);
-        color: var(--text-3);
-        font-size: 0.6rem;
-        font-weight: 800;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: help;
-        position: relative;
-    }
-
-    .f-label .help-icon:hover::after {
-        content: attr(data-tip);
-        position: absolute;
-        top: calc(100% + 6px);
-        left: 50%;
-        transform: translateX(-50%);
-        background: var(--text-1);
-        color: var(--surface);
-        font-size: 0.68rem;
-        font-weight: 400;
-        padding: 6px 10px;
-        border-radius: 8px;
-        white-space: nowrap;
-        z-index: 50;
-        pointer-events: none;
-        max-width: 200px;
-        white-space: normal;
-        text-align: center;
-        width: 180px;
-    }
-
-    .f-input,
-    .f-textarea,
-    .f-select {
-        width: 100%;
-        padding: 0.62rem 0.9rem;
-        border: 1.5px solid var(--border);
-        border-radius: 10px;
-        font-family: var(--font-body);
-        font-size: 0.87rem;
-        color: var(--text-1);
-        background: var(--surface-2);
-        transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .f-input:focus,
-    .f-textarea:focus,
-    .f-select:focus {
-        outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px var(--primary-glow);
-        background: var(--surface);
-    }
-
-    .f-textarea {
-        resize: vertical;
-        min-height: 76px;
-        font-family: var(--font-body);
-    }
-
-    .f-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-    }
-
-    /* ── Mode Cards ── */
-    .mode-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.75rem;
-    }
-
-    .mode-card {
-        position: relative;
-        border: 2px solid var(--border);
-        border-radius: 13px;
-        padding: 1rem;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-align: center;
-    }
-
-    .mode-card input[type=radio] {
-        display: none;
-    }
-
-    .mode-card:hover {
-        border-color: rgba(99, 102, 241, 0.4);
-    }
-
-    .mode-card.sel {
-        border-color: var(--primary);
-        background: var(--primary-glow);
-    }
-
-    .mode-card.sel::after {
-        content: '✓';
-        position: absolute;
-        top: 8px;
-        right: 10px;
-        font-size: 0.7rem;
-        font-weight: 800;
-        background: var(--primary);
-        color: #fff;
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 18px;
-    }
-
-    .mode-emoji {
-        font-size: 1.6rem;
-        margin-bottom: 0.35rem;
-    }
-
-    .mode-name {
-        font-family: var(--font-head);
-        font-size: 0.88rem;
-        font-weight: 700;
-        color: var(--text-1);
-    }
-
-    .mode-card.sel .mode-name {
-        color: var(--primary);
-    }
-
-    .mode-desc {
-        font-size: 0.7rem;
-        color: var(--text-2);
-        margin-top: 3px;
-        line-height: 1.4;
-    }
-
-    /* ── Feature Toggles ── */
-    .ft-row {
-        display: flex;
-        align-items: center;
-        gap: 0.85rem;
-        padding: 0.8rem 0.9rem;
-        border: 1px solid var(--border);
-        border-radius: 11px;
-        margin-bottom: 0.6rem;
-        transition: all 0.2s;
-        cursor: default;
-    }
-
-    .ft-row:last-of-type {
-        margin-bottom: 0;
-    }
-
-    .ft-row.on {
-        border-color: rgba(99, 102, 241, 0.3);
-        background: rgba(99, 102, 241, 0.03);
-    }
-
-    .ft-icon-wrap {
-        width: 34px;
-        height: 34px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.9rem;
-        flex-shrink: 0;
-    }
-
-    .ft-icon-wrap.ic-blue {
-        background: rgba(59, 130, 246, 0.1);
-        color: #3b82f6;
-    }
-
-    .ft-icon-wrap.ic-purple {
-        background: rgba(139, 92, 246, 0.1);
-        color: #8b5cf6;
-    }
-
-    .ft-icon-wrap.ic-amber {
-        background: rgba(245, 158, 11, 0.1);
-        color: #f59e0b;
-    }
-
-    .ft-icon-wrap.ic-red {
-        background: rgba(239, 68, 68, 0.1);
-        color: #ef4444;
-    }
-
-    .ft-icon-wrap.ic-green {
-        background: rgba(16, 185, 129, 0.1);
-        color: #10b981;
-    }
-
-    .ft-text {
-        flex: 1;
-    }
-
-    .ft-name {
-        font-size: 0.83rem;
-        font-weight: 600;
-        color: var(--text-1);
-    }
-
-    .ft-desc {
-        font-size: 0.7rem;
-        color: var(--text-2);
-        margin-top: 2px;
-    }
-
-    /* Toggle Switch */
-    .tog {
-        position: relative;
-        width: 42px;
-        height: 23px;
-        flex-shrink: 0;
-    }
-
-    .tog input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-
-    .tog-track {
-        position: absolute;
-        inset: 0;
-        border-radius: 23px;
-        background: #cbd5e1;
-        transition: 0.3s;
-        cursor: pointer;
-    }
-
-    .tog-track::before {
-        content: '';
-        position: absolute;
-        width: 17px;
-        height: 17px;
-        left: 3px;
-        top: 3px;
-        background: #fff;
-        border-radius: 50%;
-        transition: 0.3s;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-    }
-
-    .tog input:checked+.tog-track {
-        background: var(--primary);
-    }
-
-    .tog input:checked+.tog-track::before {
-        transform: translateX(19px);
-    }
-
-    /* ── Threshold Row ── */
-    .threshold-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border);
-    }
-
-    .threshold-row .f-group {
-        margin: 0;
-    }
-
-    .f-hint {
-        font-size: 0.68rem;
-        color: var(--text-3);
-        margin-top: 4px;
-    }
-
-    /* Detection Strength */
-    .strength-group {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 0.6rem;
-        margin-top: 0.5rem;
-    }
-
-    .strength-card {
-        border: 1.5px solid var(--border);
-        border-radius: 11px;
-        padding: 0.75rem 0.6rem;
-        cursor: pointer;
-        text-align: center;
-        transition: all 0.2s;
-    }
-
-    .strength-card:hover {
-        border-color: rgba(99, 102, 241, 0.4);
-    }
-
-    .strength-card.sel {
-        border-color: var(--primary);
-        background: var(--primary-glow);
-    }
-
-    .strength-card input {
-        display: none;
-    }
-
-    .str-emoji {
-        font-size: 1.2rem;
-        margin-bottom: 0.3rem;
-    }
-
-    .str-name {
-        font-size: 0.8rem;
-        font-weight: 700;
-        color: var(--text-1);
-    }
-
-    .strength-card.sel .str-name {
-        color: var(--primary);
-    }
-
-    .str-sub {
-        font-size: 0.65rem;
-        color: var(--text-2);
-        margin-top: 2px;
-        line-height: 1.3;
-    }
-
-    /* ── Right Sidebar ── */
-    .ce-sidebar {
-        position: sticky;
-        top: 1.5rem;
-    }
-
-    .sidebar-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        overflow: hidden;
-        margin-bottom: 1rem;
-    }
-
-    .sidebar-card-head {
-        padding: 0.9rem 1.2rem;
-        border-bottom: 1px solid var(--border);
-        background: var(--surface-2);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-family: var(--font-head);
-        font-size: 0.82rem;
-        font-weight: 700;
-        color: var(--text-1);
-    }
-
-    .sidebar-card-head i {
-        color: var(--primary);
-        font-size: 0.88rem;
-    }
-
-    .sidebar-card-body {
-        padding: 1.1rem 1.2rem;
-    }
-
-    /* Post-exam options */
-    .post-opt-row {
-        display: flex;
-        gap: 0.6rem;
-        margin-top: 0.35rem;
-    }
-
-    .post-opt {
-        flex: 1;
-        border: 1.5px solid var(--border);
-        border-radius: 10px;
-        padding: 0.65rem 0.5rem;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: var(--text-2);
-    }
-
-    .post-opt input {
-        display: none;
-    }
-
-    .post-opt .opt-icon {
-        font-size: 1.1rem;
-        display: block;
-        margin-bottom: 3px;
-    }
-
-    .post-opt:hover {
-        border-color: rgba(99, 102, 241, 0.4);
-    }
-
-    .post-opt.sel {
-        border-color: var(--primary);
-        background: var(--primary-glow);
-        color: var(--primary);
-    }
-
-    /* Access key callout */
-    .key-callout {
-        display: flex;
-        gap: 0.6rem;
-        padding: 0.75rem 0.9rem;
-        background: rgba(245, 158, 11, 0.06);
-        border: 1px solid rgba(245, 158, 11, 0.25);
-        border-radius: 10px;
-        margin-top: 0.75rem;
-        font-size: 0.74rem;
-        color: var(--text-2);
-        line-height: 1.5;
-    }
-
-    .key-callout i {
-        color: var(--amber);
-        font-size: 0.85rem;
-        flex-shrink: 0;
-        margin-top: 2px;
-    }
-
-    /* Summary preview */
-    .summary-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.55rem 0;
-        border-bottom: 1px solid var(--border);
-        font-size: 0.8rem;
-    }
-
-    .summary-row:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
-    }
-
-    .summary-row .sr-label {
-        color: var(--text-2);
-    }
-
-    .summary-row .sr-val {
-        font-weight: 600;
-        color: var(--text-1);
-    }
-
-    /* ── Action Buttons ── */
-    .ce-actions {
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-        margin-top: 0.75rem;
-    }
-
-    .btn-create {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        padding: 0.85rem;
-        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-        color: #fff;
-        border: none;
-        border-radius: 12px;
-        font-family: var(--font-body);
-        font-size: 0.92rem;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.25s;
-        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
-        text-decoration: none;
-        width: 100%;
-    }
-
-    .btn-create:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
-    }
-
-    .btn-create:active {
-        transform: translateY(0);
-    }
-
-    .btn-cancel {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        padding: 0.75rem;
-        background: var(--surface-3);
-        color: var(--text-2);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        font-family: var(--font-body);
-        font-size: 0.85rem;
-        font-weight: 600;
-        cursor: pointer;
-        text-decoration: none;
-        transition: all 0.2s;
-        width: 100%;
-    }
-
-    .btn-cancel:hover {
-        background: var(--border);
-        color: var(--text-1);
-    }
-
-    /* ── Tip Banner ── */
-    .tip-banner {
-        display: flex;
-        gap: 0.75rem;
-        padding: 0.85rem 1rem;
-        background: rgba(59, 130, 246, 0.05);
-        border-left: 3px solid var(--blue);
-        border-radius: 0 10px 10px 0;
-        font-size: 0.78rem;
-        color: var(--text-2);
-        line-height: 1.5;
-        margin-top: 1.5rem;
-    }
-
-    .tip-banner i {
-        color: var(--blue);
-        font-size: 0.9rem;
-        flex-shrink: 0;
-        margin-top: 1px;
-    }
-
-    /* ── Batch Panel ── */
-    .batch-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem 1rem;
-        background: var(--surface-3);
-        border-radius: 12px;
-        margin-bottom: 1rem;
-        flex-wrap: wrap;
-    }
-
-    .batch-toolbar-label {
-        flex: 1;
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--text-1);
-    }
-
-    .count-pill {
-        background: var(--primary);
-        color: #fff;
-        font-size: 0.7rem;
-        font-weight: 800;
-        padding: 2px 8px;
-        border-radius: 6px;
-        margin-left: 4px;
-    }
-
-    .tb-btn {
-        padding: 0.4rem 0.85rem;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        font-family: var(--font-body);
-        font-size: 0.78rem;
-        font-weight: 600;
-        cursor: pointer;
-        color: var(--text-1);
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 0.3rem;
-    }
-
-    .tb-btn:hover {
-        border-color: var(--primary);
-        color: var(--primary);
-    }
-
-    .tb-btn.primary {
-        background: var(--primary);
-        color: #fff;
-        border-color: transparent;
-    }
-
-    .tb-btn.primary:hover {
-        background: var(--primary-dark);
-        color: #fff;
-    }
-
-    .defaults-bar {
-        display: none;
-        padding: 1rem;
-        background: var(--surface-2);
-        border-radius: 12px;
-        margin-bottom: 1rem;
-        border: 1px solid var(--border);
-    }
-
-    .defaults-bar.vis {
-        display: block;
-    }
-
-    .defaults-bar h4 {
-        font-size: 0.82rem;
-        font-weight: 700;
-        margin-bottom: 0.75rem;
-    }
-
-    .defaults-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.75rem;
-    }
-
-    .defaults-grid input {
-        padding: 0.5rem 0.7rem;
-        border-radius: 8px;
-        border: 1.5px solid var(--border);
-        font-size: 0.85rem;
-        width: 100%;
-        background: var(--surface);
-        color: var(--text-1);
-        font-family: var(--font-body);
-    }
-
-    .exam-entry {
-        border: 1px solid var(--border);
-        border-radius: 13px;
-        margin-bottom: 0.75rem;
-        background: var(--surface);
-        overflow: hidden;
-    }
-
-    .entry-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.65rem 1rem;
-        background: var(--surface-2);
-        cursor: pointer;
-        border-bottom: 1px solid var(--border);
-    }
-
-    .entry-num {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-weight: 700;
-        font-size: 0.85rem;
-    }
-
-    .num-badge {
-        width: 24px;
-        height: 24px;
-        border-radius: 7px;
-        background: var(--primary);
-        color: #fff;
-        font-size: 0.72rem;
-        font-weight: 800;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .entry-preview {
-        font-size: 0.78rem;
-        color: var(--text-2);
-        font-weight: 400;
-        margin-left: 4px;
-    }
-
-    .entry-acts {
-        display: flex;
-        gap: 0.35rem;
-    }
-
-    .entry-btn {
-        padding: 0.28rem 0.58rem;
-        border-radius: 6px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        font-size: 0.72rem;
-        cursor: pointer;
-        color: var(--text-2);
-        transition: all 0.15s;
-    }
-
-    .entry-btn:hover {
-        border-color: var(--primary);
-        color: var(--primary);
-    }
-
-    .entry-btn.del:hover {
-        border-color: var(--danger);
-        color: var(--danger);
-    }
-
-    .entry-body {
-        padding: 1rem;
-    }
-
-    .file-zone {
-        position: relative;
-        padding: 1.25rem;
-        border: 2px dashed var(--border);
-        border-radius: 10px;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .file-zone:hover {
-        border-color: var(--primary);
-    }
-
-    .file-zone input[type=file] {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        cursor: pointer;
-    }
-
-    .file-zone .fz-icon {
-        font-size: 1.4rem;
-        margin-bottom: 4px;
-    }
-
-    .file-zone .fz-text {
-        font-size: 0.8rem;
-        color: var(--text-2);
-    }
-
-    .file-zone .fz-text strong {
-        color: var(--primary);
-    }
-
-    .file-zone .fz-hint {
-        font-size: 0.68rem;
-        color: var(--text-3);
-        margin-top: 2px;
-    }
-
-    .file-name-row {
-        display: none;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.8rem;
-        color: var(--success);
-        font-weight: 600;
-    }
-
-    .file-name-row.vis {
-        display: flex;
-    }
-
-    .file-zone.has-file {
-        border-style: solid;
-        border-color: var(--success);
-    }
-
-    .file-zone.has-file .fz-content {
-        display: none;
-    }
-
-    .batch-submit-bar {
-        display: none;
-        align-items: center;
-        justify-content: space-between;
-        padding: 1rem;
-        border-top: 1px solid var(--border);
-        margin-top: 0.75rem;
-    }
-
-    .batch-submit-bar.vis {
-        display: flex;
-    }
-
-    .batch-summary {
-        font-size: 0.85rem;
-        color: var(--text-2);
-    }
-
-    .batch-summary strong {
-        color: var(--text-1);
-    }
-
-    /* empty state */
-    .batch-empty {
-        text-align: center;
-        padding: 2.5rem 1rem;
-        color: var(--text-3);
-    }
-
-    .batch-empty i {
-        font-size: 2.5rem;
-        margin-bottom: 0.5rem;
-        opacity: 0.35;
-        display: block;
-    }
-
-    /* ── Overlay ── */
-    .ce-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(4px);
-        z-index: 9999;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .ce-overlay.vis {
-        display: flex;
-    }
-
-    .overlay-box {
-        background: var(--surface);
-        border-radius: 18px;
-        padding: 2.5rem;
-        text-align: center;
-        max-width: 420px;
-        width: 92%;
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
-    }
-
-    .ce-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid var(--border);
-        border-top-color: var(--primary);
-        border-radius: 50%;
-        animation: spin 0.7s linear infinite;
-        margin: 0 auto 1.25rem;
-    }
-
-    @keyframes spin {
-        to {
-            transform: rotate(360deg);
-        }
-    }
-
-    .ov-title {
-        font-family: var(--font-head);
-        font-size: 1.15rem;
-        font-weight: 700;
-        margin-bottom: 0.35rem;
-    }
-
-    .ov-sub {
-        font-size: 0.85rem;
-        color: var(--text-2);
-    }
-
-    .result-box {
-        display: none;
-    }
-
-    .result-box.vis {
-        display: block;
-    }
-
-    .result-icon {
-        font-size: 2.8rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .result-title {
-        font-family: var(--font-head);
-        font-size: 1.15rem;
-        font-weight: 700;
-        margin-bottom: 0.3rem;
-    }
-
-    .result-msg {
-        font-size: 0.85rem;
-        color: var(--text-2);
-        margin-bottom: 1.25rem;
-    }
-
-    .result-list {
-        text-align: left;
-        max-height: 200px;
-        overflow-y: auto;
-        margin-bottom: 1.25rem;
-    }
-
-    .result-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.55rem 0.8rem;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        margin-bottom: 0.35rem;
-        font-size: 0.83rem;
-    }
-
-    .result-item .ri-name {
-        font-weight: 600;
-    }
-
-    .result-item .ri-q {
-        font-size: 0.75rem;
-        color: var(--success);
-        font-weight: 600;
-    }
-
-    .result-item a {
-        padding: 0.28rem 0.6rem;
-        background: var(--primary);
-        color: #fff;
-        border-radius: 6px;
-        text-decoration: none;
-        font-size: 0.72rem;
-        font-weight: 700;
-    }
-
-    .result-acts {
-        display: flex;
-        gap: 0.75rem;
-        justify-content: center;
-    }
-
-    /* Toast */
-    .ce-toast {
-        position: fixed;
-        top: 1.25rem;
-        right: 1.25rem;
-        background: var(--success);
-        color: #fff;
-        padding: 0.7rem 1.1rem;
-        border-radius: 10px;
-        font-weight: 600;
-        font-size: 0.83rem;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
-        z-index: 10001;
-        display: none;
-    }
-
-    .ce-toast.err {
-        background: var(--danger);
-    }
-
-    /* ── Responsive ── */
-    @media (max-width: 860px) {
-        .ce-layout {
-            grid-template-columns: 1fr;
-        }
-
-        .ce-sidebar {
-            position: static;
-        }
-
-        .strength-group {
-            grid-template-columns: 1fr 1fr 1fr;
-        }
-    }
-
-    @media (max-width: 600px) {
-
-        .f-row,
-        .threshold-row,
-        .mode-grid,
-        .defaults-grid,
-        .post-opt-row {
-            grid-template-columns: 1fr;
-        }
-
-        .strength-group {
-            grid-template-columns: 1fr;
-        }
-
-        .ce-pg-header {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .ce-steps {
-            display: none;
-        }
-
-        .ce-pg-title {
-            font-size: 1.6rem;
-        }
-    }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/create_exam.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="ce-root">
+<div class="cx">
 
-    <!-- Page Header -->
-    <div class="ce-pg-header">
-        <div class="ce-pg-header-left">
-            <div class="ce-pg-eyebrow"><span></span> Exam Management</div>
-            <h1 class="ce-pg-title">Create New Exam</h1>
-            <p class="ce-pg-sub">Configure your exam settings, proctoring, and delivery options</p>
+  <header>
+    <div class="cx-eyebrow">Exam Management</div>
+    <h1 class="cx-title">Create New Exam</h1>
+    <p class="cx-sub">
+      Configure once, then create a single exam, a whole batch, or split a question bank.
+      Timing, mode and proctoring below apply to every exam you create here.
+    </p>
+  </header>
+
+  <!-- ══ Mode switcher ══════════════════════════════════════════ -->
+  <div class="cx-modes" role="tablist" aria-label="Creation mode">
+    <button type="button" class="cx-mode" role="tab" id="mode-single"
+            aria-selected="true" aria-controls="panel-single" data-mode="single">
+      <i class="bi bi-file-earmark-plus"></i> Single Exam
+    </button>
+    <button type="button" class="cx-mode" role="tab" id="mode-batch"
+            aria-selected="false" aria-controls="panel-batch" data-mode="batch">
+      <i class="bi bi-stack"></i> Batch Create
+    </button>
+    <button type="button" class="cx-mode" role="tab" id="mode-split"
+            aria-selected="false" aria-controls="panel-split" data-mode="split">
+      <i class="bi bi-scissors"></i> Split Questions
+    </button>
+  </div>
+
+  <form method="POST" id="cx-form" action="{{ url_for('faculty.create_exam') }}" novalidate>
+    <input type="hidden" name="proctor_settings_json" id="proctor_json">
+
+    <div class="cx-grid">
+
+      <!-- ══ MAIN COLUMN ══════════════════════════════════════ -->
+      <div class="cx-main">
+
+        <!-- ── Panel: what am I naming? ─────────────────────── -->
+
+        <!-- Single -->
+        <section class="cx-card cx-panel" id="panel-single" role="tabpanel" aria-labelledby="mode-single">
+          <div class="cx-card-head">
+            <span class="cx-card-icon"><i class="bi bi-info-circle-fill"></i></span>
+            <div>
+              <h2 class="cx-card-title">Exam Details</h2>
+              <p class="cx-card-note">Name and describe this exam</p>
+            </div>
+          </div>
+          <div class="cx-card-body">
+            <div class="cx-field">
+              <label class="cx-label" for="cx-title">Exam Title <span class="cx-req">*</span></label>
+              <input type="text" name="title" id="cx-title" class="cx-input" maxlength="200" autofocus
+                     value="{{ form.get('title', '') }}"
+                     placeholder="e.g., Mid-term Examination — SQL">
+              <div class="cx-hint" id="hint-title"></div>
+            </div>
+            <div class="cx-field">
+              <label class="cx-label" for="cx-desc">Description <span class="cx-optional">optional</span></label>
+              <textarea name="description" id="cx-desc" class="cx-textarea"
+                        placeholder="Shown to students before they start…">{{ form.get('description', '') }}</textarea>
+            </div>
+            <div class="cx-callout">
+              <i class="bi bi-lightbulb-fill"></i>
+              <span>Creating several exams with the same setup? Switch to
+                <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" data-goto="batch"
+                        style="display:inline-flex; margin:0 2px;">Batch Create</button>
+                — everything you configure below carries over.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Batch -->
+        <section class="cx-card cx-panel" id="panel-batch" role="tabpanel" aria-labelledby="mode-batch" hidden>
+          <div class="cx-card-head">
+            <span class="cx-card-icon"><i class="bi bi-stack"></i></span>
+            <div>
+              <h2 class="cx-card-title">Exams to Create</h2>
+              <p class="cx-card-note">Every exam below uses the same timing, mode and proctoring</p>
+            </div>
+          </div>
+          <div class="cx-card-body">
+            <div class="cx-batch-bar">
+              <span class="cx-batch-bar-label">
+                Exams <span class="cx-pill" id="batch-count">0</span>
+              </span>
+              <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" id="batch-paste">
+                <i class="bi bi-clipboard"></i> Paste list
+              </button>
+              <button type="button" class="cx-btn cx-btn-primary cx-btn-sm" id="batch-add">
+                <i class="bi bi-plus-lg"></i> Add exam
+              </button>
+            </div>
+
+            <div id="batch-list">
+              <div class="cx-empty" id="batch-empty">
+                <i class="bi bi-journal-plus"></i>
+                <p><strong>No exams yet</strong><br>
+                   Add a row, or paste a list of titles — one per line.</p>
+              </div>
+            </div>
+
+            <div class="cx-callout" style="margin-top:0.9rem;">
+              <i class="bi bi-info-circle-fill"></i>
+              <span>Attach a question file to any row to load its questions on creation.
+                Each exam gets its own access key.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Split -->
+        <section class="cx-card cx-panel" id="panel-split" role="tabpanel" aria-labelledby="mode-split" hidden>
+          <div class="cx-card-head">
+            <span class="cx-card-icon"><i class="bi bi-scissors"></i></span>
+            <div>
+              <h2 class="cx-card-title">Split a Question Bank</h2>
+              <p class="cx-card-note">Divide one file into sets you can download — nothing is created</p>
+            </div>
+          </div>
+          <div class="cx-card-body">
+            <div class="cx-drop" id="split-drop">
+              <i class="bi bi-cloud-arrow-up"></i>
+              <div class="cx-drop-main" id="split-drop-main">Choose a question file</div>
+              <div class="cx-drop-sub" id="split-drop-sub">CSV, JSON or Excel · click or drag it here</div>
+            </div>
+            <input type="file" id="split-file" accept=".csv,.json,.xlsx,.xls" class="cx-sr">
+
+            <div class="cx-row" style="margin-top:1rem;">
+              <div class="cx-field">
+                <label class="cx-label" for="split-sets">Number of sets</label>
+                <input type="number" id="split-sets" class="cx-input" min="2" max="26" value="4">
+              </div>
+              <div class="cx-field">
+                <label class="cx-label" for="split-per">Questions per set</label>
+                <input type="number" id="split-per" class="cx-input" min="1" placeholder="auto">
+                <div class="cx-hint">Leave blank to divide evenly</div>
+              </div>
+            </div>
+
+            <label class="cx-opt">
+              <input type="checkbox" id="split-unique" checked>
+              <span>
+                <span class="cx-opt-name">No question repeats across sets</span>
+                <span class="cx-opt-desc">Each question lands in exactly one set</span>
+              </span>
+            </label>
+            <label class="cx-opt">
+              <input type="checkbox" id="split-balance" checked>
+              <span>
+                <span class="cx-opt-name">Give every set the same total marks</span>
+                <span class="cx-opt-desc">Matters when questions carry different point values</span>
+              </span>
+            </label>
+
+            <div class="cx-field" style="margin-top:0.9rem;">
+              <label class="cx-label" for="split-format">Download format</label>
+              <select id="split-format" class="cx-select">
+                <option value="json">JSON — same shape as the question uploader</option>
+                <option value="csv">CSV — opens in Excel</option>
+              </select>
+            </div>
+
+            <div class="cx-msg" id="split-msg"></div>
+          </div>
+        </section>
+
+        <!-- ── Shared: timing & scoring ─────────────────────── -->
+        <section class="cx-card cx-shared">
+          <div class="cx-card-head">
+            <span class="cx-card-icon"><i class="bi bi-clock-history"></i></span>
+            <div>
+              <h2 class="cx-card-title">Timing &amp; Scoring</h2>
+              <p class="cx-card-note">How long students get, and what counts as a pass</p>
+            </div>
+          </div>
+          <div class="cx-card-body">
+            <div class="cx-row">
+              <div class="cx-field">
+                <label class="cx-label" for="cx-dur">Duration (minutes) <span class="cx-req">*</span></label>
+                <input type="number" name="duration_minutes" id="cx-dur" class="cx-input"
+                       min="1" max="600" value="{{ form.get('duration_minutes', '60') }}">
+                <div class="cx-chips">
+                  <button type="button" class="cx-chip" data-dur="15">15m</button>
+                  <button type="button" class="cx-chip" data-dur="30">30m</button>
+                  <button type="button" class="cx-chip" data-dur="60">1h</button>
+                  <button type="button" class="cx-chip" data-dur="90">1h 30m</button>
+                  <button type="button" class="cx-chip" data-dur="120">2h</button>
+                </div>
+              </div>
+              <div class="cx-field">
+                <label class="cx-label" for="cx-pass">Passing Score (%) <span class="cx-req">*</span></label>
+                <input type="number" name="passing_score" id="cx-pass" class="cx-input"
+                       min="0" max="100" step="0.1" value="{{ form.get('passing_score', '40') }}">
+                <div class="cx-chips">
+                  <button type="button" class="cx-chip" data-pass="33">33%</button>
+                  <button type="button" class="cx-chip" data-pass="40">40%</button>
+                  <button type="button" class="cx-chip" data-pass="50">50%</button>
+                  <button type="button" class="cx-chip" data-pass="60">60%</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="cx-field">
+              <label class="cx-label">Availability window <span class="cx-optional">optional</span></label>
+              <div class="cx-row">
+                <input type="datetime-local" name="start_time" id="cx-start" class="cx-input"
+                       value="{{ form.get('start_time', '') }}" aria-label="Opens at">
+                <input type="datetime-local" name="end_time" id="cx-end" class="cx-input"
+                       value="{{ form.get('end_time', '') }}" aria-label="Closes at">
+              </div>
+              <div class="cx-hint" id="hint-window">Leave both blank to open as soon as you activate the exam.</div>
+            </div>
+
+            <div class="cx-field">
+              <label class="cx-label">Exam Mode</label>
+              <div class="cx-choices">
+                <label class="cx-choice">
+                  <input type="radio" name="exam_mode" value="classroom"
+                         {% if form.get('exam_mode', 'classroom') != 'home' %}checked{% endif %}>
+                  <span class="cx-choice-name"><i class="bi bi-building"></i> Classroom</span>
+                  <span class="cx-choice-desc">Supervised lab or on-site exam</span>
+                </label>
+                <label class="cx-choice">
+                  <input type="radio" name="exam_mode" value="home"
+                         {% if form.get('exam_mode') == 'home' %}checked{% endif %}>
+                  <span class="cx-choice-name"><i class="bi bi-house"></i> Home</span>
+                  <span class="cx-choice-desc">Remote or online delivery</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Shared: security & proctoring ────────────────── -->
+        <section class="cx-card cx-shared">
+          <div class="cx-card-head">
+            <span class="cx-card-icon"><i class="bi bi-shield-check"></i></span>
+            <div>
+              <h2 class="cx-card-title">Security &amp; Proctoring</h2>
+              <p class="cx-card-note">Enable only what you need — fewer checks mean fewer false alerts</p>
+            </div>
+          </div>
+          <div class="cx-card-body">
+
+            <div class="cx-feature on" data-feature="camera">
+              <span class="cx-feature-icon"><i class="bi bi-camera-video-fill"></i></span>
+              <span class="cx-feature-text">
+                <span class="cx-feature-name">Camera Monitoring</span>
+                <span class="cx-feature-desc">Verify a face is visible and only one person is present</span>
+              </span>
+              <label class="cx-switch">
+                <input type="checkbox" id="ps_camera" checked>
+                <span class="cx-switch-track"></span>
+                <span class="cx-sr">Camera monitoring</span>
+              </label>
+            </div>
+
+            <div class="cx-feature" data-feature="head_pose" data-needs-camera>
+              <span class="cx-feature-icon"><i class="bi bi-arrow-left-right"></i></span>
+              <span class="cx-feature-text">
+                <span class="cx-feature-name">Head Movement Detection</span>
+                <span class="cx-feature-desc">Warn if a student looks away for too long</span>
+              </span>
+              <label class="cx-switch">
+                <input type="checkbox" id="ps_head_pose">
+                <span class="cx-switch-track"></span>
+                <span class="cx-sr">Head movement detection</span>
+              </label>
+            </div>
+
+            <div class="cx-feature" data-feature="object_detection" data-needs-camera>
+              <span class="cx-feature-icon"><i class="bi bi-phone"></i></span>
+              <span class="cx-feature-text">
+                <span class="cx-feature-name">Object Detection</span>
+                <span class="cx-feature-desc">Detect phones, books or laptops in frame</span>
+              </span>
+              <label class="cx-switch">
+                <input type="checkbox" id="ps_objects">
+                <span class="cx-switch-track"></span>
+                <span class="cx-sr">Object detection</span>
+              </label>
+            </div>
+
+            <div class="cx-feature" data-feature="voice_detection">
+              <span class="cx-feature-icon"><i class="bi bi-mic-fill"></i></span>
+              <span class="cx-feature-text">
+                <span class="cx-feature-name">Voice Detection</span>
+                <span class="cx-feature-desc">Flag talking during the exam. Works even with the camera off</span>
+              </span>
+              <label class="cx-switch">
+                <input type="checkbox" id="ps_voice">
+                <span class="cx-switch-track"></span>
+                <span class="cx-sr">Voice detection</span>
+              </label>
+            </div>
+
+            <div class="cx-feature on" data-feature="tab_switch">
+              <span class="cx-feature-icon"><i class="bi bi-window-stack"></i></span>
+              <span class="cx-feature-text">
+                <span class="cx-feature-name">Tab Switch Detection</span>
+                <span class="cx-feature-desc">Log and warn when a student leaves the exam window</span>
+              </span>
+              <label class="cx-switch">
+                <input type="checkbox" id="ps_tabswitch" checked>
+                <span class="cx-switch-track"></span>
+                <span class="cx-sr">Tab switch detection</span>
+              </label>
+            </div>
+
+            <div class="cx-row" style="margin-top:1rem;">
+              <div class="cx-field">
+                <label class="cx-label" for="ps_max_warnings">Max warnings</label>
+                <input type="number" id="ps_max_warnings" class="cx-input" min="1" max="100" value="25">
+                <div class="cx-hint">Then the exam auto-submits</div>
+              </div>
+              <div class="cx-field">
+                <label class="cx-label" for="max_tab_switches">Max tab switches</label>
+                <input type="number" name="max_tab_switches" id="max_tab_switches" class="cx-input"
+                       min="0" max="50" value="{{ form.get('max_tab_switches', '5') }}">
+                <div class="cx-hint">Counted separately from warnings</div>
+              </div>
+            </div>
+
+            <div class="cx-field">
+              <label class="cx-label">Detection strength</label>
+              <div class="cx-choices" style="grid-template-columns:repeat(3,1fr);">
+                <label class="cx-choice">
+                  <input type="radio" name="ps_sensitivity" value="low">
+                  <span class="cx-choice-name">Lenient</span>
+                  <span class="cx-choice-desc">Fewest false alerts</span>
+                </label>
+                <label class="cx-choice">
+                  <input type="radio" name="ps_sensitivity" value="medium" checked>
+                  <span class="cx-choice-name">Balanced</span>
+                  <span class="cx-choice-desc">Recommended</span>
+                </label>
+                <label class="cx-choice">
+                  <input type="radio" name="ps_sensitivity" value="high">
+                  <span class="cx-choice-name">Strict</span>
+                  <span class="cx-choice-desc">Catches small movements</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ══ SIDEBAR ══════════════════════════════════════════ -->
+      <aside class="cx-side">
+
+        <div class="cx-card">
+          <div class="cx-card-head">
+            <span class="cx-card-icon"><i class="bi bi-card-checklist"></i></span>
+            <h2 class="cx-card-title">Summary</h2>
+          </div>
+          <div class="cx-card-body tight">
+            <div class="cx-sum-row">
+              <span class="cx-sum-label" id="sum-what-label">Title</span>
+              <span class="cx-sum-val" id="sum-what">—</span>
+            </div>
+            <div class="cx-sum-row" data-exam-only>
+              <span class="cx-sum-label">Duration</span><span class="cx-sum-val" id="sum-dur">60 min</span>
+            </div>
+            <div class="cx-sum-row" data-exam-only>
+              <span class="cx-sum-label">Passing</span><span class="cx-sum-val" id="sum-pass">40%</span>
+            </div>
+            <div class="cx-sum-row" data-exam-only>
+              <span class="cx-sum-label">Mode</span><span class="cx-sum-val" id="sum-mode">Classroom</span>
+            </div>
+            <div class="cx-sum-row" data-exam-only>
+              <span class="cx-sum-label">Proctoring</span>
+              <span class="cx-sum-val" id="sum-proctor" style="color:var(--cx-primary);">Camera, Tab</span>
+            </div>
+            <div class="cx-sum-row" data-exam-only>
+              <span class="cx-sum-label">Questions</span><span class="cx-sum-val" id="sum-shuffle">Shuffled</span>
+            </div>
+            <div class="cx-sum-row" data-exam-only>
+              <span class="cx-sum-label">Status</span>
+              <span class="cx-sum-val" id="sum-status" style="color:var(--cx-success);">Active on create</span>
+            </div>
+            <div class="cx-sum-row" data-split-only hidden>
+              <span class="cx-sum-label">Sets</span><span class="cx-sum-val" id="sum-sets">4</span>
+            </div>
+            <div class="cx-sum-row" data-split-only hidden>
+              <span class="cx-sum-label">Overlap</span><span class="cx-sum-val" id="sum-overlap">None</span>
+            </div>
+          </div>
         </div>
 
-    </div>
-
-    <!-- Tab Row -->
-    <div class="ce-tab-row">
-        <button type="button" class="ce-tab-btn active" onclick="switchTab('single')" id="tabt-single">
-            <i class="bi bi-file-earmark-plus"></i> Single Exam
-        </button>
-        <button type="button" class="ce-tab-btn" onclick="switchTab('batch')" id="tabt-batch">
-            <i class="bi bi-stack"></i> Batch Create <span class="new-badge">NEW</span>
-        </button>
-    </div>
-
-    <!-- ══════════════ SINGLE TAB ══════════════ -->
-    <div class="ce-panel active" id="panel-single">
-        <form method="POST" id="single-form">
-            <input type="hidden" name="mode" value="single">
-            <input type="hidden" name="proctor_settings_json" id="proctor_json">
-
-            <div class="ce-layout">
-                <!-- LEFT COLUMN -->
-                <div>
-
-                    <!-- Section 1: Basic Info -->
-                    <div class="ce-section">
-                        <div class="ce-section-head">
-                            <div class="ce-section-icon si-indigo"><i class="bi bi-info-circle-fill"></i></div>
-                            <div class="ce-section-head-text">
-                                <h3>Basic Information</h3>
-                                <p>Name, description and timing</p>
-                            </div>
-                        </div>
-                        <div class="ce-section-body">
-                            <div class="f-group">
-                                <label class="f-label">Exam Title <span class="req">*</span></label>
-                                <input type="text" name="title" class="f-input" required
-                                    placeholder="e.g., Mid-term Examination — SQL">
-                            </div>
-                            <div class="f-group">
-                                <label class="f-label">Description</label>
-                                <textarea name="description" class="f-textarea"
-                                    placeholder="Brief description of the exam..."></textarea>
-                            </div>
-                            <div class="f-row">
-                                <div class="f-group">
-                                    <label class="f-label">Duration (minutes) <span class="req">*</span></label>
-                                    <input type="number" name="duration_minutes" class="f-input" required min="1"
-                                        value="60">
-                                </div>
-                                <div class="f-group">
-                                    <label class="f-label">Passing Score (%) <span class="req">*</span></label>
-                                    <input type="number" name="passing_score" class="f-input" required min="0" max="100"
-                                        value="40" step="0.1">
-                                </div>
-                            </div>
-
-                            <!-- Exam Mode -->
-                            <div class="f-group" style="margin-top:0.25rem;">
-                                <label class="f-label">Exam Mode</label>
-                                <div class="mode-grid">
-                                    <label class="mode-card sel" id="mc-classroom">
-                                        <input type="radio" name="exam_mode" value="classroom" checked
-                                            onchange="syncModeCards()">
-                                        
-                                        <div class="mode-name">Classroom</div>
-                                        <div class="mode-desc">Supervised lab or on-site exam</div>
-                                    </label>
-                                    <label class="mode-card" id="mc-home">
-                                        <input type="radio" name="exam_mode" value="home" onchange="syncModeCards()">
-                                        
-                                        <div class="mode-name">Home</div>
-                                        <div class="mode-desc">Remote or online delivery</div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Section 2: Security -->
-                    <div class="ce-section">
-                        <div class="ce-section-head">
-                            <div class="ce-section-icon si-blue"><i class="bi bi-shield-check"></i></div>
-                            <div class="ce-section-head-text">
-                                <h3>Security &amp; Proctoring</h3>
-                                <p>Enable only what you need — fewer features = fewer false alerts</p>
-                            </div>
-                        </div>
-                        <div class="ce-section-body">
-
-                            <div class="ft-row on" id="ft-camera">
-                                <div class="ft-icon-wrap ic-blue"><i class="bi bi-camera-video-fill"></i></div>
-                                <div class="ft-text">
-                                    <div class="ft-name">Camera Monitoring</div>
-                                    <div class="ft-desc">Verify face is visible and only one person</div>
-                                </div>
-                                <label class="tog">
-                                    <input type="checkbox" name="ps_camera" checked onchange="toggleFt('camera',this)">
-                                    <span class="tog-track"></span>
-                                </label>
-                            </div>
-
-                            <div class="ft-row" id="ft-headpose">
-                                <div class="ft-icon-wrap ic-purple"><i class="bi bi-arrow-left-right"></i></div>
-                                <div class="ft-text">
-                                    <div class="ft-name">Head Movement Detection</div>
-                                    <div class="ft-desc">Warn if student looks away for too long</div>
-                                </div>
-                                <label class="tog">
-                                    <input type="checkbox" name="ps_head_pose" onchange="toggleFt('headpose',this)">
-                                    <span class="tog-track"></span>
-                                </label>
-                            </div>
-
-                            <div class="ft-row" id="ft-objects">
-                                <div class="ft-icon-wrap ic-amber"><i class="bi bi-phone"></i></div>
-                                <div class="ft-text">
-                                    <div class="ft-name">Object Detection</div>
-                                    <div class="ft-desc">Detect phones, books or laptops in frame</div>
-                                </div>
-                                <label class="tog">
-                                    <input type="checkbox" name="ps_objects" onchange="toggleFt('objects',this)">
-                                    <span class="tog-track"></span>
-                                </label>
-                            </div>
-
-                            <div class="ft-row" id="ft-voice">
-                                <div class="ft-icon-wrap ic-red"><i class="bi bi-mic-fill"></i></div>
-                                <div class="ft-text">
-                                    <div class="ft-name">Voice Detection</div>
-                                    <div class="ft-desc">Detect if student is talking</div>
-                                </div>
-                                <label class="tog">
-                                    <input type="checkbox" name="ps_voice" onchange="toggleFt('voice',this)">
-                                    <span class="tog-track"></span>
-                                </label>
-                            </div>
-
-                            <div class="ft-row on" id="ft-tabswitch">
-                                <div class="ft-icon-wrap ic-green"><i class="bi bi-window-stack"></i></div>
-                                <div class="ft-text">
-                                    <div class="ft-name">Tab Switch Detection</div>
-                                    <div class="ft-desc">Log and warn on tab or window changes</div>
-                                </div>
-                                <label class="tog">
-                                    <input type="checkbox" name="ps_tabswitch" checked
-                                        onchange="toggleFt('tabswitch',this)">
-                                    <span class="tog-track"></span>
-                                </label>
-                            </div>
-
-                            <!-- Thresholds -->
-                            <div class="threshold-row">
-                                <div class="f-group">
-                                    <label class="f-label">
-                                        Max Warnings
-                                        <span class="help-icon"
-                                            data-tip="Recommended: 10 for classroom exams, 15 for home exams. Higher = more forgiving.">?</span>
-                                    </label>
-                                    <input type="number" name="ps_max_warnings" value="10" min="5" max="100"
-                                        class="f-input">
-                                    <div class="f-hint">Before auto-submit triggers</div>
-                                </div>
-                                <div class="f-group">
-                                    <label class="f-label">
-                                        Max Tab Switches
-                                        <span class="help-icon"
-                                            data-tip="Exam auto-submits once this limit is reached.">?</span>
-                                    </label>
-                                    <input type="number" name="max_tab_switches" value="3" min="1" max="20"
-                                        class="f-input">
-                                    <div class="f-hint">Then exam auto-submits</div>
-                                </div>
-                            </div>
-
-                            <!-- Detection Strength -->
-                            <div class="f-group" style="margin-top:1rem;">
-                                <label class="f-label">
-                                    Detection Strength
-                                    <span class="help-icon"
-                                        data-tip="Controls timing for face, head, and object detection. Higher = catches violations faster but may increase false positives.">?</span>
-                                </label>
-                                <div class="strength-group">
-                                    <label class="strength-card" id="sc-low">
-                                        <input type="radio" name="ps_sensitivity" value="low">
-                                        <div class="str-name">Easy</div>
-                                        <div class="str-sub">8s grace — forgiving</div>
-                                    </label>
-                                    <label class="strength-card sel" id="sc-medium">
-                                        <input type="radio" name="ps_sensitivity" value="medium" checked>
-                                        <div class="str-name">Normal ✦</div>
-                                        <div class="str-sub">5s — recommended</div>
-                                    </label>
-                                    <label class="strength-card" id="sc-high">
-                                        <input type="radio" name="ps_sensitivity" value="high">
-                                        <div class="str-name">Strict</div>
-                                        <div class="str-sub">2s — maximum</div>
-                                    </label>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- RIGHT SIDEBAR -->
-                <div class="ce-sidebar">
-
-                    <!-- Exam Summary -->
-                    <div class="sidebar-card">
-                        <div class="sidebar-card-head">
-                            <i class="bi bi-card-checklist"></i> Exam Summary
-                        </div>
-                        <div class="sidebar-card-body">
-                            <div class="summary-row">
-                                <span class="sr-label">Title</span>
-                                <span class="sr-val" id="sum-title"
-                                    style="text-align:right; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</span>
-                            </div>
-                            <div class="summary-row">
-                                <span class="sr-label">Duration</span>
-                                <span class="sr-val" id="sum-dur">60 min</span>
-                            </div>
-                            <div class="summary-row">
-                                <span class="sr-label">Passing</span>
-                                <span class="sr-val" id="sum-pass">50%</span>
-                            </div>
-                            <div class="summary-row">
-                                <span class="sr-label">Mode</span>
-                                <span class="sr-val" id="sum-mode">Classroom</span>
-                            </div>
-                            <div class="summary-row">
-                                <span class="sr-label">Proctoring</span>
-                                <span class="sr-val" id="sum-proctor" style="color:var(--primary);">Camera, Tab</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Post-Exam Behaviour -->
-                    <div class="sidebar-card">
-                        <div class="sidebar-card-head">
-                            <i class="bi bi-flag-fill"></i> Post-Exam Behaviour
-                        </div>
-                        <div class="sidebar-card-body">
-
-
-
-                            <!-- After submission -->
-                            <div class="f-group" style="margin-bottom:0.75rem;">
-                                <label class="f-label">After Submission — Show</label>
-                                <div class="post-opt-row">
-                                    <label class="post-opt " id="po-results" onclick="selPostOpt('results')">
-                                        <input type="radio" name="post_exam_redirect" value="results" >
-                                        <span class="opt-icon"></span> Their Results
-                                    </label>
-                                    <label class="post-opt sel" id="po-dashboard" onclick="selPostOpt('dashboard')">
-                                        <input type="radio" name="post_exam_redirect" value="dashboard" checked>
-                                        <span class="opt-icon"></span> Dashboard
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Access key -->
-                            <div class="key-callout">
-                                <i class="bi bi-key-fill"></i>
-                                <span>A unique <strong>8-character access key</strong> will be generated on creation —
-                                    share it with students to unlock the exam before camera calibration.</span>
-                            </div>
-
-                            <!-- Leaderboard Visibility -->
-                            <div style="margin-top:0.75rem; padding:0.75rem; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">
-                                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                                    <div style="display:flex; align-items:center; gap:8px;">
-                                        <span style="font-size:1.1rem;"></span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.82rem;">Show Leaderboard</div>
-                                            <div style="font-size:0.68rem; color:var(--text-2); opacity:0.7;">Students can see rankings for this exam</div>
-                                        </div>
-                                    </div>
-                                    <label style="position:relative; display:inline-block; width:38px; height:20px; flex-shrink:0; cursor:pointer;">
-                                        <input type="checkbox" name="show_leaderboard_check"
-                                            onchange="document.getElementById('lb_hidden').value = this.checked ? 'true' : 'false'"
-                                            style="opacity:0; width:0; height:0; position:absolute;">
-
-                                        <span style="position:absolute; inset:0; border-radius:20px; background:rgba(255,255,255,0.12); transition:background 0.25s;"
-                                            onclick="const c=this.previousElementSibling; setTimeout(()=>{
-                                                this.style.background = c.checked ? '#6366f1' : 'rgba(255,255,255,0.12)';
-                                                this.querySelector('span').style.left = c.checked ? '20px' : '2px';
-                                            },0)">
-
-                                            <span style="position:absolute; height:16px; width:16px; bottom:2px; left:2px; border-radius:50%; background:#fff; transition:left 0.25s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
-
-                                        </span>
-                                    </label>
-                                </div>
-                            </div>
-                            <input type="hidden" name="show_leaderboard" id="lb_hidden" value="true">
-
-                        </div>
-                    </div>
-
-                    <!-- Actions -->
-                    <div class="ce-actions">
-                        <button type="submit" class="btn-create" onclick="collectProctor()">
-                            <i class="bi bi-plus-circle-fill"></i> Create Exam
-                        </button>
-                        <a href="{{ url_for('faculty.faculty_dashboard') }}" class="btn-cancel">
-                            <i class="bi bi-x"></i> Cancel
-                        </a>
-                    </div>
-
-                    <!-- Tips -->
-                    <div class="tip-banner">
-                        <i class="bi bi-lightbulb-fill"></i>
-                        <span><strong>Tip:</strong> For in-person exams with a supervisor, enabling only Tab Switch
-                            detection is usually sufficient. Camera + Tab is the recommended baseline.</span>
-                    </div>
-                </div>
+        <div class="cx-card cx-shared">
+          <div class="cx-card-head">
+            <span class="cx-card-icon"><i class="bi bi-flag-fill"></i></span>
+            <h2 class="cx-card-title">Delivery</h2>
+          </div>
+          <div class="cx-card-body tight">
+            <div class="cx-field">
+              <label class="cx-label">After submission, show</label>
+              <div class="cx-choices">
+                <label class="cx-choice">
+                  <input type="radio" name="post_exam_redirect" value="results"
+                         {% if form.get('post_exam_redirect') == 'results' %}checked{% endif %}>
+                  <span class="cx-choice-name">Results</span>
+                </label>
+                <label class="cx-choice">
+                  <input type="radio" name="post_exam_redirect" value="dashboard"
+                         {% if form.get('post_exam_redirect', 'dashboard') != 'results' %}checked{% endif %}>
+                  <span class="cx-choice-name">Dashboard</span>
+                </label>
+              </div>
             </div>
-        </form>
-    </div>
 
-    <!-- ══════════════ BATCH TAB ══════════════ -->
-    <div class="ce-panel" id="panel-batch">
-        <div class="ce-section">
-            <div class="ce-section-body">
-                <div class="batch-toolbar">
-                    <div class="batch-toolbar-label">Exams to create <span class="count-pill" id="batch-count">0</span>
-                    </div>
-                    <button type="button" class="tb-btn" onclick="toggleDefaults()"><i class="bi bi-gear"></i> Set
-                        Defaults</button>
-                    <button type="button" class="tb-btn primary" onclick="addEntry()"><i class="bi bi-plus-lg"></i> Add
-                        Exam</button>
-                </div>
-
-                <div class="defaults-bar" id="defaults-bar">
-                    <h4>Default Values (applied to all exams)</h4>
-                    <div class="defaults-grid">
-                        <div><label class="f-label">Duration (min)</label><input type="number" id="def-dur" value="60"
-                                min="1"></div>
-                        <div><label class="f-label">Passing Score (%)</label><input type="number" id="def-pass"
-                                value="50" min="0" max="100" step="0.1"></div>
-                    </div>
-                    <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
-                        <button type="button" class="tb-btn primary" onclick="applyDefaults()">Apply to All</button>
-                    </div>
-                </div>
-
-                <div id="batch-list">
-                    <div class="batch-empty" id="batch-empty">
-                        <i class="bi bi-journal-plus"></i>
-                        <p><strong>No exams added yet</strong></p>
-                        <p style="font-size:0.8rem; margin-top:4px;">Click "Add Exam" above to get started</p>
-                    </div>
-                </div>
-
-                <div class="batch-submit-bar" id="batch-submit-bar">
-                    <div class="batch-summary">Ready to create <strong id="batch-sub-count">0</strong> exam(s)</div>
-                    <div style="display:flex; gap:0.5rem;">
-                        <a href="{{ url_for('faculty.faculty_dashboard') }}" class="btn-cancel"
-                            style="width:auto; padding:0.55rem 1.1rem;">Cancel</a>
-                        <button type="button" class="btn-create" onclick="submitBatch()" id="btn-batch"
-                            style="width:auto; padding:0.55rem 1.25rem; font-size:0.85rem;">
-                            <i class="bi bi-check2-all"></i> Create All
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <label class="cx-opt">
+              <input type="checkbox" name="require_access_key" value="true" id="opt-key"
+                     {% if form.get('require_access_key', 'true') != 'false' %}checked{% endif %}>
+              <span>
+                <span class="cx-opt-name">Require an access key</span>
+                <span class="cx-opt-desc">An 8-character key is generated per exam</span>
+              </span>
+            </label>
+            <label class="cx-opt">
+              <input type="checkbox" name="randomize_questions" value="true" id="opt-shuffle"
+                     {% if form.get('randomize_questions', 'true') != 'false' %}checked{% endif %}>
+              <span>
+                <span class="cx-opt-name">Shuffle questions &amp; options</span>
+                <span class="cx-opt-desc">Per student, fixed across refreshes</span>
+              </span>
+            </label>
+            <label class="cx-opt">
+              <input type="checkbox" name="show_leaderboard" value="true"
+                     {% if form.get('show_leaderboard', 'true') != 'false' %}checked{% endif %}>
+              <span>
+                <span class="cx-opt-name">Show leaderboard</span>
+                <span class="cx-opt-desc">Visible only once results are published</span>
+              </span>
+            </label>
+            <label class="cx-opt">
+              <input type="checkbox" name="is_active" value="true" id="opt-active"
+                     {% if form.get('is_active', 'true') != 'false' %}checked{% endif %}>
+              <span>
+                <span class="cx-opt-name">Activate immediately</span>
+                <span class="cx-opt-desc">Leave off to prepare it first</span>
+              </span>
+            </label>
+          </div>
         </div>
-    </div>
 
+        <div class="cx-card">
+          <div class="cx-card-body tight">
+            <button type="submit" class="cx-btn cx-btn-primary" id="cx-submit">
+              <i class="bi bi-plus-circle-fill"></i> <span id="cx-submit-text">Create Exam</span>
+            </button>
+            <a href="{{ url_for('faculty.faculty_dashboard') }}" class="cx-btn cx-btn-ghost"
+               style="margin-top:0.5rem;">Cancel</a>
+            <div class="cx-kbd-hint">
+              <span class="cx-kbd">Ctrl</span>+<span class="cx-kbd">Enter</span> to submit
+              &nbsp;·&nbsp; <span class="cx-kbd">Alt</span>+<span class="cx-kbd">1-3</span> to switch
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </form>
 </div>
 
 <!-- Overlay -->
-<div class="ce-overlay" id="overlay">
-    <div class="overlay-box">
-        <div id="ov-spin">
-            <div class="ce-spinner"></div>
-            <div class="ov-title">Creating Exams…</div>
-            <div class="ov-sub" id="ov-detail">Processing your exams</div>
-        </div>
-        <div class="result-box" id="ov-result">
-            <div class="result-icon" id="r-icon"></div>
-            <div class="result-title" id="r-title"></div>
-            <div class="result-msg" id="r-msg"></div>
-            <div class="result-list" id="r-list"></div>
-            <div class="result-acts">
-                <a href="{{ url_for('faculty.faculty_dashboard') }}" class="btn-create"
-                    style="width:auto; padding:0.6rem 1.25rem; font-size:0.85rem;">Go to Dashboard</a>
-                <button type="button" class="btn-cancel" onclick="resetBatch()"
-                    style="width:auto; padding:0.6rem 1.1rem;">Create More</button>
-            </div>
-        </div>
+<div class="cx-overlay" id="cx-overlay">
+  <div class="cx-overlay-box">
+    <div id="ov-working">
+      <div class="cx-spinner"></div>
+      <h3 class="cx-card-title" id="ov-title">Creating exams…</h3>
+      <p class="cx-card-note" id="ov-sub">This only takes a moment</p>
     </div>
+    <div id="ov-done" hidden>
+      <h3 class="cx-card-title" id="ov-done-title"></h3>
+      <p class="cx-card-note" id="ov-done-msg"></p>
+      <div class="cx-result-list" id="ov-list"></div>
+      <div style="display:flex; gap:0.5rem; margin-top:0.9rem;">
+        <a href="{{ url_for('faculty.faculty_dashboard') }}" class="cx-btn cx-btn-primary">Go to Dashboard</a>
+        <button type="button" class="cx-btn cx-btn-ghost" id="ov-more">Create more</button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="ce-toast" id="toast"></div>
+<div class="cx-toast" id="cx-toast" role="status" aria-live="polite"></div>
 
 <script>
-    (function () {
+(function createExamPage() {
+  'use strict';
 
-        /* ── Tab switching ── */
-        window.switchTab = function (mode) {
-            ['single', 'batch'].forEach(m => {
-                document.getElementById('tabt-' + m).classList.toggle('active', m === mode);
-                document.getElementById('panel-' + m).classList.toggle('active', m === mode);
-            });
-            if (mode === 'batch' && !batchInited) { batchInited = true; addEntry(); addEntry(); }
-        };
+  const URLS = {
+    batch: "{{ url_for('faculty.batch_create_exams') }}",
+    splitPreview: "{{ url_for('faculty.split_questions_preview') }}",
+    splitDownload: "{{ url_for('faculty.split_questions_download') }}"
+  };
 
-        /* ── Mode cards ── */
-        window.syncModeCards = function () {
-            ['classroom', 'home'].forEach(v => {
-                const el = document.getElementById('mc-' + v);
-                el.classList.toggle('sel', el.querySelector('input').checked);
-            });
-            updateSummary();
-        };
+  const form = document.getElementById('cx-form');
+  const submitBtn = document.getElementById('cx-submit');
+  const submitText = document.getElementById('cx-submit-text');
+  const toastEl = document.getElementById('cx-toast');
 
-        /* ── Strength cards ── */
-        document.querySelectorAll('.strength-card').forEach(card => {
-            card.addEventListener('click', function () {
-                document.querySelectorAll('.strength-card').forEach(c => c.classList.remove('sel'));
-                this.classList.add('sel');
-            });
-        });
+  let mode = 'single';
+  let busy = false;
 
-        /* ── Post-opt ── */
-        window.selPostOpt = function (v) {
-            ['results', 'dashboard'].forEach(k => {
-                const el = document.getElementById('po-' + k);
-                el.classList.toggle('sel', k === v);
-                el.querySelector('input').checked = (k === v);
-            });
-        };
+  /* ── Small helpers ────────────────────────────────────── */
+  const $ = id => document.getElementById(id);
+  const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
 
-        /* ── Feature toggle ── */
-        window.toggleFt = function (name, input) {
-            document.getElementById('ft-' + name).classList.toggle('on', input.checked);
-            updateSummary();
-        };
+  let toastTimer;
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3200);
+  }
 
-        /* ── Summary live update ── */
-        function updateSummary() {
-            const titleEl = document.querySelector('[name=title]');
-            const durEl = document.querySelector('[name=duration_minutes]');
-            const passEl = document.querySelector('[name=passing_score]');
-            const mode = document.querySelector('[name=exam_mode]:checked')?.value;
+  function hint(el, text, kind) {
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'cx-hint' + (kind ? ' ' + kind : '');
+  }
 
-            if (titleEl) document.getElementById('sum-title').textContent = titleEl.value || '—';
-            if (durEl) document.getElementById('sum-dur').textContent = (durEl.value || 60) + ' min';
-            if (passEl) document.getElementById('sum-pass').textContent = (passEl.value || 50) + '%';
-            if (mode) document.getElementById('sum-mode').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+  /* ── Mode switching ───────────────────────────────────── */
+  const PANELS = { single: 'panel-single', batch: 'panel-batch', split: 'panel-split' };
 
-            const active = [];
-            if (document.querySelector('[name=ps_camera]')?.checked) active.push('Camera');
-            if (document.querySelector('[name=ps_head_pose]')?.checked) active.push('Head');
-            if (document.querySelector('[name=ps_objects]')?.checked) active.push('Objects');
-            if (document.querySelector('[name=ps_voice]')?.checked) active.push('Voice');
-            if (document.querySelector('[name=ps_tabswitch]')?.checked) active.push('Tab');
-            document.getElementById('sum-proctor').textContent = active.length ? active.join(', ') : 'None';
-        }
+  function setMode(next) {
+    if (!PANELS[next]) return;
+    mode = next;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const form = document.getElementById('single-form');
-            if (form) {
-                form.querySelectorAll('input, textarea').forEach(el => el.addEventListener('input', updateSummary));
-            }
-            updateSummary();
-        });
+    document.querySelectorAll('.cx-mode').forEach(btn => {
+      btn.setAttribute('aria-selected', String(btn.dataset.mode === next));
+    });
+    Object.entries(PANELS).forEach(([key, id]) => { $(id).hidden = key !== next; });
 
-        /* ── Collect proctoring JSON ── */
-        window.collectProctor = function () {
-            const sens = document.querySelector('[name=ps_sensitivity]:checked')?.value || 'medium';
-            const presets = { low: { no_face: 8, cooldown: 8, deviation: 8 }, medium: { no_face: 5, cooldown: 5, deviation: 5 }, high: { no_face: 2, cooldown: 2, deviation: 2 } };
-            const p = presets[sens];
-            const s = {
-                camera_enabled: !!document.querySelector('[name=ps_camera]')?.checked,
-                face_detection: !!document.querySelector('[name=ps_camera]')?.checked,
-                head_pose: !!document.querySelector('[name=ps_head_pose]')?.checked,
-                object_detection: !!document.querySelector('[name=ps_objects]')?.checked,
-                voice_detection: !!document.querySelector('[name=ps_voice]')?.checked,
-                tab_switch: !!document.querySelector('[name=ps_tabswitch]')?.checked,
-                max_warnings: parseInt(document.querySelector('[name=ps_max_warnings]')?.value || '25'),
-                max_tab_switches: parseInt(document.querySelector('[name=max_tab_switches]')?.value || '5'),
-                no_face_timeout_sec: p.no_face,
-                warning_cooldown_sec: p.cooldown,
-                deviation_min_duration: p.deviation,
-                sensitivity: sens,
-            };
-            document.getElementById('proctor_json').value = JSON.stringify(s);
-        };
+    /* Split creates nothing, so the shared exam settings do not apply to it. */
+    const splitting = next === 'split';
+    document.querySelectorAll('.cx-shared').forEach(el => { el.hidden = splitting; });
 
-        /* ── Batch ── */
-        let entryCount = 0, batchInited = false;
+    submitText.textContent = splitting ? 'Split & download sets'
+                           : next === 'batch' ? 'Create all exams'
+                           : 'Create Exam';
+    submitBtn.querySelector('.bi').className = splitting
+      ? 'bi bi-download'
+      : next === 'batch' ? 'bi bi-check2-all' : 'bi bi-plus-circle-fill';
 
-        window.toggleDefaults = function () { document.getElementById('defaults-bar').classList.toggle('vis'); };
+    document.querySelectorAll('[data-exam-only]').forEach(el => { el.hidden = splitting; });
+    document.querySelectorAll('[data-split-only]').forEach(el => { el.hidden = !splitting; });
 
-        window.applyDefaults = function () {
-            const dur = document.getElementById('def-dur').value;
-            const pass = document.getElementById('def-pass').value;
-            document.querySelectorAll('.exam-entry').forEach(e => {
-                if (dur) e.querySelector('.e-dur').value = dur;
-                if (pass) e.querySelector('.e-pass').value = pass;
-            });
-            toast('Defaults applied!');
-        };
+    try { history.replaceState(null, '', '?mode=' + next); } catch (e) { /* file:// etc. */ }
+    updateSummary();
+  }
 
-        window.addEntry = function (pre) {
-            entryCount++;
-            const i = entryCount;
-            const el = document.createElement('div');
-            el.className = 'exam-entry'; el.id = 'entry-' + i; el.dataset.idx = i;
-            const tv = pre?.title || '', dv = pre?.description || '', du = pre?.duration || 60, pv = pre?.passing || 50;
-            el.innerHTML = `<div class="entry-head" onclick="collapseEntry(${i})"><div class="entry-num"><span class="num-badge">${i}</span>Exam #${i}<span class="entry-preview" id="ep-${i}">${tv ? '— ' + tv : ''}</span></div><div class="entry-acts" onclick="event.stopPropagation()"><button type="button" class="entry-btn" onclick="dupEntry(${i})" title="Duplicate"><i class="bi bi-copy"></i></button><button type="button" class="entry-btn del" onclick="removeEntry(${i})" title="Delete"><i class="bi bi-trash3"></i></button></div></div><div class="entry-body" id="eb-${i}"><div class="f-group"><label class="f-label">Exam Title <span class="req">*</span></label><input type="text" class="f-input e-title" placeholder="Exam title" value="${tv}" oninput="document.getElementById('ep-${i}').textContent=this.value?'— '+this.value:''"></div><div class="f-group"><label class="f-label">Description</label><textarea class="f-textarea e-desc" rows="2">${dv}</textarea></div><div class="f-row"><div class="f-group" style="margin:0"><label class="f-label">Duration (min)</label><input type="number" class="f-input e-dur" min="1" value="${du}"></div><div class="f-group" style="margin:0"><label class="f-label">Passing Score (%)</label><input type="number" class="f-input e-pass" min="0" max="100" step="0.1" value="${pv}"></div></div><div class="f-group" style="margin-top:0.75rem"><label class="f-label">Question File (CSV / Excel / JSON)</label><div class="file-zone" id="fz-${i}"><input type="file" class="e-file" accept=".csv,.xls,.xlsx,.json" onchange="fileSelect(${i},this)"><div class="fz-content" id="fzc-${i}"><div class="fz-icon"><i class="bi bi-cloud-arrow-up"></i></div><div class="fz-text"><strong>Click to upload</strong> or drag</div><div class="fz-hint">CSV, Excel, JSON</div></div><div class="file-name-row" id="fnr-${i}"><i class="bi bi-check-circle-fill" style="color:var(--success);font-size:16px;"></i><span class="fn-label"></span><button type="button" onclick="removeFile(event,${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:1rem;"><i class="bi bi-x-lg"></i></button></div></div></div></div>`;
-            document.getElementById('batch-empty').style.display = 'none';
-            document.getElementById('batch-submit-bar').classList.add('vis');
-            document.getElementById('batch-list').appendChild(el);
-            syncBatchCount();
-            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            setTimeout(() => el.querySelector('.e-title').focus(), 100);
-        };
+  document.querySelectorAll('.cx-mode').forEach(btn =>
+    on(btn, 'click', () => setMode(btn.dataset.mode)));
+  document.querySelectorAll('[data-goto]').forEach(btn =>
+    on(btn, 'click', () => setMode(btn.dataset.goto)));
 
-        window.fileSelect = function (i, inp) {
-            const f = inp.files[0];
-            if (!f) return;
-            document.getElementById('fz-' + i).classList.add('has-file');
-            document.getElementById('fzc-' + i).style.display = 'none';
-            const row = document.getElementById('fnr-' + i);
-            row.classList.add('vis');
-            row.querySelector('.fn-label').textContent = f.name;
-        };
+  /* ── Proctoring ───────────────────────────────────────── */
+  function syncFeatures() {
+    const cameraOn = $('ps_camera').checked;
 
-        window.removeFile = function (e, i) {
-            e.preventDefault(); e.stopPropagation();
-            const entry = document.getElementById('entry-' + i);
-            entry.querySelector('.e-file').value = '';
-            document.getElementById('fz-' + i).classList.remove('has-file');
-            document.getElementById('fzc-' + i).style.display = '';
-            document.getElementById('fnr-' + i).classList.remove('vis');
-        };
+    document.querySelectorAll('.cx-feature').forEach(row => {
+      const input = row.querySelector('input[type=checkbox]');
+      const needsCamera = row.hasAttribute('data-needs-camera');
 
-        window.collapseEntry = function (i) {
-            const b = document.getElementById('eb-' + i);
-            if (b) b.style.display = b.style.display === 'none' ? '' : 'none';
-        };
+      /* A camera-derived check cannot run without the camera, and the server
+         forces these off anyway — so show that here rather than let the form
+         promise something the exam will not do. */
+      if (needsCamera) {
+        input.disabled = !cameraOn;
+        row.classList.toggle('disabled', !cameraOn);
+        if (!cameraOn) input.checked = false;
+      }
+      row.classList.toggle('on', input.checked && !input.disabled);
+    });
+  }
 
-        window.dupEntry = function (i) {
-            const e = document.getElementById('entry-' + i);
-            if (!e) return;
-            addEntry({ title: e.querySelector('.e-title').value + ' (Copy)', description: e.querySelector('.e-desc').value, duration: e.querySelector('.e-dur').value, passing: e.querySelector('.e-pass').value });
-            toast('Duplicated!');
-        };
+  function collectProctor() {
+    const sensitivity = form.querySelector('[name=ps_sensitivity]:checked')?.value || 'medium';
+    const camera = $('ps_camera').checked;
 
-        window.removeEntry = function (i) {
-            const e = document.getElementById('entry-' + i);
-            if (!e) return;
-            e.style.opacity = '0'; e.style.transition = 'opacity 0.2s';
-            setTimeout(() => {
-                e.remove(); syncBatchCount();
-                if (!document.querySelectorAll('.exam-entry').length) {
-                    document.getElementById('batch-empty').style.display = 'block';
-                    document.getElementById('batch-submit-bar').classList.remove('vis');
-                }
-            }, 200);
-        };
+    const settings = {
+      camera_enabled: camera,
+      face_detection: camera,
+      head_pose: camera && $('ps_head_pose').checked,
+      object_detection: camera && $('ps_objects').checked,
+      voice_detection: $('ps_voice').checked,
+      tab_switch: $('ps_tabswitch').checked,
+      sensitivity: sensitivity,
+      max_warnings: parseInt($('ps_max_warnings').value || '25', 10),
+      max_tab_switches: parseInt($('max_tab_switches').value || '5', 10)
+    };
+    $('proctor_json').value = JSON.stringify(settings);
+    return settings;
+  }
 
-        function syncBatchCount() {
-            const c = document.querySelectorAll('.exam-entry').length;
-            document.getElementById('batch-count').textContent = c;
-            document.getElementById('batch-sub-count').textContent = c;
-        }
+  /* ── Quick-pick chips ─────────────────────────────────── */
+  function wireChips(attr, target) {
+    const chips = document.querySelectorAll(`.cx-chip[data-${attr}]`);
+    const sync = () => chips.forEach(c =>
+      c.classList.toggle('on', String(c.dataset[attr]) === String(target.value)));
+    chips.forEach(chip => on(chip, 'click', () => {
+      target.value = chip.dataset[attr];
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+      sync();
+    }));
+    on(target, 'input', sync);
+    sync();
+  }
 
-        window.submitBatch = function () {
-            const entries = document.querySelectorAll('.exam-entry');
-            if (!entries.length) { toast('Add at least one exam!', true); return; }
-            let valid = true; const fd = new FormData(); const meta = [];
-            entries.forEach((entry, i) => {
-                if (!valid) return;
-                const title = entry.querySelector('.e-title').value.trim();
-                if (!title) {
-                    valid = false;
-                    entry.querySelector('.e-title').style.borderColor = 'var(--danger)';
-                    entry.querySelector('.e-title').focus();
-                    toast('Exam #' + (i + 1) + ': Title required!', true);
-                    return;
-                }
-                entry.querySelector('.e-title').style.borderColor = '';
-                meta.push({ title, description: entry.querySelector('.e-desc').value.trim(), duration_minutes: parseInt(entry.querySelector('.e-dur').value) || 60, passing_score: parseFloat(entry.querySelector('.e-pass').value) || 50 });
-                const f = entry.querySelector('.e-file').files[0];
-                if (f) fd.append('file_' + i, f);
-            });
-            if (!valid) return;
-            fd.append('exams_json', JSON.stringify(meta));
-            const ov = document.getElementById('overlay');
-            ov.classList.add('vis');
-            document.getElementById('ov-spin').style.display = 'block';
-            document.getElementById('ov-result').classList.remove('vis');
-            document.getElementById('ov-detail').textContent = 'Creating ' + meta.length + ' exam(s)…';
-            document.getElementById('btn-batch').disabled = true;
-            fetch('{{ url_for('faculty.batch_create_exams') }}', { method: 'POST', body: fd })
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('btn-batch').disabled = false;
-                    document.getElementById('ov-spin').style.display = 'none';
-                    if (data.success) {
-                        document.getElementById('r-icon').innerHTML = '<i class="bi bi-check-circle-fill" style="color:var(--success);font-size:2.5rem;"></i>';
-                        document.getElementById('r-title').textContent = 'All Done!';
-                        document.getElementById('r-msg').textContent = data.message;
-                        const list = document.getElementById('r-list'); list.innerHTML = '';
-                        (data.created_exams || []).forEach(ex => {
-                            const item = document.createElement('div'); item.className = 'result-item';
-                            item.innerHTML = `<span class="ri-name">${ex.title}</span>${ex.questions_count > 0 ? `<span class="ri-q">${ex.questions_count} questions</span>` : `<a href="/faculty/exam/${ex.id}/upload">Upload Questions</a>`}`;
-                            list.appendChild(item);
-                        });
-                    } else {
-                        document.getElementById('r-icon').innerHTML = '<i class="bi bi-x-circle-fill" style="color:var(--danger);font-size:2.5rem;"></i>';
-                        document.getElementById('r-title').textContent = 'Error';
-                        document.getElementById('r-msg').textContent = data.error || 'Something went wrong';
-                    }
-                    document.getElementById('ov-result').classList.add('vis');
-                })
-                .catch(() => {
-                    document.getElementById('btn-batch').disabled = false;
-                    document.getElementById('ov-spin').style.display = 'none';
-                    document.getElementById('r-icon').innerHTML = '<i class="bi bi-x-circle-fill" style="color:var(--danger);font-size:2.5rem;"></i>';
-                    document.getElementById('r-title').textContent = 'Network Error';
-                    document.getElementById('r-msg').textContent = 'Could not reach the server.';
-                    document.getElementById('ov-result').classList.add('vis');
-                });
-        };
+  /* ── Summary ──────────────────────────────────────────── */
+  function updateSummary() {
+    const whatLabel = $('sum-what-label');
+    const what = $('sum-what');
 
-        window.resetBatch = function () {
-            document.getElementById('overlay').classList.remove('vis');
-            document.querySelectorAll('.exam-entry').forEach(e => e.remove());
-            entryCount = 0; syncBatchCount();
-            document.getElementById('batch-empty').style.display = 'block';
-            document.getElementById('batch-submit-bar').classList.remove('vis');
-            addEntry(); addEntry();
-        };
+    if (mode === 'batch') {
+      whatLabel.textContent = 'Exams';
+      const n = batchRows().length;
+      what.textContent = n ? `${n} queued` : '—';
+    } else if (mode === 'split') {
+      whatLabel.textContent = 'File';
+      what.textContent = splitFile ? splitFile.name : '—';
+    } else {
+      whatLabel.textContent = 'Title';
+      what.textContent = $('cx-title').value.trim() || '—';
+    }
 
-        function toast(msg, err) {
-            const t = document.getElementById('toast');
-            t.textContent = msg;
-            t.className = 'ce-toast' + (err ? ' err' : '');
-            t.style.display = 'block';
-            clearTimeout(t._t);
-            t._t = setTimeout(() => t.style.display = 'none', 3200);
-        }
+    $('sum-dur').textContent = ($('cx-dur').value || 60) + ' min';
+    $('sum-pass').textContent = ($('cx-pass').value || 40) + '%';
 
-    })();
+    const m = form.querySelector('[name=exam_mode]:checked')?.value || 'classroom';
+    $('sum-mode').textContent = m.charAt(0).toUpperCase() + m.slice(1);
+
+    const active = [];
+    if ($('ps_camera').checked) active.push('Camera');
+    if ($('ps_head_pose').checked && !$('ps_head_pose').disabled) active.push('Head');
+    if ($('ps_objects').checked && !$('ps_objects').disabled) active.push('Objects');
+    if ($('ps_voice').checked) active.push('Voice');
+    if ($('ps_tabswitch').checked) active.push('Tab');
+    $('sum-proctor').textContent = active.length ? active.join(', ') : 'None';
+
+    $('sum-shuffle').textContent = $('opt-shuffle').checked ? 'Shuffled' : 'Fixed order';
+
+    const activeEl = $('opt-active');
+    $('sum-status').textContent = activeEl.checked ? 'Active on create' : 'Draft';
+    $('sum-status').style.color = activeEl.checked ? 'var(--cx-success)' : 'var(--cx-text-3)';
+
+    if (mode === 'split') {
+      $('sum-sets').textContent = $('split-sets').value || '—';
+      $('sum-overlap').textContent = $('split-unique').checked ? 'None' : 'Allowed';
+    }
+  }
+
+  /* ── Validation ───────────────────────────────────────── */
+  let touched = false;
+
+  function validateShared(show) {
+    let ok = true;
+
+    const dur = parseInt($('cx-dur').value || '', 10);
+    const durBad = !dur || dur < 1 || dur > 600;
+    $('cx-dur').classList.toggle('is-bad', show && durBad);
+    if (durBad) ok = false;
+
+    const pass = parseFloat($('cx-pass').value || '');
+    const passBad = isNaN(pass) || pass < 0 || pass > 100;
+    $('cx-pass').classList.toggle('is-bad', show && passBad);
+    if (passBad) ok = false;
+
+    const start = $('cx-start').value, end = $('cx-end').value;
+    if (start && end && new Date(end) <= new Date(start)) {
+      hint($('hint-window'), 'The window must end after it starts.', 'bad');
+      ok = false;
+    } else if (start && end) {
+      hint($('hint-window'), 'Students can only begin inside this window.', 'good');
+    } else {
+      hint($('hint-window'), 'Leave both blank to open as soon as you activate the exam.');
+    }
+    return ok;
+  }
+
+  function validateSingle(show) {
+    const title = $('cx-title').value.trim();
+    if (!title) {
+      hint($('hint-title'), show ? 'A title is required.' : '', show ? 'bad' : null);
+      $('cx-title').classList.toggle('is-bad', show);
+      return false;
+    }
+    hint($('hint-title'), '');
+    $('cx-title').classList.remove('is-bad');
+    return true;
+  }
+
+  function validate(show) {
+    const force = show || touched;
+    if (mode === 'split') return true;
+    const a = validateShared(force);
+    const b = mode === 'single' ? validateSingle(force) : batchRows().length > 0;
+    return a && b;
+  }
+
+  /* ── Batch rows ───────────────────────────────────────── */
+  let rowSeq = 0;
+
+  function batchRows() {
+    return [...document.querySelectorAll('#batch-list .cx-brow')];
+  }
+
+  function renumber() {
+    batchRows().forEach((row, i) => { row.querySelector('.cx-brow-num').textContent = i + 1; });
+    const n = batchRows().length;
+    $('batch-count').textContent = n;
+    $('batch-empty').hidden = n > 0;
+    updateSummary();
+  }
+
+  function addRow(title) {
+    const id = ++rowSeq;
+    const row = document.createElement('div');
+    row.className = 'cx-brow';
+    row.dataset.row = id;
+    row.innerHTML = `
+      <span class="cx-brow-num"></span>
+      <input type="text" class="cx-input cx-brow-title" maxlength="200"
+             placeholder="Exam title" value="${(title || '').replace(/"/g, '&quot;')}">
+      <label class="cx-file-btn cx-brow-file" for="brow-file-${id}">
+        <i class="bi bi-paperclip"></i><span>Questions</span>
+      </label>
+      <input type="file" id="brow-file-${id}" class="cx-sr" accept=".csv,.json,.xlsx,.xls">
+      <button type="button" class="cx-icon-btn" aria-label="Remove this exam">
+        <i class="bi bi-trash3"></i>
+      </button>`;
+
+    $('batch-list').appendChild(row);
+
+    const fileInput = row.querySelector('input[type=file]');
+    const fileLabel = row.querySelector('.cx-file-btn');
+    on(fileInput, 'change', () => {
+      const f = fileInput.files[0];
+      fileLabel.classList.toggle('has', !!f);
+      fileLabel.querySelector('span').textContent = f ? f.name : 'Questions';
+    });
+
+    on(row.querySelector('.cx-icon-btn'), 'click', () => { row.remove(); renumber(); });
+    on(row.querySelector('.cx-brow-title'), 'input', updateSummary);
+
+    renumber();
+    return row;
+  }
+
+  on($('batch-add'), 'click', () => addRow().querySelector('.cx-brow-title').focus());
+
+  on($('batch-paste'), 'click', () => {
+    const text = prompt('Paste exam titles — one per line:');
+    if (!text) return;
+    const titles = text.split('\n').map(t => t.trim()).filter(Boolean);
+    titles.forEach(addRow);
+    if (titles.length) toast(`Added ${titles.length} exam${titles.length > 1 ? 's' : ''}.`);
+  });
+
+  /* ── Split ────────────────────────────────────────────── */
+  let splitFile = null;
+  const drop = $('split-drop');
+  const splitInput = $('split-file');
+
+  function setSplitFile(file) {
+    splitFile = file || null;
+    drop.classList.toggle('loaded', !!splitFile);
+    $('split-drop-main').textContent = splitFile ? splitFile.name : 'Choose a question file';
+    $('split-drop-sub').textContent = splitFile
+      ? Math.max(1, Math.round(splitFile.size / 1024)) + ' KB · click to choose another'
+      : 'CSV, JSON or Excel · click or drag it here';
+    updateSummary();
+  }
+
+  on(drop, 'click', () => splitInput.click());
+  on(splitInput, 'change', () => setSplitFile(splitInput.files[0]));
+  ['dragenter', 'dragover'].forEach(ev => on(drop, ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => on(drop, ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  on(drop, 'drop', e => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { splitInput.files = e.dataTransfer.files; setSplitFile(f); }
+  });
+
+  function splitPayload() {
+    const fd = new FormData();
+    fd.append('file', splitFile);
+    fd.append('num_sets', $('split-sets').value || '');
+    fd.append('per_set', $('split-per').value || '');
+    fd.append('strategy', $('split-unique').checked ? 'unique' : 'shared');
+    fd.append('balance_marks', $('split-balance').checked ? 'true' : 'false');
+    fd.append('format', $('split-format').value);
+    return fd;
+  }
+
+  async function runSplit() {
+    const msg = $('split-msg');
+    if (!splitFile) { msg.textContent = 'Choose a question file first.'; msg.className = 'cx-msg bad'; return; }
+
+    msg.textContent = 'Splitting…'; msg.className = 'cx-msg';
+    try {
+      const res = await fetch(URLS.splitDownload, { method: 'POST', body: splitPayload() });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        msg.textContent = data.message || 'Could not split the file.';
+        msg.className = 'cx-msg bad';
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = splitFile.name.replace(/\.[^.]+$/, '') + '_sets.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+
+      msg.textContent = 'Downloaded. Upload each set to an exam the usual way.';
+      msg.className = 'cx-msg good';
+      toast('Sets downloaded.');
+    } catch (e) {
+      msg.textContent = 'Could not reach the server.';
+      msg.className = 'cx-msg bad';
+    }
+  }
+
+  /* Live preview of the split whenever the inputs change */
+  async function previewSplit() {
+    if (!splitFile) return;
+    const msg = $('split-msg');
+    try {
+      const res = await fetch(URLS.splitPreview, { method: 'POST', body: splitPayload() });
+      const data = await res.json();
+      if (!data.success) { msg.textContent = data.message; msg.className = 'cx-msg bad'; return; }
+      const p = data.plan;
+      msg.innerHTML = `<strong>${p.bank_total} questions → ${p.num_sets} sets of ${p.per_set}</strong>`
+        + (p.leftover ? ` · ${p.leftover} left over` : '')
+        + '<br>' + p.sets.map(s => `Set ${s.label}: ${s.count} questions, ${s.total_marks} marks`).join('<br>');
+      msg.className = 'cx-msg good';
+    } catch (e) { /* preview is best-effort */ }
+  }
+
+  ['split-sets', 'split-per', 'split-unique', 'split-balance'].forEach(id =>
+    on($(id), 'change', previewSplit));
+  on(splitInput, 'change', previewSplit);
+
+  /* ── Batch submit ─────────────────────────────────────── */
+  async function runBatch() {
+    const rows = batchRows();
+    const payload = [], files = [];
+
+    rows.forEach(row => {
+      const title = row.querySelector('.cx-brow-title').value.trim();
+      if (!title) return;
+      payload.push({ title });
+      files.push(row.querySelector('input[type=file]').files[0] || null);
+    });
+
+    if (!payload.length) { toast('Add at least one exam with a title.'); return; }
+
+    const fd = new FormData();
+    fd.append('exams_json', JSON.stringify(payload));
+
+    /* Shared settings ride along so every exam in the batch gets the same
+       timing, mode and proctoring. The server merges these into each row. */
+    ['duration_minutes', 'passing_score', 'start_time', 'end_time',
+     'max_tab_switches', 'proctor_settings_json'].forEach(name => {
+      const el = form.querySelector(`[name="${name}"]`);
+      if (el) fd.append(name, el.value);
+    });
+    fd.append('exam_mode', form.querySelector('[name=exam_mode]:checked')?.value || 'classroom');
+    fd.append('post_exam_redirect', form.querySelector('[name=post_exam_redirect]:checked')?.value || 'dashboard');
+    ['require_access_key', 'randomize_questions', 'show_leaderboard', 'is_active'].forEach(name => {
+      const el = form.querySelector(`[name="${name}"]`);
+      fd.append(name, el && el.checked ? 'true' : 'false');
+    });
+
+    files.forEach((file, i) => { if (file) fd.append(`file_${i}`, file); });
+
+    $('cx-overlay').classList.add('show');
+    $('ov-working').hidden = false;
+    $('ov-done').hidden = true;
+    $('ov-title').textContent = `Creating ${payload.length} exam${payload.length > 1 ? 's' : ''}…`;
+
+    try {
+      const res = await fetch(URLS.batch, { method: 'POST', body: fd });
+      const data = await res.json();
+
+      $('ov-working').hidden = true;
+      $('ov-done').hidden = false;
+
+      if (data.success) {
+        $('ov-done-title').textContent = 'Done';
+        $('ov-done-msg').textContent = data.message;
+        $('ov-list').innerHTML = (data.created_exams || []).map(e => `
+          <div class="cx-setrow">
+            <div>
+              <div class="cx-setrow-name">${e.title}</div>
+              <div class="cx-setrow-meta">${e.questions_count} questions · key ${e.access_key || '—'}</div>
+            </div>
+            <a class="cx-btn cx-btn-ghost cx-btn-sm" href="/faculty/exam/${e.id}">Open</a>
+          </div>`).join('')
+          + (data.failed || []).map(f => `
+          <div class="cx-setrow" style="border-color:var(--cx-danger);">
+            <div>
+              <div class="cx-setrow-name">${f.title}</div>
+              <div class="cx-setrow-meta" style="color:var(--cx-danger);">${f.errors.join(' ')}</div>
+            </div>
+          </div>`).join('');
+      } else {
+        $('ov-done-title').textContent = 'Nothing was created';
+        $('ov-done-msg').textContent = data.error || 'Please check the rows and try again.';
+        $('ov-list').innerHTML = (data.failed || []).map(f =>
+          `<div class="cx-setrow"><div><div class="cx-setrow-name">${f.title}</div>
+           <div class="cx-setrow-meta" style="color:var(--cx-danger);">${f.errors.join(' ')}</div></div></div>`).join('');
+      }
+    } catch (e) {
+      $('ov-working').hidden = true;
+      $('ov-done').hidden = false;
+      $('ov-done-title').textContent = 'Could not reach the server';
+      $('ov-done-msg').textContent = 'Nothing was created. Please try again.';
+    }
+  }
+
+  on($('ov-more'), 'click', () => {
+    $('cx-overlay').classList.remove('show');
+    $('batch-list').querySelectorAll('.cx-brow').forEach(r => r.remove());
+    renumber();
+  });
+
+  /* ── Submit ───────────────────────────────────────────── */
+  on(form, 'submit', async e => {
+    e.preventDefault();          // every mode is handled explicitly
+    if (busy) return;
+
+    touched = true;
+    collectProctor();
+
+    if (mode === 'split') { runSplit(); return; }
+
+    if (!validate(true)) {
+      const bad = form.querySelector('.is-bad');
+      if (bad) { bad.focus(); bad.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      else if (mode === 'batch') toast('Add at least one exam.');
+      return;
+    }
+
+    if (mode === 'batch') { runBatch(); return; }
+
+    busy = true;
+    submitBtn.disabled = true;
+    submitText.textContent = 'Creating…';
+    form.submit();               // normal POST for the single path
+  });
+
+  /* ── Keyboard ─────────────────────────────────────────── */
+  on(document, 'keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      form.requestSubmit();
+      return;
+    }
+    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
+    if (e.altKey && ['1', '2', '3'].includes(e.key)) {
+      e.preventDefault();
+      setMode({ '1': 'single', '2': 'batch', '3': 'split' }[e.key]);
+      return;
+    }
+    /* Enter inside a batch title adds the next row — faster than reaching for the mouse. */
+    if (e.key === 'Enter' && inField && document.activeElement.classList.contains('cx-brow-title')) {
+      e.preventDefault();
+      addRow().querySelector('.cx-brow-title').focus();
+    }
+  });
+
+  /* ── Wire up ──────────────────────────────────────────── */
+  document.querySelectorAll('.cx-feature input[type=checkbox]').forEach(input =>
+    on(input, 'change', () => { syncFeatures(); updateSummary(); }));
+
+  on(form, 'input', () => { validate(false); updateSummary(); });
+  on(form, 'change', () => { validate(false); updateSummary(); });
+  [$('cx-title'), $('cx-dur'), $('cx-pass')].forEach(el =>
+    on(el, 'blur', () => { touched = true; validate(false); }));
+
+  wireChips('dur', $('cx-dur'));
+  wireChips('pass', $('cx-pass'));
+
+  const startMode = new URLSearchParams(location.search).get('mode');
+  setMode(PANELS[startMode] ? startMode : 'single');
+  syncFeatures();
+  updateSummary();
+})();
 </script>
 {% endblock %}

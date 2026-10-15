@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 600" width="980" height="600" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="p_arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="p_red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+    <marker id="p_green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981"/>
+    </marker>
+  </defs>
+  <rect width="980" height="600" rx="14" fill="#0b1220"/>
+
+  <text x="24" y="34" font-size="15" font-weight="700" fill="#e2e8f0" letter-spacing="0.5">Per-frame proctoring pipeline</text>
+  <text x="24" y="54" font-size="11.5" fill="#94a3b8">backend/routes/exam.py :281  →  proctor_service.py  →  openvino_vision.py :check_frame</text>
+
+  <!-- Stage 1 -->
+  <rect x="24" y="76" width="170" height="74" rx="9" fill="#1e3a5f" fill-opacity="0.35" stroke="#3b82f6" stroke-opacity="0.55"/>
+  <text x="38" y="100" font-size="12" font-weight="700" fill="#93c5fd">1 · EMIT</text>
+  <text x="38" y="119" font-size="10.5" fill="#cbd5e1">canvas.toBlob JPEG 0.6</text>
+  <text x="38" y="135" font-size="10.5" fill="#94a3b8">320×240 · every 3000 ms</text>
+
+  <line x1="194" y1="113" x2="234" y2="113" stroke="#64748b" stroke-width="1.6" marker-end="url(#p_arr)"/>
+
+  <!-- Stage 2 -->
+  <rect x="234" y="76" width="170" height="74" rx="9" fill="#4c1d95" fill-opacity="0.32" stroke="#8b5cf6" stroke-opacity="0.55"/>
+  <text x="248" y="100" font-size="12" font-weight="700" fill="#c4b5fd">2 · DECODE</text>
+  <text x="248" y="119" font-size="10.5" fill="#cbd5e1">np.frombuffer</text>
+  <text x="248" y="135" font-size="10.5" fill="#cbd5e1">cv2.imdecode → ndarray</text>
+
+  <line x1="404" y1="113" x2="444" y2="113" stroke="#64748b" stroke-width="1.6" marker-end="url(#p_arr)"/>
+
+  <!-- Stage 3 : throttle -->
+  <rect x="444" y="76" width="186" height="74" rx="9" fill="#78350f" fill-opacity="0.35" stroke="#f59e0b" stroke-opacity="0.65"/>
+  <text x="458" y="100" font-size="12" font-weight="700" fill="#6ee7b7">3 · THROTTLE</text>
+  <text x="458" y="119" font-size="10.5" fill="#cbd5e1">4.0 s per student_exam_id</text>
+  <text x="458" y="135" font-size="10.5" fill="#6ee7b7">runs BEFORE decode</text>
+
+  <line x1="630" y1="113" x2="670" y2="113" stroke="#64748b" stroke-width="1.6" marker-end="url(#p_arr)"/>
+
+  <!-- Stage 4 : instance -->
+  <rect x="670" y="76" width="286" height="74" rx="9" fill="#4c1d95" fill-opacity="0.32" stroke="#8b5cf6" stroke-opacity="0.55"/>
+  <text x="684" y="100" font-size="12" font-weight="700" fill="#c4b5fd">4 · GET PROCTOR INSTANCE</text>
+  <text x="684" y="119" font-size="10.5" fill="#cbd5e1">PROCTOR_INSTANCES[student_exam_id]</text>
+  <text x="684" y="135" font-size="10.5" fill="#6ee7b7">shared models · freed on submit</text>
+
+  <path d="M 813 150 L 813 176" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#p_arr)"/>
+
+  <!-- Stage 5 : check_frame box -->
+  <rect x="24" y="182" width="932" height="196" rx="11" fill="#0f172a" fill-opacity="0.55" stroke="#475569" stroke-width="1.5"/>
+  <text x="44" y="208" font-size="12" font-weight="700" fill="#e2e8f0" letter-spacing="0.8">5 · check_frame(frame)  —  four detectors, evaluated in order</text>
+
+  <rect x="44" y="222" width="212" height="88" rx="8" fill="#064e3b" fill-opacity="0.3" stroke="#10b981" stroke-opacity="0.5"/>
+  <text x="58" y="244" font-size="11.5" font-weight="700" fill="#6ee7b7">FACE PRESENCE</text>
+  <text x="58" y="262" font-size="10" fill="#cbd5e1">OpenVINO face-detection,</text>
+  <text x="58" y="277" font-size="10" fill="#cbd5e1">Haar cascade fallback</text>
+  <text x="58" y="295" font-size="10" fill="#94a3b8">0 faces &gt; timeout → no_face</text>
+
+  <rect x="268" y="222" width="212" height="88" rx="8" fill="#064e3b" fill-opacity="0.3" stroke="#10b981" stroke-opacity="0.5"/>
+  <text x="282" y="244" font-size="11.5" font-weight="700" fill="#6ee7b7">MULTIPLE FACES</text>
+  <text x="282" y="262" font-size="10" fill="#cbd5e1">same detector, count &gt; 1</text>
+  <text x="282" y="277" font-size="10" fill="#94a3b8">strongest real-world signal</text>
+  <text x="282" y="295" font-size="10" fill="#94a3b8">→ multiple_faces</text>
+
+  <rect x="492" y="222" width="212" height="88" rx="8" fill="#064e3b" fill-opacity="0.3" stroke="#10b981" stroke-opacity="0.5"/>
+  <text x="506" y="244" font-size="11.5" font-weight="700" fill="#6ee7b7">HEAD POSE</text>
+  <text x="506" y="262" font-size="10" fill="#cbd5e1">yaw/pitch vs calibrated</text>
+  <text x="506" y="277" font-size="10" fill="#cbd5e1">baseline, must persist</text>
+  <text x="506" y="295" font-size="10" fill="#94a3b8">0.7 ms · no fallback if absent</text>
+
+  <rect x="716" y="222" width="212" height="88" rx="8" fill="#334155" fill-opacity="0.35" stroke="#64748b" stroke-opacity="0.55"/>
+  <text x="730" y="244" font-size="11.5" font-weight="700" fill="#cbd5e1">OBJECTS  (optional)</text>
+  <text x="730" y="262" font-size="10" fill="#cbd5e1">YOLOv4-tiny / MobileNet-SSD</text>
+  <text x="730" y="277" font-size="10" fill="#94a3b8">phone, book on desk</text>
+  <text x="730" y="295" font-size="10" fill="#94a3b8">weights not shipped</text>
+
+  <rect x="44" y="322" width="884" height="42" rx="7" fill="#1e293b" fill-opacity="0.6" stroke="#475569" stroke-opacity="0.6"/>
+  <text x="58" y="340" font-size="10.5" fill="#cbd5e1">Baseline adaptation — when the head is inside tolerance:  baseline = (1−α)·baseline + α·current   with α = 0.05 for the</text>
+  <text x="58" y="356" font-size="10.5" fill="#cbd5e1">first 25 frames, then 0.02.  Posture drift follows the student instead of accumulating false flags.</text>
+
+  <!-- Decision -->
+  <path d="M 490 378 L 490 402" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#p_arr)"/>
+
+  <rect x="352" y="406" width="276" height="54" rx="9" fill="#78350f" fill-opacity="0.35" stroke="#f59e0b" stroke-opacity="0.6"/>
+  <text x="366" y="428" font-size="12" font-weight="700" fill="#fcd34d">6 · COOLDOWN GATE</text>
+  <text x="366" y="447" font-size="10.5" fill="#cbd5e1">global gap AND per-violation-type gap</text>
+
+  <line x1="352" y1="433" x2="264" y2="433" stroke="#10b981" stroke-width="1.8" marker-end="url(#p_green)"/>
+  <text x="178" y="428" font-size="10.5" fill="#6ee7b7">on cooldown</text>
+  <text x="182" y="443" font-size="10.5" fill="#94a3b8">→ "NORMAL"</text>
+
+  <line x1="628" y1="433" x2="700" y2="433" stroke="#ef4444" stroke-width="1.8" marker-end="url(#p_red)"/>
+  <text x="712" y="430" font-size="10.5" fill="#fca5a5">passes gate</text>
+  <text x="712" y="445" font-size="10.5" fill="#94a3b8">→ issue warning</text>
+
+  <!-- Outputs -->
+  <rect x="24" y="486" width="296" height="90" rx="9" fill="#7f1d1d" fill-opacity="0.26" stroke="#ef4444" stroke-opacity="0.5"/>
+  <text x="40" y="508" font-size="11.5" font-weight="700" fill="#fca5a5">7a · EVIDENCE JPEG</text>
+  <text x="40" y="527" font-size="10.5" fill="#cbd5e1">cv2.imwrite, violation label stamped</text>
+  <text x="40" y="543" font-size="10.5" fill="#94a3b8">static/violations/&lt;exam&gt;_&lt;date&gt;/&lt;prn&gt;/</text>
+  <text x="40" y="562" font-size="10.5" fill="#6ee7b7">path saved on the violation row</text>
+
+  <rect x="336" y="486" width="296" height="90" rx="9" fill="#4c1d95" fill-opacity="0.3" stroke="#8b5cf6" stroke-opacity="0.5"/>
+  <text x="352" y="508" font-size="11.5" font-weight="700" fill="#c4b5fd">7b · DATABASE ROWS</text>
+  <text x="352" y="527" font-size="10.5" fill="#cbd5e1">ExamViolation + ActivityLog</text>
+  <text x="352" y="543" font-size="10.5" fill="#cbd5e1">student_exam.total_violations += 1</text>
+  <text x="352" y="562" font-size="10.5" fill="#94a3b8">one commit per violation</text>
+
+  <rect x="648" y="486" width="308" height="90" rx="9" fill="#1e3a5f" fill-opacity="0.35" stroke="#3b82f6" stroke-opacity="0.5"/>
+  <text x="664" y="508" font-size="11.5" font-weight="700" fill="#93c5fd">7c · EMIT proctor_result</text>
+  <text x="664" y="527" font-size="10.5" fill="#cbd5e1">"Gentle reminder (n/25): …"</text>
+  <text x="664" y="543" font-size="10.5" fill="#94a3b8">count ≥ max_warnings → TERMINATE</text>
+  <text x="664" y="562" font-size="10.5" fill="#94a3b8">client auto-submits the paper</text>
+
+  <path d="M 490 460 L 490 472 L 172 472 L 172 486" stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#p_arr)"/>
+  <path d="M 490 460 L 490 486" stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#p_arr)"/>
+  <path d="M 490 460 L 490 472 L 802 472 L 802 486" stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#p_arr)"/>
+</svg>

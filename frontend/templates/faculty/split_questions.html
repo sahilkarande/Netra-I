@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+{% block title %}Split Question Bank - Netra-I{% endblock %}
+
+{% block extra_css %}
+<style>
+  .sq-wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  .sq-eyebrow {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; font-weight: 800; letter-spacing: 1.6px;
+    text-transform: uppercase; color: var(--primary-color, #6366f1); margin-bottom: 10px;
+  }
+  .sq-eyebrow::before { content: ''; width: 26px; height: 2px; background: currentColor; }
+
+  .sq-title { font-size: 30px; font-weight: 800; margin: 0 0 8px; }
+  .sq-sub { color: var(--text-secondary); font-size: 14px; margin: 0 0 26px; line-height: 1.6; }
+
+  .sq-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .sq-grid { grid-template-columns: 1fr; } }
+
+  .sq-card {
+    background: var(--card-bg, rgba(255,255,255,.03));
+    border: 1px solid rgba(148,163,184,.18);
+    border-radius: 16px; overflow: hidden;
+  }
+  .sq-card-head {
+    padding: 15px 20px; border-bottom: 1px solid rgba(148,163,184,.15);
+    display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px;
+  }
+  .sq-card-head i { color: var(--primary-color, #6366f1); }
+  .sq-card-body { padding: 20px; }
+
+  /* ── Drop zone ── */
+  .sq-drop {
+    border: 2px dashed rgba(148,163,184,.35); border-radius: 14px;
+    padding: 30px 20px; text-align: center; cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  .sq-drop:hover, .sq-drop.over {
+    border-color: var(--primary-color, #6366f1);
+    background: rgba(99,102,241,.06);
+  }
+  .sq-drop.loaded { border-style: solid; border-color: #10b981; background: rgba(16,185,129,.07); }
+  .sq-drop i { font-size: 34px; color: var(--primary-color, #6366f1); display: block; margin-bottom: 10px; }
+  .sq-drop.loaded i { color: #10b981; }
+  .sq-drop-main { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  .sq-drop-sub { font-size: 12px; color: var(--text-secondary); }
+
+  .sq-field { margin-top: 18px; }
+  .sq-field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px; }
+  .sq-field input[type=number], .sq-field select {
+    width: 100%; padding: 11px 13px; border-radius: 10px;
+    border: 1px solid rgba(148,163,184,.3);
+    background: var(--input-bg, rgba(255,255,255,.04)); color: inherit; font-size: 14px;
+  }
+  .sq-field small { display: block; margin-top: 5px; font-size: 11.5px; color: var(--text-secondary); }
+
+  .sq-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .sq-check {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 11px 13px; border-radius: 10px; cursor: pointer;
+    border: 1px solid rgba(148,163,184,.18); margin-top: 10px;
+  }
+  .sq-check input { margin-top: 2px; width: 16px; height: 16px; flex-shrink: 0; }
+  .sq-check-text { font-size: 12.5px; font-weight: 600; }
+  .sq-check-text span { display: block; font-weight: 400; color: var(--text-secondary); margin-top: 2px; }
+
+  .sq-btn {
+    width: 100%; padding: 13px; border-radius: 11px; font-weight: 700; font-size: 14px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 9px;
+    border: 1px solid transparent; margin-top: 16px;
+  }
+  .sq-btn-primary { background: var(--primary-color, #6366f1); color: #fff; }
+  .sq-btn-ghost { background: transparent; border-color: rgba(148,163,184,.3); color: inherit; }
+  .sq-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+  .sq-msg { font-size: 13px; line-height: 1.6; margin-top: 14px; white-space: pre-line; }
+  .sq-msg.err { color: #ef4444; font-weight: 600; }
+  .sq-msg.ok  { color: #10b981; }
+
+  .sq-set-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 11px 14px; border-radius: 10px;
+    background: rgba(148,163,184,.08); margin-bottom: 8px;
+  }
+  .sq-set-label { font-weight: 800; font-size: 13.5px; }
+  .sq-set-meta { font-size: 12px; color: var(--text-secondary); }
+
+  .sq-empty { text-align: center; color: var(--text-secondary); font-size: 13px; padding: 26px 10px; }
+  .sq-empty i { font-size: 30px; display: block; margin-bottom: 10px; opacity: .45; }
+
+  .sq-steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+  .sq-steps li {
+    counter-increment: s; position: relative; padding: 0 0 14px 34px;
+    font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;
+  }
+  .sq-steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 0;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(99,102,241,.15); color: var(--primary-color, #6366f1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sq-wrap">
+
+  <div class="sq-eyebrow">Exam Management</div>
+  <h1 class="sq-title">Split Question Bank</h1>
+  <p class="sq-sub">
+    Upload one file of questions and divide it into several sets. By default no question
+    appears in more than one set, so students sitting side by side get different papers.
+    You download the sets as files &mdash; nothing is created here, and you upload each set
+    to an exam the usual way.
+  </p>
+
+  <div class="sq-grid">
+
+    <!-- ── Left: the form ── -->
+    <div class="sq-card">
+      <div class="sq-card-head"><i class="bi bi-scissors"></i> Split a question file</div>
+      <div class="sq-card-body">
+
+        <div class="sq-drop" id="sqDrop">
+          <i class="bi bi-cloud-arrow-up"></i>
+          <div class="sq-drop-main" id="sqDropMain">Choose a question file</div>
+          <div class="sq-drop-sub" id="sqDropSub">CSV, JSON or Excel &middot; click or drag it here</div>
+        </div>
+        <input type="file" id="sqFile" accept=".csv,.json,.xlsx,.xls" style="display:none;">
+
+        <div class="sq-row sq-field">
+          <div>
+            <label for="sqSets">Number of sets</label>
+            <input type="number" id="sqSets" min="2" max="26" value="4">
+          </div>
+          <div>
+            <label for="sqPerSet">Questions per set</label>
+            <input type="number" id="sqPerSet" min="1" placeholder="auto">
+            <small>Leave blank to divide evenly</small>
+          </div>
+        </div>
+
+        <label class="sq-check">
+          <input type="checkbox" id="sqUnique" checked>
+          <span class="sq-check-text">No question repeats across sets
+            <span>Each question lands in exactly one set</span></span>
+        </label>
+
+        <label class="sq-check">
+          <input type="checkbox" id="sqBalance" checked>
+          <span class="sq-check-text">Give every set the same total marks
+            <span>Matters when questions carry different point values</span></span>
+        </label>
+
+        <div class="sq-field">
+          <label for="sqFormat">Download format</label>
+          <select id="sqFormat">
+            <option value="json">JSON &mdash; same shape as the exam uploader</option>
+            <option value="csv">CSV &mdash; opens in Excel</option>
+          </select>
+        </div>
+
+        <button class="sq-btn sq-btn-ghost" id="sqPreviewBtn" disabled>
+          <i class="bi bi-eye"></i> Preview the split
+        </button>
+        <button class="sq-btn sq-btn-primary" id="sqDownloadBtn" disabled>
+          <i class="bi bi-download"></i> Split &amp; download sets
+        </button>
+
+        <div class="sq-msg" id="sqMsg"></div>
+      </div>
+    </div>
+
+    <!-- ── Right: result + help ── -->
+    <div>
+      <div class="sq-card" style="margin-bottom:20px;">
+        <div class="sq-card-head"><i class="bi bi-collection"></i> Preview</div>
+        <div class="sq-card-body" id="sqPreview">
+          <div class="sq-empty">
+            <i class="bi bi-inboxes"></i>
+            Upload a file and preview to see how it divides.
+          </div>
+        </div>
+      </div>
+
+      <div class="sq-card">
+        <div class="sq-card-head"><i class="bi bi-signpost-split"></i> How this fits in</div>
+        <div class="sq-card-body">
+          <ol class="sq-steps">
+            <li>Split your bank here and download the ZIP.</li>
+            <li>Create an exam for each set, as you normally would.</li>
+            <li>Upload that set's file on the exam's <strong>Add Questions</strong> page.</li>
+            <li>Set eligibility and share each exam's access key with its group.</li>
+          </ol>
+          <a href="{{ url_for('faculty.create_exam') }}" class="sq-btn sq-btn-ghost"
+             style="text-decoration:none;">
+            <i class="bi bi-plus-circle"></i> Create an exam
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function splitQuestions() {
+  const drop     = document.getElementById('sqDrop');
+  const dropMain = document.getElementById('sqDropMain');
+  const dropSub  = document.getElementById('sqDropSub');
+  const fileEl   = document.getElementById('sqFile');
+  const setsEl   = document.getElementById('sqSets');
+  const perSetEl = document.getElementById('sqPerSet');
+  const uniqueEl = document.getElementById('sqUnique');
+  const balEl    = document.getElementById('sqBalance');
+  const fmtEl    = document.getElementById('sqFormat');
+  const previewBtn  = document.getElementById('sqPreviewBtn');
+  const downloadBtn = document.getElementById('sqDownloadBtn');
+  const msgEl    = document.getElementById('sqMsg');
+  const previewEl = document.getElementById('sqPreview');
+
+  let chosen = null;
+
+  function say(text, kind) {
+    msgEl.textContent = text || '';
+    msgEl.className = 'sq-msg' + (kind ? ' ' + kind : '');
+  }
+
+  function setFile(file) {
+    chosen = file || null;
+    const has = !!chosen;
+    previewBtn.disabled = downloadBtn.disabled = !has;
+    drop.classList.toggle('loaded', has);
+    dropMain.textContent = has ? chosen.name : 'Choose a question file';
+    dropSub.textContent = has
+      ? Math.max(1, Math.round(chosen.size / 1024)) + ' KB · click to choose a different file'
+      : 'CSV, JSON or Excel · click or drag it here';
+    say('');
+  }
+
+  drop.addEventListener('click', () => fileEl.click());
+  fileEl.addEventListener('change', () => setFile(fileEl.files[0]));
+
+  ['dragenter', 'dragover'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { fileEl.files = e.dataTransfer.files; setFile(f); }
+  });
+
+  function payload() {
+    const fd = new FormData();
+    fd.append('file', chosen);
+    fd.append('num_sets', setsEl.value || '');
+    fd.append('per_set', perSetEl.value || '');
+    fd.append('strategy', uniqueEl.checked ? 'unique' : 'shared');
+    fd.append('balance_marks', balEl.checked ? 'true' : 'false');
+    fd.append('format', fmtEl.value);
+    return fd;
+  }
+
+  function renderPlan(plan) {
+    const rows = plan.sets.map(s => `
+      <div class="sq-set-row">
+        <div>
+          <div class="sq-set-label">Set ${s.label}</div>
+          <div class="sq-set-meta">${s.count} questions · ${s.total_marks} marks</div>
+        </div>
+        <i class="bi bi-check-circle-fill" style="color:#10b981;"></i>
+      </div>`).join('');
+
+    const leftover = plan.leftover
+      ? `<div class="sq-set-meta" style="margin-top:10px;">
+           ${plan.leftover} question(s) left over and not used.
+         </div>` : '';
+
+    const shared = plan.strategy === 'shared'
+      ? `<div class="sq-set-meta" style="margin-top:10px; color:#f59e0b;">
+           Questions may appear in more than one set.
+         </div>` : '';
+
+    previewEl.innerHTML = `
+      <div class="sq-set-meta" style="margin-bottom:12px;">
+        ${plan.bank_total} questions → ${plan.num_sets} sets of ${plan.per_set}
+      </div>${rows}${leftover}${shared}`;
+  }
+
+  previewBtn.addEventListener('click', async () => {
+    say('Reading the file…');
+    previewBtn.disabled = true;
+    try {
+      const res = await fetch("{{ url_for('faculty.split_questions_preview') }}",
+                              { method: 'POST', body: payload() });
+      const data = await res.json();
+      if (data.success) {
+        renderPlan(data.plan);
+        say(data.parsed + ' ' + data.message, 'ok');
+      } else {
+        say((data.parsed ? data.parsed + '\n' : '') + data.message, 'err');
+      }
+    } catch (e) {
+      say('Could not reach the server.', 'err');
+    }
+    previewBtn.disabled = false;
+  });
+
+  downloadBtn.addEventListener('click', async () => {
+    say('Splitting…');
+    downloadBtn.disabled = true;
+    try {
+      const res = await fetch("{{ url_for('faculty.split_questions_download') }}",
+                              { method: 'POST', body: payload() });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        say(data.message || 'Could not split the file.', 'err');
+      } else {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (chosen.name.replace(/\.[^.]+$/, '') || 'question_bank') + '_sets.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        say('Downloaded. Each set is a separate file inside the ZIP, '
+            + 'ready to upload to an exam.', 'ok');
+      }
+    } catch (e) {
+      say('Could not reach the server.', 'err');
+    }
+    downloadBtn.disabled = false;
+  });
+})();
+</script>
+{% endblock %}

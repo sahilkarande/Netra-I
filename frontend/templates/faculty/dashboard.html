@@ -27,6 +27,61 @@
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             padding: 0.5rem;
         }
+        /* ── Visibility toggles ─────────────────────────────── */
+        .mini-track {
+            margin-top: 0.4rem;
+            width: 36px;
+            height: 18px;
+            border-radius: 9px;
+            background: #ef4444;
+            position: relative;
+            transition: background 0.3s;
+        }
+        .mini-track.on { background: #10b981; }
+        .mini-track.partial { background: #f59e0b; }
+
+        .mini-thumb {
+            width: 14px;
+            height: 14px;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+        .mini-track.on .mini-thumb { left: 20px; }
+        .mini-track.partial .mini-thumb { left: 11px; }
+
+        .visibility-status {
+            display: none;
+            flex-basis: 100%;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding: 0.6rem 0.9rem;
+            border-radius: 10px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--text-primary, #111827);
+            border-left: 4px solid #6366f1;
+        }
+        .visibility-status.show { display: flex; }
+        .visibility-status.ok { background: rgba(16, 185, 129, 0.12); border-left-color: #10b981; }
+        .visibility-status.warn { background: rgba(245, 158, 11, 0.14); border-left-color: #f59e0b; }
+        .visibility-status.err { background: rgba(239, 68, 68, 0.14); border-left-color: #ef4444; }
+
+        .visibility-hint {
+            margin: 0.85rem 0 0;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            color: var(--text-secondary, #6b7280);
+            max-width: 900px;
+        }
+        .visibility-hint i { color: #f59e0b; }
+
         .dashboard-action-btn:hover {
             transform: translateY(-8px) scale(1.02);
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -81,28 +136,44 @@
                     <span>Global<br>Leaderboard</span>
                 </a>
 
-                <label class="dashboard-action-btn" style="cursor: pointer;">
-                    <input type="checkbox" id="shortcutLbToggle" {% if exams and exams|selectattr('show_leaderboard')|list|length >= (exams|length / 2) %}checked{% endif %}
-                    onchange="setGlobalLeaderboard(this.checked)"
-                    style="opacity:0; width:0; height:0; position: absolute;">
+                <label class="dashboard-action-btn toggle-action" style="cursor: pointer;"
+                       title="Show or hide the leaderboard for all your exams">
+                    <input type="checkbox" id="shortcutLbToggle"
+                           {% if visibility.leaderboard_enabled %}checked{% endif %}
+                           onchange="setGlobalLeaderboard(this.checked)"
+                           style="opacity:0; width:0; height:0; position: absolute;">
                     <i class="bi bi-award-fill"></i>
-                    <span id="shortcutLbText">Leaderboard<br>{% if exams and exams|selectattr('show_leaderboard')|list|length >= (exams|length / 2) %}Open{% else %}Closed{% endif %}</span>
-                    <div id="shortcutLbTrack" style="margin-top: 0.4rem; width: 36px; height: 18px; border-radius: 9px; background: {% if exams and exams|selectattr('show_leaderboard')|list|length >= (exams|length / 2) %}#10b981{% else %}#ef4444{% endif %}; position: relative; transition: background 0.3s;">
-                        <div id="shortcutLbThumb" style="width: 14px; height: 14px; background: white; border-radius: 50%; position: absolute; top: 2px; left: {% if exams and exams|selectattr('show_leaderboard')|list|length >= (exams|length / 2) %}20px{% else %}2px{% endif %}; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
+                    <span id="shortcutLbText">Leaderboard<br>{% if visibility.leaderboard_enabled %}Open{% elif visibility.leaderboard_on %}Partial{% else %}Closed{% endif %}</span>
+                    <div id="shortcutLbTrack" class="mini-track {% if visibility.leaderboard_enabled %}on{% elif visibility.leaderboard_on %}partial{% endif %}">
+                        <div id="shortcutLbThumb" class="mini-thumb"></div>
                     </div>
                 </label>
 
-                <label class="dashboard-action-btn" style="cursor: pointer;">
-                    <input type="checkbox" id="shortcutResultToggle" {% if exams and results_visible_count >= (exams|length / 2) %}checked{% endif %}
-                    onchange="setGlobalResults(this.checked)"
-                    style="opacity:0; width:0; height:0; position: absolute;">
+                <label class="dashboard-action-btn toggle-action" style="cursor: pointer;"
+                       title="Publish or hide results for all your exams">
+                    <input type="checkbox" id="shortcutResultToggle"
+                           {% if visibility.results_enabled %}checked{% endif %}
+                           onchange="setGlobalResults(this.checked)"
+                           style="opacity:0; width:0; height:0; position: absolute;">
                     <i class="bi bi-eye-fill"></i>
-                    <span id="shortcutResultText">Results<br>{% if exams and results_visible_count >= (exams|length / 2) %}ON{% else %}OFF{% endif %}</span>
-                    <div id="shortcutResultTrack" style="margin-top: 0.4rem; width: 36px; height: 18px; border-radius: 9px; background: {% if exams and results_visible_count >= (exams|length / 2) %}#10b981{% else %}#ef4444{% endif %}; position: relative; transition: background 0.3s;">
-                        <div id="shortcutResultThumb" style="width: 14px; height: 14px; background: white; border-radius: 50%; position: absolute; top: 2px; left: {% if exams and results_visible_count >= (exams|length / 2) %}20px{% else %}2px{% endif %}; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
+                    <span id="shortcutResultText">Results<br>{% if visibility.results_enabled %}ON{% elif visibility.results_on %}Partial{% else %}OFF{% endif %}</span>
+                    <div id="shortcutResultTrack" class="mini-track {% if visibility.results_enabled %}on{% elif visibility.results_on %}partial{% endif %}">
+                        <div id="shortcutResultThumb" class="mini-thumb"></div>
                     </div>
                 </label>
             </div>
+
+            <div id="visibilityStatus" class="visibility-status" role="status" aria-live="polite">
+                <i class="bi bi-info-circle"></i>
+                <span id="visibilityStatusText"></span>
+            </div>
+
+            <p class="visibility-hint">
+                <i class="bi bi-lightbulb"></i>
+                Students see their score, result page and PDF only while <strong>Results</strong> is ON.
+                The leaderboard also needs Results ON, because it shows marks.
+                <span id="visibilitySummary">{% if visibility.is_default_only %}You have no exams yet — these settings become the default for every exam you create.{% else %}({{ visibility.results_on }}/{{ visibility.total_exams }} exams publishing results, {{ visibility.leaderboard_on }}/{{ visibility.total_exams }} on the leaderboard){% endif %}</span>
+            </p>
 
         </div>
     </div>
@@ -162,7 +233,7 @@
                             </div>
                             <div>
                                 <div style="font-weight: 600; color: var(--text-primary);">{{ activity.student.full_name or activity.student.username }}</div>
-                                <div style="font-size: 0.85rem; color: var(--text-secondary);">Submitted <strong>{{ activity.exam.title }}</strong> &bull; {{ activity.submitted_at.strftime('%b %d, %H:%M') }}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary);">Submitted <strong>{{ activity.exam.title }}</strong> &bull; {{ activity.submitted_at.strftime('%b %d, %H:%M') if activity.submitted_at else 'In Progress' }}</div>
                             </div>
                         </div>
                         <div style="text-align: right;">
@@ -356,7 +427,7 @@
             <div class="exam-header">
                 <div>
                     <div class="exam-title">{{ exam.title }}</div>
-                    <div class="exam-desc">Created: {{ exam.created_at.strftime('%b %d, %Y') }}</div>
+                    <div class="exam-desc">Created: {{ exam.created_at.strftime('%b %d, %Y') if exam.created_at else '—' }}</div>
                 </div>
                 <div class="exam-tags">
                     {% if exam.is_active %}
@@ -539,94 +610,102 @@
                     output.innerHTML = `<div style='color:green;'>${data.message}</div>`;
                 }
             } catch (err) {
-                if (status) status.innerHTML = `<div style='color:red;'>❌ ${err.message}</div>`;
+                output.innerHTML = `<div style='color:red;'>❌ ${err.message}</div>`;
             }
         });
         }
 
-        // -----------------------------
-        // Results Global Toggle
-        // -----------------------------
-        window.setGlobalResults = async function (enabled) {
-            const track = document.getElementById('shortcutResultTrack');
-            const thumb = document.getElementById('shortcutResultThumb');
-            const text = document.getElementById('shortcutResultText');
-            
-            // Animate toggle
-            if (track) track.style.background = enabled ? '#10b981' : '#ef4444';
-            if (thumb) thumb.style.left = enabled ? '20px' : '2px';
-            if (text) text.innerHTML = 'Results<br>' + (enabled ? 'ON' : 'OFF');
-
-            try {
-                const r = await fetch('{{ url_for('faculty.faculty_set_results_visibility') }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ show_results: enabled })
-                });
-                const res = await r.json();
-                if (!res.success) {
-                    throw new Error(res.error || 'Failed to update results setting');
-                }
-            } catch (err) {
-                alert(`Error: ${err.message}`);
-                // Revert toggle
-                if (track) track.style.background = !enabled ? '#10b981' : '#ef4444';
-                if (thumb) thumb.style.left = !enabled ? '20px' : '2px';
-                if (text) text.innerHTML = 'Results<br>' + (!enabled ? 'ON' : 'OFF');
-            }
-        };
-
     });
 
     // -----------------------------
-    // Leaderboard Global Toggle
+    // Results / Leaderboard visibility toggles
     // -----------------------------
-    window.setGlobalLeaderboard = async function (enabled) {
-        const track = document.getElementById('globalLbTrack');
-        const thumb = document.getElementById('globalLbThumb');
-        const status = document.getElementById('lbStatus');
-        
-        // Sync top shortcut toggle
-        const topTrack = document.getElementById('shortcutLbTrack');
-        const topThumb = document.getElementById('shortcutLbThumb');
-        const topToggle = document.getElementById('shortcutLbToggle');
-        const bottomToggle = document.getElementById('globalLbToggle');
-
-        if (topToggle && topToggle.checked !== enabled) topToggle.checked = enabled;
-        if (bottomToggle && bottomToggle.checked !== enabled) bottomToggle.checked = enabled;
-
-        // Animate toggles
-        if (track) track.style.background = enabled ? '#6366f1' : 'rgba(255,255,255,0.15)';
-        if (thumb) thumb.style.left = enabled ? '22px' : '3px';
-        if (topTrack) topTrack.style.background = enabled ? '#10b981' : '#ef4444';
-        if (topThumb) topThumb.style.left = enabled ? '20px' : '2px';
-        
-        const topText = document.getElementById('shortcutLbText');
-        if (topText) topText.innerHTML = 'Leaderboard<br>' + (enabled ? 'Open' : 'Closed');
-
-        if (status) {
-            status.style.display = 'block';
-            status.textContent = 'Saving…';
-        }
-        try {
-            const r = await fetch('{{ url_for('faculty.faculty_set_leaderboard') }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ show_leaderboard: enabled })
-            });
-            const d = await r.json();
-            if (d.success) {
-                status.textContent = enabled
-                    ? 'Leaderboard enabled for all your exams'
-                    : 'Leaderboard hidden for all your exams';
-            } else {
-                status.textContent = ' ' + (d.error || 'Failed to save');
-            }
-        } catch (e) {
-            status.textContent = ' Network error';
-        }
-        setTimeout(() => status.style.display = 'none', 3000);
+    const VISIBILITY_URLS = {
+        leaderboard: '{{ url_for('faculty.faculty_set_leaderboard') }}',
+        results: '{{ url_for('faculty.faculty_set_results_visibility') }}'
     };
+
+    function paintToggle(kind, enabled, partial) {
+        const ids = kind === 'leaderboard'
+            ? { track: 'shortcutLbTrack', text: 'shortcutLbText', box: 'shortcutLbToggle', label: 'Leaderboard', on: 'Open', off: 'Closed' }
+            : { track: 'shortcutResultTrack', text: 'shortcutResultText', box: 'shortcutResultToggle', label: 'Results', on: 'ON', off: 'OFF' };
+
+        const track = document.getElementById(ids.track);
+        const text = document.getElementById(ids.text);
+        const box = document.getElementById(ids.box);
+
+        if (track) {
+            track.classList.toggle('on', !!enabled);
+            track.classList.toggle('partial', !enabled && !!partial);
+        }
+        if (text) {
+            text.innerHTML = ids.label + '<br>' + (enabled ? ids.on : (partial ? 'Partial' : ids.off));
+        }
+        if (box && box.checked !== !!enabled) box.checked = !!enabled;
+    }
+
+    function showVisibilityStatus(message, tone) {
+        const box = document.getElementById('visibilityStatus');
+        const text = document.getElementById('visibilityStatusText');
+        if (!box || !text) return;
+
+        text.textContent = message;
+        box.className = 'visibility-status show ' + (tone || '');
+        clearTimeout(box._hideTimer);
+        box._hideTimer = setTimeout(() => { box.className = 'visibility-status'; }, 4000);
+    }
+
+    function applyState(state) {
+        if (!state) return;
+        paintToggle('leaderboard', state.leaderboard_enabled, state.leaderboard_on > 0);
+        paintToggle('results', state.results_enabled, state.results_on > 0);
+
+        const summary = document.getElementById('visibilitySummary');
+        if (summary && typeof state.total_exams === 'number') {
+            summary.textContent = state.total_exams === 0
+                ? 'You have no exams yet — these settings become the default for every exam you create.'
+                : `(${state.results_on}/${state.total_exams} exams publishing results, `
+                    + `${state.leaderboard_on}/${state.total_exams} on the leaderboard)`;
+        }
+    }
+
+    async function setVisibility(kind, enabled) {
+        const payload = kind === 'leaderboard'
+            ? { show_leaderboard: enabled, enabled: enabled }
+            : { show_results: enabled, visible: enabled, enabled: enabled };
+
+        paintToggle(kind, enabled, false);
+        showVisibilityStatus('Saving…', '');
+
+        try {
+            const r = await fetch(VISIBILITY_URLS[kind], {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+
+            if (!r.ok || !data.success) {
+                throw new Error(data.message || 'Could not save this setting');
+            }
+
+            applyState(data);
+
+            let message = data.message || 'Saved';
+            if (kind === 'leaderboard' && enabled && data.total_exams > 0 && data.results_on === 0) {
+                message += ' — students still see nothing until Results is ON';
+                showVisibilityStatus(message, 'warn');
+            } else {
+                showVisibilityStatus(message, enabled ? 'ok' : 'warn');
+            }
+        } catch (err) {
+            paintToggle(kind, !enabled, false);
+            showVisibilityStatus(err.message || 'Network error — nothing was saved', 'err');
+        }
+    }
+
+    window.setGlobalLeaderboard = (enabled) => setVisibility('leaderboard', enabled);
+    window.setGlobalResults = (enabled) => setVisibility('results', enabled);
 
     // -----------------------------
     // Grid/List View Toggle

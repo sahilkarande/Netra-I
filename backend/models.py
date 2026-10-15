@@ -14,6 +14,7 @@ from backend.database import db
 from flask_login import UserMixin
 from datetime import datetime
 import random
+import secrets
 import string
 import json
 
@@ -44,6 +45,17 @@ class User(db.Model, UserMixin):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     password_changed = db.Column(db.Boolean, default=False)  # Track if password changed
     password_changed_at = db.Column(db.DateTime, nullable=True)  # When password was changed
+    password_hint = db.Column(db.String(255), nullable=True)  # Self-set reminder, never the password itself
+
+    # Faculty display defaults: applied to every exam this faculty creates,
+    # so the dashboard toggles are meaningful even before any exam exists.
+    default_results_published = db.Column(db.Boolean, default=False)
+    default_show_leaderboard = db.Column(db.Boolean, default=True)
+
+    @property
+    def must_change_password(self):
+        """Students logging in for the very first time must set their own password."""
+        return self.role == 'student' and not self.password_changed
 
     # Relationships
     created_exams = db.relationship('Exam', backref='creator', lazy=True, foreign_keys='Exam.creator_id')
@@ -57,7 +69,7 @@ class User(db.Model, UserMixin):
     # Helper Methods
     # ===========================
     def generate_otp(self):
-        self.otp = ''.join(random.choices(string.digits, k=6))
+        self.otp = ''.join(secrets.choice(string.digits) for _ in range(6))
         self.otp_created_at = datetime.utcnow()
         return self.otp
 
@@ -184,6 +196,30 @@ class Exam(db.Model):
         """Store proctoring settings as JSON."""
         self.proctor_settings = json.dumps(settings_dict)
 
+    @property
+    def results_visible_to_students(self):
+        """Students see scores, answer breakdowns and PDFs only once published."""
+        return bool(self.results_published)
+
+    @property
+    def leaderboard_visible_to_students(self):
+        """The leaderboard shows marks, so it also requires published results."""
+        return bool(self.show_leaderboard) and self.results_visible_to_students
+
+    @property
+    def is_assigned(self):
+        from flask_login import current_user
+        if not current_user or not current_user.is_authenticated:
+            return False
+        if current_user.role != 'student':
+            return True
+        if self.allow_all_students:
+            return True
+        if not self.allowed_students:
+            return False
+        allowed_ids = [sid.strip() for sid in self.allowed_students.split(',') if sid.strip()]
+        return str(current_user.id) in allowed_ids
+
     questions = db.relationship(
         'Question', backref='exam', lazy=True,
         cascade='all, delete, delete-orphan'
@@ -284,7 +320,14 @@ class StudentExam(db.Model):
     violations = db.relationship('ExamViolation', backref='student_exam', lazy=True, cascade='all, delete-orphan')
     no_face_count = db.Column(db.Integer, default=0)
     multiple_faces_count = db.Column(db.Integer, default=0)
-    total_violations = db.Column(db.Integer, default=0)
+
+    @property
+    def result_visible_to_student(self):
+        """Student may see this attempt's score only once the exam's results are published."""
+        if self.is_invalidated:
+            return False
+        exam = self.exam
+        return bool(exam) and exam.results_visible_to_students
 
     # Faculty review fields
     is_invalidated = db.Column(db.Boolean, default=False)  # True = exam not counted
@@ -389,6 +432,106 @@ class ExamViolation(db.Model):
 
     def __repr__(self):
         return f"<ExamViolation {self.violation_type} at {self.timestamp}>"
+
+
+# ===========================
+# 🙂 FACE ENROLLMENT (face login)
+# ===========================
+class FaceEnrollment(db.Model):
+    """A user's enrolled face, stored as descriptor vectors — never as images.
+
+    Each sample is a 128-dimension float32 vector produced by face-api.js in the
+    browser (512 bytes). Several samples are kept so matching tolerates changes
+    in lighting, glasses and angle. The raw frame is never transmitted or stored.
+
+    A face vector is a credential that cannot be rotated, so this is a
+    convenience factor alongside the password, never a replacement for it.
+    """
+    __tablename__ = 'face_enrollment'
+
+    DESCRIPTOR_DIM = 128
+    BYTES_PER_SAMPLE = DESCRIPTOR_DIM * 4      # float32
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True, index=True)
+
+    # N samples packed back-to-back as little-endian float32
+    descriptors = db.Column(db.LargeBinary, nullable=False)
+    sample_count = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    success_count = db.Column(db.Integer, default=0)
+    fail_count = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+
+    # Enrolment is one-shot: once locked, the student cannot replace their own
+    # face. Only faculty/admin may clear the lock, and that is audited.
+    is_locked = db.Column(db.Boolean, default=True, nullable=False)
+    enrolled_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reset_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reset_at = db.Column(db.DateTime, nullable=True)
+
+    # Liveness evidence recorded at enrolment time
+    liveness_score = db.Column(db.Float, nullable=True)     # mean spoof score, lower is better
+    liveness_method = db.Column(db.String(40), nullable=True)
+
+    user = db.relationship('User', foreign_keys=[user_id],
+                           backref=db.backref('face_enrollment', uselist=False))
+
+    def __repr__(self):
+        return f"<FaceEnrollment user={self.user_id} samples={self.sample_count}>"
+
+
+class FaceLoginAttempt(db.Model):
+    """Audit trail for face logins. Biometric auth needs a reviewable history."""
+    __tablename__ = 'face_login_attempt'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    identifier = db.Column(db.String(100))       # what was typed in the login box
+    success = db.Column(db.Boolean, default=False)
+    distance = db.Column(db.Float, nullable=True)
+    reason = db.Column(db.String(100), nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    # Liveness outcome — a rejected attempt records WHY it was judged a spoof
+    liveness_passed = db.Column(db.Boolean, nullable=True)
+    spoof_score = db.Column(db.Float, nullable=True)
+    liveness_detail = db.Column(db.Text, nullable=True)     # JSON of per-frame features
+    stage = db.Column(db.String(20), nullable=True)         # enroll | login | exam
+
+    def __repr__(self):
+        return f"<FaceLoginAttempt {self.identifier} success={self.success}>"
+
+
+class FaceAuditLog(db.Model):
+    """Who changed whose face template, when, and why.
+
+    Face data is a credential that cannot be rotated, so every create, reset and
+    delete is recorded permanently — including which staff member authorised it.
+    """
+    __tablename__ = 'face_audit_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    subject_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    actor_role = db.Column(db.String(20), nullable=True)
+
+    action = db.Column(db.String(30), nullable=False)   # enrolled | reset | deleted | relocked
+    reason = db.Column(db.Text, nullable=True)
+    sample_count = db.Column(db.Integer, nullable=True)
+    liveness_score = db.Column(db.Float, nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    subject = db.relationship('User', foreign_keys=[subject_user_id])
+    actor = db.relationship('User', foreign_keys=[actor_user_id])
+
+    def __repr__(self):
+        return f"<FaceAuditLog {self.action} subject={self.subject_user_id}>"
 
 
 # ===========================

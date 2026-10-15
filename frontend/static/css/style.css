@@ -13681,14 +13681,16 @@ tbody tr.flagged {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
   background: rgba(255,255,255,.025);
   border: 1px solid rgba(255,255,255,.07);
   border-radius: 16px;
   padding: 16px;
   backdrop-filter: blur(14px);
-  position: sticky;
-  top: 16px;
 }
+
+/* Push the mic meter to the bottom so the panel never ends in dead space */
+.sc-cam-panel .sc-audio-wrap { margin-top: auto; }
 
 .sc-cam-section-title {
   font-size: 15px;
@@ -13808,16 +13810,15 @@ tbody tr.flagged {
 
 /* ─ Right panel ─ */
 .sc-right-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  padding: 24px 16px 0 0;
+  /* header / progress / scrollable list / footer — only the list moves */
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
   position: relative;
 }
-
-.sc-right-panel::-webkit-scrollbar { width: 6px; }
-.sc-right-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 
 /* Screen recording blocker */
 #sc-rec-blocker {
@@ -13909,11 +13910,12 @@ tbody tr.flagged {
 .sc-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
-  padding: 20px 26px;
+  padding: 14px 18px;
   background: rgba(255,255,255,.035);
   border: 1px solid rgba(255,255,255,.07);
-  border-radius: 16px;
+  border-radius: 14px;
   backdrop-filter: blur(12px);
 }
 
@@ -13974,21 +13976,21 @@ tbody tr.flagged {
 
 .sc-overall-badge {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .sc-badge-ring {
-  width: 52px;
-  height: 52px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   border: 2px solid rgba(247,183,49,.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 15px;
   color: var(--exam-warning);
   background: rgba(247,183,49,.07);
   transition: all .4s ease;
@@ -14041,27 +14043,43 @@ tbody tr.flagged {
 .sc-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
-  padding-bottom: 24px;
+  align-content: start;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 10px 6px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.14) transparent;
 }
+
+/* Soft fade at the bottom edge so it reads as "more below" */
+.sc-grid {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent 100%);
+}
+
+.sc-grid::-webkit-scrollbar { width: 6px; }
+.sc-grid::-webkit-scrollbar-track { background: transparent; }
+.sc-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
 
 .sc-group-label {
   grid-column: 1 / -1;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: rgba(255,255,255,.28);
-  padding: 6px 0 2px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-  margin-top: 4px;
+  letter-spacing: 1.1px;
+  color: rgba(255,255,255,.3);
+  padding: 4px 2px 6px;
+  margin-top: 12px;
 }
+
+.sc-group-label:first-child { margin-top: 0; }
 
 .sc-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
+  gap: 12px;
+  padding: 9px 12px;
   background: transparent;
   border: 1px solid rgba(255,255,255,.05);
   border-radius: 10px;
@@ -14081,25 +14099,25 @@ tbody tr.flagged {
 
 /* Icon circles */
 .sc-item-icon-wrap {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
-.si-blue   { background: rgba(82,153,255,.1);  border: 1px solid rgba(82,153,255,.2);  color: #5299ff; }
-.si-cyan   { background: rgba(20,184,234,.1);  border: 1px solid rgba(20,184,234,.2);  color: #14b8ea; }
-.si-green  { background: rgba(48,212,158,.1);  border: 1px solid rgba(48,212,158,.2);  color: #30d49e; }
-.si-yellow { background: rgba(247,183,49,.1);  border: 1px solid rgba(247,183,49,.2);  color: #f7b731; }
-.si-orange { background: rgba(255,130,60,.1);  border: 1px solid rgba(255,130,60,.2);  color: #ff823c; }
-.si-purple { background: rgba(168,85,247,.1);  border: 1px solid rgba(168,85,247,.2);  color: #a855f7; }
-.si-red    { background: rgba(240,84,84,.1);   border: 1px solid rgba(240,84,84,.2);   color: #f05454; }
-.si-teal   { background: rgba(20,184,166,.1);  border: 1px solid rgba(20,184,166,.2);  color: #14b8a6; }
-.si-pink   { background: rgba(236,72,153,.1);  border: 1px solid rgba(236,72,153,.2);  color: #ec4899; }
+.si-blue   { background: rgba(82,153,255,.09);  color: rgba(130,184,255,.85); }
+.si-cyan   { background: rgba(20,184,234,.09);  color: rgba(104,206,240,.85); }
+.si-green  { background: rgba(48,212,158,.09);  color: rgba(106,224,186,.85); }
+.si-yellow { background: rgba(247,183,49,.09);  color: rgba(249,205,116,.85); }
+.si-orange { background: rgba(255,130,60,.09);  color: rgba(255,167,118,.85); }
+.si-purple { background: rgba(168,85,247,.09);  color: rgba(195,142,250,.85); }
+.si-red    { background: rgba(240,84,84,.09);   color: rgba(245,138,138,.85); }
+.si-teal   { background: rgba(20,184,166,.09);  color: rgba(94,211,197,.85); }
+.si-pink   { background: rgba(236,72,153,.09);  color: rgba(242,131,184,.85); }
 
 .sc-item-body {
   flex: 1;
@@ -14122,6 +14140,7 @@ tbody tr.flagged {
 }
 
 /* Small device tag chips inside check descriptions */
+/* Fact chips stay monochrome so only real problems catch the eye */
 .sc-tag {
   display: inline-flex;
   align-items: center;
@@ -14129,36 +14148,30 @@ tbody tr.flagged {
   font-size: 9.5px;
   font-weight: 600;
   padding: 2px 7px;
-  border-radius: 20px;
-  margin: 2px 2px 0 0;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  color: rgba(255,255,255,.55);
+  border-radius: 6px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid transparent;
+  color: rgba(255,255,255,.42);
   white-space: nowrap;
 }
 
-.sc-tag.st-warn {
-  background: rgba(240,84,84,.08);
-  border-color: rgba(240,84,84,.25);
-  color: #f05454;
-}
-
-.sc-tag.st-ok {
-  background: rgba(48,212,158,.07);
-  border-color: rgba(48,212,158,.2);
-  color: rgba(48,212,158,.8);
-}
-
+.sc-tag.st-ok,
 .sc-tag.st-info {
-  background: rgba(82,153,255,.07);
-  border-color: rgba(82,153,255,.2);
-  color: rgba(82,153,255,.85);
+  background: rgba(255,255,255,.05);
+  border-color: transparent;
+  color: rgba(255,255,255,.42);
+}
+
+.sc-tag.st-warn {
+  background: rgba(240,84,84,.1);
+  border-color: rgba(240,84,84,.28);
+  color: #f2706f;
 }
 
 .sc-tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 4px;
   margin-top: 5px;
 }
 
@@ -14205,12 +14218,8 @@ tbody tr.flagged {
   border: 1px solid rgba(255,255,255,.1);
   border-radius: 14px;
   backdrop-filter: blur(16px);
-  position: sticky;
-  bottom: 0;
   z-index: 10;
-  margin-top: auto;
-  box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
-  transform: translateY(-16px); /* Align slightly above bottom edge */
+  box-shadow: 0 -10px 30px rgba(0,0,0,.35);
 }
 
 .sc-notice {

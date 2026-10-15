@@ -30,7 +30,11 @@ _proctor_lock = threading.Lock()
 # Heartbeat tracking
 _heartbeat_registry: Dict = {}  # student_exam_id -> last_heartbeat_time
 _last_frame_processed: Dict = {} # student_exam_id -> last frame time
-HEARTBEAT_TIMEOUT = 30 
+HEARTBEAT_TIMEOUT = 30
+
+# How often a student's camera frame is actually inspected. The client is told
+# this same number, so it never uploads frames the server will only discard.
+FRAME_INTERVAL_SEC = float(os.getenv('NETRA_FRAME_INTERVAL_SEC', '4.0'))
 
 # Shared face detector
 _FACE_CASCADE = None
@@ -137,7 +141,6 @@ def get_proctor_instance(student_exam_id: int, exam):
             )
             vision = OpenVINOProctor(
                 proctor_state,
-                model_dir="models",
                 device="CPU",
                 feature_flags=feature_flags,
             )
@@ -179,7 +182,7 @@ def log_proctor_event(student_exam_id: int, event_type: str, severity: str,
                     f"{f' | Evidence: {evidence_path}' if evidence_path else ''}"
                 ),
                 severity=severity,
-                timestamp=datetime.utcnow()
+                created_at=datetime.utcnow()
             )
             db.session.add(activity)
         except Exception:

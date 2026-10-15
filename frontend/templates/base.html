@@ -48,6 +48,32 @@
 --nav-bg:rgba(247,245,251,0.94);
 }
 
+/* ---------- FLASH MESSAGES ---------- */
+.flash-stack{
+position:fixed;top:76px;right:16px;z-index:3000;
+display:flex;flex-direction:column;gap:8px;
+width:min(380px,calc(100vw - 32px));
+}
+.flash-msg{
+display:flex;align-items:flex-start;gap:10px;
+padding:12px 14px;border-radius:10px;
+background:var(--bg-alt);color:var(--txt);
+border:1px solid var(--border);border-left:4px solid var(--flash-accent,#69459a);
+box-shadow:0 8px 24px rgba(0,0,0,0.25);
+font-size:0.92rem;line-height:1.4;
+transition:opacity .3s,transform .3s;
+}
+.flash-msg.flash-error,.flash-msg.flash-danger{--flash-accent:#ef4444;}
+.flash-msg.flash-warning{--flash-accent:#f59e0b;}
+.flash-msg.flash-success{--flash-accent:#10b981;}
+.flash-msg.flash-info,.flash-msg.flash-message{--flash-accent:#3b82f6;}
+.flash-msg .flash-text{flex:1;}
+.flash-msg button{
+background:none;border:none;color:inherit;opacity:.6;
+cursor:pointer;font-size:1.1rem;line-height:1;padding:0;
+}
+.flash-msg.flash-hide{opacity:0;transform:translateX(12px);}
+
 /* ---------- BASE ---------- */
 
 body{
@@ -224,7 +250,7 @@ document.documentElement.setAttribute("data-theme",saved);
 })();
 </script>
 
-<body>
+<body class="{% block body_class %}{% endblock %}">
 
 <!-- NAVBAR -->
 
@@ -252,6 +278,10 @@ onclick="location.href='{{ url_for('auth.index') }}'">
 <span class="nav-username">{{ current_user.full_name or current_user.username }}</span>
 </span>
 
+<a href="{{ url_for('auth.change_password') }}" class="btn-nav-outline" title="Change password">
+<i class="bi bi-shield-lock"></i>
+</a>
+
 <a href="{{ url_for('auth.logout') }}" class="btn-nav-outline">
 <i class="bi bi-box-arrow-right"></i> Logout
 </a>
@@ -273,6 +303,27 @@ Login
 </nav>
 
 <!-- MAIN -->
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-stack" role="status" aria-live="polite">
+{% for category, message in messages %}
+<div class="flash-msg flash-{{ category }}">
+<span class="flash-text">{{ message }}</span>
+<button type="button" aria-label="Dismiss" onclick="this.parentElement.remove()">&times;</button>
+</div>
+{% endfor %}
+</div>
+<script>
+setTimeout(function(){
+document.querySelectorAll('.flash-msg:not(.flash-error):not(.flash-danger)').forEach(function(el){
+el.classList.add('flash-hide');
+setTimeout(function(){ el.remove(); }, 300);
+});
+}, 6000);
+</script>
+{% endif %}
+{% endwith %}
 
 <main class="main-content">
 {% block content %}{% endblock %}

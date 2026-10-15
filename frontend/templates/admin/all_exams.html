@@ -241,7 +241,7 @@
                     <td>
                         <a href="{{ url_for('faculty.view_exam', exam_id=item.exam.id) }}" class="btn-view">View →</a>
                         {% if item.exam.is_active %}
-                        <form method="POST" action="{{ url_for('faculty_force_end_exam', exam_id=item.exam.id) }}"
+                        <form method="POST" action="{{ url_for('faculty.faculty_force_end_exam', exam_id=item.exam.id) }}"
                             style="display: inline; margin-left: 0.5rem;"
                             onsubmit="return confirm('Force-end this exam for ALL students?')">
                             <button type="submit" class="btn-end">End</button>

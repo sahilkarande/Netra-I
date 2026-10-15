@@ -17,13 +17,48 @@ from backend.models import User, Exam, Question, StudentExam, StudentAnswer, Exa
 from backend.services.pdf_generator import generate_batch_report_pdf
 from backend.services.proctor_service import PROCTOR_INSTANCES, _heartbeat_registry, _last_frame_processed
 from backend.services.exam_service import assign_shuffle
+from backend.socket_io import socketio
 
 faculty_bp = Blueprint('faculty', __name__)
 
+def _get_faculty_exams():
+    """Retrieve exams accessible to current faculty (own exams + same course/department exams) or all if admin"""
+    if current_user.role == 'admin':
+        return Exam.query.order_by(Exam.created_at.desc()).all()
+    user_course = current_user.course or current_user.department
+    if user_course:
+        return Exam.query.join(User, Exam.creator_id == User.id).filter(
+            db.or_(
+                Exam.creator_id == current_user.id,
+                User.course == user_course,
+                User.department == user_course
+            )
+        ).order_by(Exam.created_at.desc()).all()
+    return Exam.query.filter_by(creator_id=current_user.id).order_by(Exam.created_at.desc()).all()
+
+def _faculty_can_access_exam(exam):
+    """Check if current user can access/manage the exam"""
+    if not exam:
+        return False
+    if current_user.role == 'admin':
+        return True
+    if exam.creator_id == current_user.id:
+        return True
+    user_course = current_user.course or current_user.department
+    if user_course and exam.creator:
+        creator_course = exam.creator.course or exam.creator.department
+        if creator_course and creator_course == user_course:
+            return True
+    return False
+
 def _faculty_can_access_student(student_id):
-    """Check if faculty created an exam that this student has taken"""
-    return db.session.query(StudentExam).join(Exam).filter(
-        Exam.creator_id == current_user.id,
+    """Check if faculty or course faculty created an exam that this student has taken"""
+    accessible_exams = _get_faculty_exams()
+    accessible_ids = [e.id for e in accessible_exams]
+    if not accessible_ids:
+        return False
+    return db.session.query(StudentExam).filter(
+        StudentExam.exam_id.in_(accessible_ids),
         StudentExam.student_id == student_id
     ).first() is not None
 
@@ -33,10 +68,7 @@ def faculty_dashboard():
     if current_user.role != 'faculty' and current_user.role != 'admin':
         return redirect(url_for('auth.index'))
     
-    if current_user.role == 'admin':
-        exams = Exam.query.order_by(Exam.created_at.desc()).all()
-    else:
-        exams = Exam.query.filter_by(creator_id=current_user.id).order_by(Exam.created_at.desc()).all()
+    exams = _get_faculty_exams()
     
     exam_ids = [e.id for e in exams]
     
@@ -44,7 +76,10 @@ def faculty_dashboard():
     total_attempts = StudentExam.query.filter(StudentExam.exam_id.in_(exam_ids)).count() if exam_ids else 0
     unique_students = db.session.query(func.count(func.distinct(StudentExam.student_id))).filter(StudentExam.exam_id.in_(exam_ids)).scalar() or 0
     
-    submitted_exams = StudentExam.query.filter(StudentExam.exam_id.in_(exam_ids), StudentExam.status == 'submitted').all()
+    submitted_exams = StudentExam.query.filter(
+        StudentExam.exam_id.in_(exam_ids), 
+        db.or_(StudentExam.status.in_(['submitted', 'completed']), StudentExam.completed == True)
+    ).all() if exam_ids else []
     if submitted_exams:
         avg_class_score = round(sum(se.percentage or 0 for se in submitted_exams) / len(submitted_exams), 1)
         passed_count = sum(1 for se in submitted_exams if se.passed)
@@ -54,6 +89,8 @@ def faculty_dashboard():
         pass_rate = 0
         
     results_visible_count = sum(1 for e in exams if e.results_published)
+    leaderboard_visible_count = sum(1 for e in exams if e.show_leaderboard)
+    visibility = _visibility_state(exams)
     
     # Get recent submissions
     recent_activities = StudentExam.query.filter(StudentExam.exam_id.in_(exam_ids)).order_by(StudentExam.submitted_at.desc()).limit(10).all()
@@ -65,96 +102,195 @@ def faculty_dashboard():
                          avg_class_score=avg_class_score,
                          pass_rate=pass_rate,
                          results_visible_count=results_visible_count,
+                         leaderboard_visible_count=leaderboard_visible_count,
+                         visibility=visibility,
                          recent_activities=recent_activities)
+
+def _parse_bool(value, default=False):
+    """Accept true/false, 1/0, "on"/"off", "yes"/"no" from JSON or form posts."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _visibility_state(exams):
+    """Summary of the current toggles, used to keep the dashboard UI in sync.
+
+    With no exams yet the toggles still mean something: they show the faculty's
+    saved defaults, which every exam they create will inherit.
+    """
+    total = len(exams)
+    leaderboard_on = sum(1 for e in exams if e.show_leaderboard)
+    results_on = sum(1 for e in exams if e.results_published)
+
+    if total == 0:
+        return {
+            "total_exams": 0,
+            "leaderboard_on": 0,
+            "results_on": 0,
+            "leaderboard_enabled": bool(getattr(current_user, 'default_show_leaderboard', True)),
+            "results_enabled": bool(getattr(current_user, 'default_results_published', False)),
+            "is_default_only": True,
+        }
+
+    return {
+        "total_exams": total,
+        "leaderboard_on": leaderboard_on,
+        "results_on": results_on,
+        "leaderboard_enabled": leaderboard_on == total,
+        "results_enabled": results_on == total,
+        "is_default_only": False,
+    }
+
+
+@faculty_bp.route('/faculty/visibility-state')
+@login_required
+def faculty_visibility_state():
+    """Current results / leaderboard visibility for this faculty's exams."""
+    if current_user.role not in ('faculty', 'admin'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+    state = _visibility_state(_get_faculty_exams())
+    state["success"] = True
+    return jsonify(state)
+
 
 @faculty_bp.route('/faculty/set_leaderboard', methods=['POST'])
 @login_required
 def faculty_set_leaderboard():
-    if current_user.role != 'faculty' and current_user.role != 'admin':
-        return jsonify({"success": False}), 403
-    data = request.get_json()
+    if current_user.role not in ('faculty', 'admin'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    data = request.get_json(silent=True) or request.form
     exam_id = data.get('exam_id')
-    enabled = data.get('enabled') or data.get('show_leaderboard')
-    
+    raw = data.get('enabled') if 'enabled' in data else data.get('show_leaderboard')
+    enabled = _parse_bool(raw)
+
     if exam_id:
         exam = Exam.query.get(exam_id)
-        if exam and (exam.creator_id == current_user.id or current_user.role == 'admin'):
-            exam.show_leaderboard = enabled
-            db.session.commit()
-            return jsonify({"success": True})
+        if not exam or not _faculty_can_access_exam(exam):
+            return jsonify({"success": False, "message": "Exam not found"}), 404
+        exam.show_leaderboard = enabled
+        updated = 1
     else:
-        # Global toggle for all faculty exams
-        exams = Exam.query.filter_by(creator_id=current_user.id).all()
+        exams = _get_faculty_exams()
         for e in exams:
             e.show_leaderboard = enabled
-        db.session.commit()
-        return jsonify({"success": True})
-        
-    return jsonify({"success": False}), 404
+        updated = len(exams)
+        # Remember it as this faculty's default for exams created later
+        current_user.default_show_leaderboard = enabled
+
+    db.session.commit()
+
+    state = _visibility_state(_get_faculty_exams())
+    state.update({
+        "success": True,
+        "enabled": enabled,
+        "updated": updated,
+        "message": (
+            ("Saved — the leaderboard will be open on exams you create" if enabled
+             else "Saved — the leaderboard will stay closed on exams you create")
+            if updated == 0 and not exam_id else
+            (f"Leaderboard opened for {updated} exam(s)" if enabled
+             else f"Leaderboard closed for {updated} exam(s)")
+        )
+    })
+    return jsonify(state)
+
 
 @faculty_bp.route('/faculty/set_results_visibility', methods=['POST'])
 @login_required
 def faculty_set_results_visibility():
-    if current_user.role != 'faculty' and current_user.role != 'admin':
-        return jsonify({"success": False}), 403
-    data = request.get_json()
+    if current_user.role not in ('faculty', 'admin'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    data = request.get_json(silent=True) or request.form
     exam_id = data.get('exam_id')
-    visible = data.get('visible') if 'visible' in data else data.get('show_results')
-    
+    if 'visible' in data:
+        raw = data.get('visible')
+    elif 'enabled' in data:
+        raw = data.get('enabled')
+    else:
+        raw = data.get('show_results')
+    visible = _parse_bool(raw)
+
+    def _apply(exam):
+        exam.results_published = visible
+        exam.results_published_at = datetime.utcnow() if visible else None
+        exam.results_published_by = current_user.id if visible else None
+
     if exam_id:
         exam = Exam.query.get(exam_id)
-        if exam and (exam.creator_id == current_user.id or current_user.role == 'admin'):
-            exam.results_published = visible
-            db.session.commit()
-            return jsonify({"success": True})
+        if not exam or not _faculty_can_access_exam(exam):
+            return jsonify({"success": False, "message": "Exam not found"}), 404
+        _apply(exam)
+        updated = 1
     else:
-        # Global toggle for all faculty exams
-        exams = Exam.query.filter_by(creator_id=current_user.id).all()
+        exams = _get_faculty_exams()
         for e in exams:
-            e.results_published = visible
-        db.session.commit()
-        return jsonify({"success": True})
-        
-    return jsonify({"success": False}), 404
+            _apply(e)
+        updated = len(exams)
+        current_user.default_results_published = visible
+
+    db.session.commit()
+
+    state = _visibility_state(_get_faculty_exams())
+    state.update({
+        "success": True,
+        "enabled": visible,
+        "updated": updated,
+        "message": (
+            ("Saved — results will be published on exams you create" if visible
+             else "Saved — results will stay hidden on exams you create")
+            if updated == 0 and not exam_id else
+            (f"Results published for {updated} exam(s)" if visible
+             else f"Results hidden for {updated} exam(s)")
+        )
+    })
+    return jsonify(state)
+
 
 @faculty_bp.route('/faculty/exam/create', methods=['GET', 'POST'])
 @login_required
 def create_exam():
-    if current_user.role != 'faculty' and current_user.role != 'admin':
-        return redirect(url_for('auth.index'))
-        
-    if request.method == 'POST':
-        title = request.form.get('title')
-        description = request.form.get('description')
-        duration = int(request.form.get('duration', 60))
-        passing_score = float(request.form.get('passing_score', 50.0))
-        
-        proctor_settings = {
-            'camera_enabled': request.form.get('camera_enabled') == 'on',
-            'face_detection': request.form.get('face_detection') == 'on',
-            'head_pose': request.form.get('head_pose') == 'on',
-            'object_detection': request.form.get('object_detection') == 'on',
-            'voice_detection': request.form.get('voice_detection') == 'on',
-            'tab_switch': request.form.get('tab_switch') == 'on',
-            'max_warnings': int(request.form.get('max_warnings', 25)),
-            'max_tab_switches': int(request.form.get('max_tab_switches', 5))
-        }
+    """Create a single exam.
 
-        new_exam = Exam(
-            title=title,
-            description=description,
-            duration_minutes=duration,
-            passing_score=passing_score,
-            creator_id=current_user.id,
-            proctor_settings=json.dumps(proctor_settings)
-        )
-        
-        db.session.add(new_exam)
-        db.session.commit()
-        flash('Exam created successfully! Now upload questions.', 'success')
+    All field handling lives in :mod:`backend.services.exam_builder` so the
+    batch path below applies exactly the same rules.
+    """
+    if current_user.role not in ('faculty', 'admin'):
+        return redirect(url_for('auth.index'))
+
+    from backend.services import exam_builder
+
+    if request.method == 'POST':
+        errors, new_exam = exam_builder.build_exam(request.form, current_user)
+
+        if errors:
+            for message in errors:
+                flash(message, 'error')
+            # Hand the submitted values back so nothing typed is lost.
+            return render_template('faculty/create_exam.html',
+                                   form=request.form), 400
+
+        try:
+            db.session.add(new_exam)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Could not create the exam: {e}', 'error')
+            return render_template('faculty/create_exam.html',
+                                   form=request.form), 500
+
+        summary = exam_builder.summarise(new_exam)
+        key_note = (f" Access key: {summary['access_key']}."
+                    if summary['access_key'] else '')
+        flash(f"Exam \"{new_exam.title}\" created.{key_note} Now add questions.", 'success')
         return redirect(url_for('faculty.upload_questions', exam_id=new_exam.id))
-        
-    return render_template('faculty/create_exam.html')
+
+    return render_template('faculty/create_exam.html', form={})
+
 
 @faculty_bp.route('/faculty/import_students', methods=['POST'])
 @login_required
@@ -205,6 +341,9 @@ def import_students():
 
         exam_id = request.args.get('exam_id', type=int)
         exam = Exam.query.get(exam_id) if exam_id else None
+        if exam and not _faculty_can_access_exam(exam):
+            flash('You cannot enrol students into that exam.', 'error')
+            return redirect(url_for('faculty.faculty_students'))
 
         for index, row in df.iterrows():
             try:
@@ -229,8 +368,10 @@ def import_students():
                     username=clean_string(row.get('username')) or email.split('@')[0],
                     email=email,
                     full_name=clean_string(row.get('full_name')),
-                    prn_number=prn_clean,
-                    roll_id=clean_string(row.get('roll_id')),
+                    # Blank PRN/roll must be NULL: PRN is unique, and '' would
+                    # collide with the next student who also has none.
+                    prn_number=prn_clean or None,
+                    roll_id=clean_string(row.get('roll_id')) or None,
                     password_hash=hashed_pw,
                     role='student',
                     is_verified=True
@@ -263,7 +404,7 @@ def import_students():
 @login_required
 def delete_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         flash('Unauthorized access', 'error')
         return redirect(url_for('faculty.faculty_dashboard'))
         
@@ -276,7 +417,7 @@ def delete_exam(exam_id):
 @login_required
 def upload_questions(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         return redirect(url_for('faculty.faculty_dashboard'))
         
     if request.method == 'POST':
@@ -344,7 +485,7 @@ def upload_questions(exam_id):
 @login_required
 def view_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         return redirect(url_for('faculty.faculty_dashboard'))
     
     # Get all students for the selection modal
@@ -381,7 +522,7 @@ def view_exam(exam_id):
 @login_required
 def exam_analytics(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         return redirect(url_for('faculty.faculty_dashboard'))
     
     student_exams = StudentExam.query.filter_by(exam_id=exam_id).all()
@@ -428,7 +569,7 @@ def faculty_publish_results(exam_id):
         return jsonify({"error": "Access denied"}), 403
 
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         return jsonify({"error": "Not your exam"}), 403
 
     student_exams = StudentExam.query.filter_by(exam_id=exam_id).all()
@@ -538,7 +679,7 @@ def faculty_student_report():
     if current_user.role == 'admin':
         exams = Exam.query.order_by(Exam.created_at.desc()).all()
     else:
-        exams = Exam.query.filter_by(creator_id=current_user.id).order_by(Exam.created_at.desc()).all()
+        exams = _get_faculty_exams()
         
     selected_batch = request.args.get('batch')
     selected_exam_ids_str = request.args.getlist('exam_ids')
@@ -652,10 +793,29 @@ def faculty_student_profile(student_id):
 @faculty_bp.route('/faculty/student/<int:student_id>/edit', methods=['GET', 'POST'])
 @login_required
 def faculty_edit_student(student_id):
+    if current_user.role not in ('faculty', 'admin'):
+        flash('Access denied', 'error')
+        return redirect(url_for('auth.index'))
+
     student = User.query.get_or_404(student_id)
+    # Only student accounts — editing a staff email here would be an account takeover
+    if student.role != 'student':
+        flash('Only student accounts can be edited here.', 'error')
+        return redirect(url_for('faculty.faculty_students'))
+
     if request.method == 'POST':
-        student.full_name = request.form.get('full_name')
-        student.email = request.form.get('email')
+        full_name = (request.form.get('full_name') or '').strip()
+        email = (request.form.get('email') or '').strip().lower()
+        if not email:
+            flash('Email is required.', 'error')
+            return render_template('faculty/edit_student.html', student=student)
+        clash = User.query.filter(User.email == email, User.id != student.id).first()
+        if clash:
+            flash('That email is already used by another account.', 'error')
+            return render_template('faculty/edit_student.html', student=student)
+
+        student.full_name = full_name or None
+        student.email = email
         db.session.commit()
         flash('Student updated successfully', 'success')
         return redirect(url_for('faculty.faculty_students'))
@@ -664,7 +824,19 @@ def faculty_edit_student(student_id):
 @faculty_bp.route('/faculty/download_template')
 @login_required
 def download_template():
-    return send_file('static/templates/student_import_template.csv')
+    if current_user.role not in ('faculty', 'admin'):
+        return redirect(url_for('auth.index'))
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['full_name', 'username', 'email', 'prn_number', 'roll_id', 'password'])
+    writer.writerow(['Asha Patil', 'asha.patil', 'asha.patil@example.com', '250840125001', '01', ''])
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='student_import_template.csv'
+    )
 
 @faculty_bp.route('/faculty/change-student-password/<int:student_id>', methods=['POST'])
 @login_required
@@ -672,75 +844,278 @@ def faculty_change_student_password(student_id):
     if current_user.role not in ['faculty', 'admin']:
         return jsonify({"success": False, "message": "Unauthorized"}), 403
     student = User.query.get_or_404(student_id)
+    # Never let faculty reset a staff password — that would hand over the account
+    if student.role != 'student':
+        return jsonify({"success": False, "message": "Only student passwords can be reset here."}), 403
     student.password_hash = generate_password_hash("123456789", method='pbkdf2:sha256')
+    # Reset to a default password -> student must set their own again on next login
+    student.password_changed = False
+    student.password_changed_at = None
+    student.password_hint = None
     db.session.commit()
-    return jsonify({"success": True, "message": "Password reset successfully"})
+    return jsonify({
+        "success": True,
+        "message": "Password reset successfully. The student must set a new password on next login."
+    })
+@faculty_bp.route('/faculty/split-questions')
+@login_required
+def split_questions_page():
+    """Standalone tool: split one question file into several set files."""
+    if current_user.role not in ('faculty', 'admin'):
+        flash('Access denied', 'error')
+        return redirect(url_for('auth.index'))
+    return render_template('faculty/split_questions.html')
+
+
+@faculty_bp.route('/faculty/split-questions/preview', methods=['POST'])
+@login_required
+def split_questions_preview():
+    """Parse the uploaded bank and show how it would divide. Writes nothing."""
+    if current_user.role not in ('faculty', 'admin'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    from backend.services import question_splitter as QS
+
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({"success": False, "message": "Choose a question file first."}), 400
+
+    ok, message, questions = QS.parse_questions(secure_filename(file.filename), file.read())
+    if not ok:
+        return jsonify({"success": False, "message": message}), 400
+
+    try:
+        num_sets = int(request.form.get('num_sets') or 0)
+        per_set = int(request.form.get('per_set') or 0) or None
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Set count must be a number."}), 400
+
+    split_ok, split_msg, result = QS.split_questions(
+        questions, num_sets, per_set,
+        strategy=request.form.get('strategy', 'unique'),
+        balance_marks=request.form.get('balance_marks', 'true') == 'true',
+    )
+
+    if not split_ok:
+        return jsonify({"success": False, "message": split_msg, "parsed": message}), 400
+
+    # Preview shows shape only — the questions themselves come with the download.
+    return jsonify({
+        "success": True,
+        "parsed": message,
+        "message": split_msg,
+        "plan": {
+            "bank_total": result['bank_total'],
+            "num_sets": result['num_sets'],
+            "per_set": result['per_set'],
+            "leftover": result['leftover'],
+            "strategy": result['strategy'],
+            "sets": [{"label": x['label'], "count": x['count'],
+                      "total_marks": x['total_marks']} for x in result['sets']],
+            "sample": result['sets'][0]['questions'][:2],
+        },
+    })
+
+
+@faculty_bp.route('/faculty/split-questions/download', methods=['POST'])
+@login_required
+def split_questions_download():
+    """Split the uploaded bank and return the sets as a ZIP."""
+    if current_user.role not in ('faculty', 'admin'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    from backend.services import question_splitter as QS
+
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({"success": False, "message": "Choose a question file first."}), 400
+
+    original = secure_filename(file.filename)
+    ok, message, questions = QS.parse_questions(original, file.read())
+    if not ok:
+        return jsonify({"success": False, "message": message}), 400
+
+    try:
+        num_sets = int(request.form.get('num_sets') or 0)
+        per_set = int(request.form.get('per_set') or 0) or None
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Set count must be a number."}), 400
+
+    fmt = 'csv' if request.form.get('format') == 'csv' else 'json'
+
+    split_ok, split_msg, result = QS.split_questions(
+        questions, num_sets, per_set,
+        strategy=request.form.get('strategy', 'unique'),
+        balance_marks=request.form.get('balance_marks', 'true') == 'true',
+    )
+
+    if not split_ok:
+        return jsonify({"success": False, "message": split_msg}), 400
+
+    base = original.rsplit('.', 1)[0] or 'question_bank'
+    payload = QS.build_zip(result, base, fmt)
+
+    return send_file(
+        io.BytesIO(payload),
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'{base}_sets.zip',
+    )
+
+
+@faculty_bp.route('/faculty/student/<int:student_id>/reset-face', methods=['POST'])
+@login_required
+def faculty_reset_student_face(student_id):
+    """Clear a student's registered face so they can enrol again.
+
+    Students cannot change their own face once locked, so this is the only
+    route by which a face template can be replaced. Every use is audited with
+    the acting staff member's id.
+    """
+    if current_user.role not in ('faculty', 'admin'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    student = User.query.get_or_404(student_id)
+    if student.role != 'student':
+        return jsonify({"success": False, "message": "Not a student account."}), 400
+
+    payload = request.get_json(silent=True) or request.form or {}
+    reason = (payload.get('reason') or '').strip()
+    if not reason:
+        return jsonify({
+            "success": False,
+            "message": "A reason is required — face resets are permanently logged.",
+        }), 400
+
+    from backend.services import face_service
+    ip = (request.headers.get('X-Forwarded-For', request.remote_addr or '')
+          .split(',')[0].strip())
+
+    ok, message = face_service.reset_enrollment(student, current_user,
+                                                reason=reason, ip_address=ip)
+    return jsonify({"success": ok, "message": message}), (200 if ok else 400)
+
+
+@faculty_bp.route('/faculty/student/<int:student_id>/face-history')
+@login_required
+def faculty_student_face_history(student_id):
+    """Who changed this student's face template, and when."""
+    if current_user.role not in ('faculty', 'admin'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    from backend.models import FaceAuditLog
+    from backend.services import face_service
+
+    rows = (FaceAuditLog.query
+            .filter_by(subject_user_id=student_id)
+            .order_by(FaceAuditLog.created_at.desc())
+            .limit(50).all())
+
+    student = User.query.get_or_404(student_id)
+    return jsonify({
+        "success": True,
+        "enrollment": face_service.enrollment_info(student),
+        "history": [{
+            "action": r.action,
+            "actor": (r.actor.full_name or r.actor.username) if r.actor else None,
+            "actor_role": r.actor_role,
+            "reason": r.reason,
+            "liveness_score": r.liveness_score,
+            "at": r.created_at.isoformat() if r.created_at else None,
+        } for r in rows],
+    })
+
+
 @faculty_bp.route('/api/faculty/batch-create-exams', methods=['POST'])
 @login_required
 def batch_create_exams():
+    """Create several exams at once, each optionally with its own question file.
+
+    Shares validation, proctoring and access-key generation with the single
+    path, and reuses the tolerant question parser so a batch file does not have
+    to use stricter column names than a normal upload.
+    """
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"success": False, "error": "Access denied"}), 403
 
+    from backend.services import exam_builder
+    from backend.services import question_splitter
+
     try:
         exams_data = json.loads(request.form.get('exams_json', '[]'))
-        created_exams = []
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "error": "Malformed batch payload."}), 400
 
-        for i, exam_info in enumerate(exams_data):
-            title = exam_info.get('title')
-            if not title: continue
+    if not isinstance(exams_data, list) or not exams_data:
+        return jsonify({"success": False, "error": "No exams to create."}), 400
 
-            # Create the exam
-            new_exam = Exam(
-                title=title,
-                description=exam_info.get('description', ''),
-                duration_minutes=int(exam_info.get('duration_minutes', 60)),
-                passing_score=float(exam_info.get('passing_score', 50.0)),
-                creator_id=current_user.id
-            )
+    # Shared settings posted once alongside the batch (proctoring, mode, …)
+    shared = {k: v for k, v in request.form.items() if k != 'exams_json'}
+
+    created, failed = [], []
+
+    try:
+        for index, row in enumerate(exams_data):
+            if not isinstance(row, dict):
+                continue
+
+            fields = dict(shared)
+            fields.update({k: v for k, v in row.items() if v not in (None, '')})
+
+            errors, new_exam = exam_builder.build_exam(fields, current_user)
+            if errors:
+                failed.append({"row": index + 1,
+                               "title": row.get('title') or f'Row {index + 1}',
+                               "errors": errors})
+                continue
+
             db.session.add(new_exam)
-            db.session.commit()
+            db.session.flush()              # need the id for question rows
 
-            # Handle file upload if present
-            file_key = f'file_{i}'
             questions_count = 0
-            if file_key in request.files:
-                file = request.files[file_key]
-                if file and file.filename != '':
-                    filename = secure_filename(file.filename)
-                    if filename.endswith('.csv'):
-                        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-                        csv_input = csv.DictReader(stream)
-                        for row in csv_input:
-                            q = Question(
-                                exam_id=new_exam.id,
-                                question_text=row['question'],
-                                option_a=row['a'],
-                                option_b=row['b'],
-                                option_c=row['c'],
-                                option_d=row['d'],
-                                correct_answer=row['answer'].upper(),
-                                points=float(row.get('points', 1.0))
-                            )
-                            db.session.add(q)
-                            questions_count += 1
-                        db.session.commit()
+            upload = request.files.get(f'file_{index}')
+            if upload and upload.filename:
+                ok, _message, questions = question_splitter.parse_questions(
+                    secure_filename(upload.filename), upload.read())
+                if ok:
+                    for order, q in enumerate(questions, start=1):
+                        db.session.add(Question(
+                            exam_id=new_exam.id,
+                            question_text=q['question'],
+                            option_a=q['option_a'],
+                            option_b=q['option_b'],
+                            option_c=q['option_c'],
+                            option_d=q['option_d'],
+                            correct_answer=q['correct_answer'],
+                            points=q['points'],
+                            order_number=order,
+                        ))
+                        questions_count += 1
 
-            created_exams.append({
-                "id": new_exam.id,
-                "title": new_exam.title,
-                "questions_count": questions_count
-            })
+            created.append({**exam_builder.summarise(new_exam),
+                            "questions_count": questions_count})
 
-        return jsonify({
-            "success": True,
-            "message": f"Successfully created {len(created_exams)} exams.",
-            "created_exams": created_exams
-        })
+        # One commit for the whole batch: either every exam lands or none does.
+        db.session.commit()
 
     except Exception as e:
         db.session.rollback()
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
+    if not created:
+        return jsonify({"success": False,
+                        "error": "No exams could be created.",
+                        "failed": failed}), 400
+
+    message = f"Created {len(created)} exam(s)."
+    if failed:
+        message += f" {len(failed)} row(s) were skipped."
+
+    return jsonify({"success": True, "message": message,
+                    "created_exams": created, "failed": failed})
+
+
 @faculty_bp.route('/faculty/delete_student/<int:student_id>', methods=['POST'])
 @login_required
 def delete_student(student_id):
@@ -842,6 +1217,8 @@ def export_students():
 def preview_questions(exam_id):
     if current_user.role not in ('faculty', 'admin'):
         return jsonify({"error": "Access denied"}), 403
+    if not _faculty_can_access_exam(Exam.query.get(exam_id)):
+        return jsonify({"error": "Exam not found"}), 404
     
     file = request.files.get('file') or request.files.get('csv_file')
     if not file:
@@ -871,20 +1248,30 @@ def preview_questions(exam_id):
 @login_required
 def faculty_force_end_exam(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         flash('Unauthorized', 'error')
         return redirect(url_for('faculty.faculty_dashboard'))
         
     # Force end all active student exams
     active_exams = StudentExam.query.filter_by(exam_id=exam_id, status='started').all()
+    from backend.services.exam_service import calculate_student_score
+    from backend.services.proctor_service import cleanup_proctor_instance
+
     for se in active_exams:
         se.status = 'submitted'
         se.submitted_at = datetime.utcnow()
-        # Trigger score calculation
-        from backend.services.exam_service import calculate_student_score
         calculate_student_score(se.id)
-        
+        cleanup_proctor_instance(se.id)
+
+    # Closed for everyone: students polling the status endpoint see this, and
+    # nobody can open a fresh attempt until the exam is reactivated.
+    exam.force_ended = True
+    exam.status = 'ended'
     db.session.commit()
+
+    from backend.routes.exam import exam_room
+    socketio.emit('exam_force_ended', {'exam_id': exam.id}, to=exam_room(exam.id))
+
     flash(f'Force ended {len(active_exams)} active attempts.', 'success')
     return redirect(url_for('faculty.view_exam', exam_id=exam_id))
 
@@ -893,20 +1280,28 @@ def faculty_force_end_exam(exam_id):
 def faculty_force_end_student(exam_id, student_exam_id):
     se = StudentExam.query.get_or_404(student_exam_id)
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    # The attempt must belong to this exam, or access to one exam would let a
+    # faculty end attempts on any other.
+    if se.exam_id != exam.id or not _faculty_can_access_exam(exam):
         return jsonify({"success": False, "error": "Unauthorized"}), 403
-        
-    se.status = 'submitted'
-    se.submitted_at = datetime.utcnow()
-    from backend.services.exam_service import calculate_student_score
-    calculate_student_score(se.id)
-    db.session.commit()
+
+    if not se.completed:
+        se.status = 'submitted'
+        se.submitted_at = datetime.utcnow()
+        from backend.services.exam_service import calculate_student_score
+        from backend.services.proctor_service import cleanup_proctor_instance
+        calculate_student_score(se.id)
+        cleanup_proctor_instance(se.id)
+        db.session.commit()
+
+        from backend.routes.exam import attempt_room
+        socketio.emit('student_force_ended', {'student_exam_id': se.id}, to=attempt_room(se.id))
     return redirect(url_for('faculty.view_exam', exam_id=exam_id))
 @faculty_bp.route('/faculty/exam/<int:exam_id>/generate_key', methods=['POST'])
 @login_required
 def generate_exam_key(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         return jsonify({"success": False, "error": "Unauthorized"}), 403
         
     import secrets
@@ -922,7 +1317,7 @@ def generate_exam_key(exam_id):
 @login_required
 def clear_exam_key(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         return jsonify({"success": False, "error": "Unauthorized"}), 403
         
     exam.access_key = None
@@ -933,25 +1328,49 @@ def clear_exam_key(exam_id):
 @login_required
 def update_exam_access(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         flash('Unauthorized', 'error')
         return redirect(url_for('faculty.faculty_dashboard'))
         
-    exam.is_active = request.form.get('is_active') == 'true'
-    db.session.commit()
-    flash('Exam access updated.', 'success')
+    if 'access_mode' in request.form:
+        access_mode = request.form.get('access_mode')
+        exam.allow_all_students = (access_mode == 'all')
+        
+        if 'allowed_students' in request.form:
+            allowed_str = request.form.get('allowed_students', '').strip()
+            allowed_ids = [sid.strip() for sid in allowed_str.split(',') if sid.strip().isdigit()]
+            exam.allowed_students = ','.join(allowed_ids) if allowed_ids else None
+        
+        db.session.commit()
+        flash('Student eligibility settings saved.', 'success')
+    elif 'is_active' in request.form:
+        exam.is_active = request.form.get('is_active') == 'true'
+        reactivated = exam.is_active and exam.force_ended
+        if exam.is_active:
+            exam.force_ended = False
+            exam.status = 'active'
+        db.session.commit()
+        if reactivated:
+            from backend.routes.exam import exam_room
+            socketio.emit('exam_reactivated', {'exam_id': exam.id}, to=exam_room(exam.id))
+        flash('Exam access updated.', 'success')
+    else:
+        flash('No changes made.', 'info')
     return redirect(url_for('faculty.view_exam', exam_id=exam_id))
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/extend_time', methods=['POST'])
 @login_required
 def faculty_extend_exam_time(exam_id):
     exam = Exam.query.get_or_404(exam_id)
-    if exam.creator_id != current_user.id and current_user.role != 'admin':
+    if not _faculty_can_access_exam(exam):
         flash('Unauthorized', 'error')
         return redirect(url_for('faculty.faculty_dashboard'))
         
-    minutes = int(request.form.get('minutes') or request.form.get('extra_minutes') or 0)
-    if minutes > 0:
+    try:
+        minutes = int(request.form.get('minutes') or request.form.get('extra_minutes') or 0)
+    except (TypeError, ValueError):
+        minutes = 0
+    if 0 < minutes <= 600:
         # Extend for all currently active students
         active_exams = StudentExam.query.filter_by(exam_id=exam_id, status='started').all()
         # Note: If we don't have a per-student end_time, we might need to store it
@@ -961,3 +1380,129 @@ def faculty_extend_exam_time(exam_id):
         flash(f'Exam duration extended by {minutes} minutes.', 'success')
         
     return redirect(url_for('faculty.view_exam', exam_id=exam_id))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Proctoring review
+# ═══════════════════════════════════════════════════════════════════════
+
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+_EVIDENCE_ROOT = os.path.join(_PROJECT_ROOT, 'frontend', 'static', 'violations')
+
+
+def _staff_attempt_or_none(student_exam_id):
+    """The attempt, if the current user is staff who can access its exam."""
+    if current_user.role not in ('faculty', 'admin'):
+        return None
+    se = StudentExam.query.get(student_exam_id)
+    if not se or not _faculty_can_access_exam(se.exam):
+        return None
+    return se
+
+
+def _evidence_file(violation):
+    """Absolute path of a violation's evidence image, only if it is inside the
+    evidence directory — the stored path is never trusted to point elsewhere."""
+    if not violation or not violation.evidence_path:
+        return None
+    path = violation.evidence_path
+    if not os.path.isabs(path):
+        path = os.path.join(_PROJECT_ROOT, path)
+    path = os.path.realpath(path)
+    root = os.path.realpath(_EVIDENCE_ROOT)
+    if os.path.commonpath([path, root]) != root or not os.path.isfile(path):
+        return None
+    return path
+
+
+@faculty_bp.route('/api/proctor/status/<int:student_exam_id>')
+@login_required
+def proctor_status(student_exam_id):
+    """Violation summary and timeline for one attempt (analytics review modal)."""
+    se = _staff_attempt_or_none(student_exam_id)
+    if not se:
+        return jsonify({"success": False, "error": "Not found"}), 404
+
+    violations = (ExamViolation.query
+                  .filter_by(student_exam_id=se.id)
+                  .order_by(ExamViolation.timestamp.desc())
+                  .limit(100).all())
+
+    return jsonify({
+        "success": True,
+        "total_violations": se.total_violations or 0,
+        "proctoring_status": se.proctoring_status or 'active',
+        "calibration_completed": bool(se.calibration_completed),
+        "is_invalidated": bool(se.is_invalidated),
+        "faculty_review_note": se.faculty_review_note,
+        "recent_violations": [{
+            "id": v.id,
+            "type": v.violation_type,
+            "severity": v.severity,
+            "message": v.message,
+            "timestamp": (v.timestamp.isoformat() + 'Z') if v.timestamp else None,
+            "evidence_url": (url_for('faculty.violation_evidence', violation_id=v.id)
+                             if _evidence_file(v) else None),
+        } for v in violations],
+    })
+
+
+@faculty_bp.route('/api/faculty/review-exam/<int:student_exam_id>', methods=['POST'])
+@login_required
+def review_exam(student_exam_id):
+    """Accept or invalidate an attempt after reviewing its proctoring flags."""
+    se = _staff_attempt_or_none(student_exam_id)
+    if not se:
+        return jsonify({"success": False, "error": "Not found"}), 404
+
+    data = request.get_json(silent=True) or request.form
+    action = (data.get('action') or '').strip().lower()
+    note = (data.get('note') or '').strip()[:2000]
+
+    if action == 'invalidate':
+        if not note:
+            return jsonify({"success": False,
+                            "error": "Please give a reason for invalidating this attempt."}), 400
+        se.is_invalidated = True
+    elif action == 'accept':
+        se.is_invalidated = False
+        note = note or 'Reviewed — no issue found'
+    else:
+        return jsonify({"success": False, "error": "Unknown action."}), 400
+
+    se.faculty_review_note = note
+    se.reviewed_by = current_user.id
+    se.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"success": True, "is_invalidated": se.is_invalidated})
+
+
+@faculty_bp.route('/faculty/violation/<int:violation_id>/evidence')
+@login_required
+def violation_evidence(violation_id):
+    """Serve an evidence image to staff who can access the exam."""
+    v = ExamViolation.query.get_or_404(violation_id)
+    if not _staff_attempt_or_none(v.student_exam_id):
+        return "Not found", 404
+    path = _evidence_file(v)
+    if not path:
+        return "Not found", 404
+    return send_file(path, mimetype='image/jpeg', max_age=0)
+
+
+@faculty_bp.route('/api/faculty/violation/<int:violation_id>/evidence', methods=['DELETE', 'POST'])
+@login_required
+def delete_violation_evidence(violation_id):
+    """Delete one evidence image. The violation row itself is kept."""
+    v = ExamViolation.query.get_or_404(violation_id)
+    if not _staff_attempt_or_none(v.student_exam_id):
+        return jsonify({"success": False, "error": "Not found"}), 404
+    path = _evidence_file(v)
+    if path:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    v.evidence_path = None
+    db.session.commit()
+    return jsonify({"success": True})

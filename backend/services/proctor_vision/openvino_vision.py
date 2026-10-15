@@ -5,6 +5,7 @@
 PROCTOR_ENGINE_VERSION = "4.0"
 
 import os
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -24,6 +25,40 @@ except ImportError:
 # ═══════════════════════════════════════════════════════════════════════
 # ENUMS & CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
+
+# Model files live in <repo>/ai_models. Resolve from this file so the engine
+# works regardless of the process working directory; override with NETRA_MODEL_DIR.
+DEFAULT_MODEL_DIR = os.getenv(
+    'NETRA_MODEL_DIR',
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))), 'ai_models')
+)
+
+
+# Compiling an OpenVINO model costs ~hundreds of ms and a few MB. The compiled
+# handle is stateless for inference, so one set is shared by every attempt
+# instead of one set per student. Only ProctorState stays per-student.
+_MODEL_CACHE: Dict[str, Any] = {}
+_MODEL_CACHE_LOCK = threading.Lock()
+_OV_CORE = None
+
+
+def _get_core():
+    global _OV_CORE
+    if _OV_CORE is None and Core is not None:
+        _OV_CORE = Core()
+    return _OV_CORE
+
+
+def _cached(key, builder):
+    """Build once under a lock, then hand the same object to every caller."""
+    if key in _MODEL_CACHE:
+        return _MODEL_CACHE[key]
+    with _MODEL_CACHE_LOCK:
+        if key not in _MODEL_CACHE:
+            _MODEL_CACHE[key] = builder()
+    return _MODEL_CACHE[key]
+
 
 class Severity(str, Enum):
     LOW = "low"
@@ -94,11 +129,12 @@ class OpenVINOProctor:
     def __init__(
         self,
         state: ProctorState,
-        model_dir: str = "ai_models",
+        model_dir: str = None,
         device: str = "CPU",
         feature_flags: Optional[Dict[str, Any]] = None,
     ):
         self.state = state
+        model_dir = model_dir or DEFAULT_MODEL_DIR
         self.model_dir = model_dir
         self.device = device
 
@@ -124,10 +160,7 @@ class OpenVINOProctor:
               f"voice={self.feature_flags.get('voice_detection')}")
 
         # ── Load OpenVINO Core ──
-        if Core is not None:
-            self.core = Core()
-        else:
-            self.core = None
+        self.core = _get_core()
 
         # ── Only load models that are needed ──
         self._face_cascade = None
@@ -135,6 +168,7 @@ class OpenVINOProctor:
         self.hp_compiled = None
         self.obj_net = None
         self.obj_model_type = None
+        self.degraded = []          # features requested but unavailable
 
         if self.feature_flags.get('camera_enabled') and self.feature_flags.get('face_detection'):
             self._load_face_detection_model(model_dir, device)
@@ -144,6 +178,8 @@ class OpenVINOProctor:
 
         if self.feature_flags.get('camera_enabled') and self.feature_flags.get('object_detection'):
             self._load_object_detection_model(model_dir, device)
+
+        self._report_degraded_features(model_dir)
 
         # ── Thresholds — controlled by faculty via 'sensitivity' setting ──
         # 'high' = STRICT — catches everything fast, minimal tolerance
@@ -190,6 +226,37 @@ class OpenVINOProctor:
     # MODEL LOADING (with graceful fallbacks)
     # ═══════════════════════════════════════════════════════════════════
 
+    def _report_degraded_features(self, model_dir: str):
+        """Say plainly which requested detectors are not actually running.
+
+        Silent degradation is the dangerous case: faculty tick 'head pose', the
+        model is missing, and the dashboard still reports proctoring as active.
+        """
+        if not self.feature_flags.get('camera_enabled'):
+            return
+
+        if self.feature_flags.get('face_detection') and self.fd_compiled is None:
+            self.degraded.append(
+                'face detection running on Haar cascade (OpenVINO model not loaded)'
+            )
+
+        if self.feature_flags.get('head_pose') and self.hp_compiled is None:
+            self.degraded.append(
+                'HEAD POSE IS OFF — no model and no fallback; "looking away" will never trigger'
+            )
+
+        if self.feature_flags.get('object_detection') and self.obj_net is None:
+            self.degraded.append(
+                'object detection is OFF — no YOLO/SSD weights found'
+            )
+
+        if self.degraded:
+            print("=" * 70)
+            print(f"⚠️  PROCTORING DEGRADED  (model_dir: {model_dir})")
+            for item in self.degraded:
+                print(f"   • {item}")
+            print("=" * 70)
+
     def _load_face_detection_model(self, model_dir: str, device: str):
         self.fd_compiled = None
         self.fd_input = None
@@ -199,12 +266,16 @@ class OpenVINOProctor:
         try:
             fd_model_path = f"{model_dir}/face-detection-adas-0001.xml"
             if self.core and os.path.exists(fd_model_path):
-                fd_model = self.core.read_model(fd_model_path)
-                self.fd_compiled = self.core.compile_model(fd_model, device)
+                def _build():
+                    compiled = self.core.compile_model(
+                        self.core.read_model(fd_model_path), device)
+                    print("✅ Face detection model compiled (shared)")
+                    return compiled
+
+                self.fd_compiled = _cached(f"fd::{fd_model_path}::{device}", _build)
                 self.fd_input = self.fd_compiled.input(0)
                 self.fd_output = self.fd_compiled.output(0)
                 _, _, self.fd_h, self.fd_w = self.fd_input.shape
-                print("✅ Face detection model loaded")
             else:
                 print("⚠️ Face detection model not found — using Haar cascade fallback")
         except Exception as e:
@@ -214,9 +285,9 @@ class OpenVINOProctor:
         self._face_cascade = None
         if self.fd_compiled is None:
             try:
-                self._face_cascade = cv2.CascadeClassifier(
+                self._face_cascade = _cached('haar::frontalface', lambda: cv2.CascadeClassifier(
                     cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-                )
+                ))
                 if self._face_cascade.empty():
                     self._face_cascade = None
                 else:
@@ -232,11 +303,15 @@ class OpenVINOProctor:
         try:
             hp_model_path = f"{model_dir}/head-pose-estimation-adas-0001.xml"
             if self.core and os.path.exists(hp_model_path):
-                hp_model = self.core.read_model(hp_model_path)
-                self.hp_compiled = self.core.compile_model(hp_model, device)
+                def _build():
+                    compiled = self.core.compile_model(
+                        self.core.read_model(hp_model_path), device)
+                    print("✅ Head pose model compiled (shared)")
+                    return compiled
+
+                self.hp_compiled = _cached(f"hp::{hp_model_path}::{device}", _build)
                 self.hp_input = self.hp_compiled.input(0)
                 _, _, self.hp_h, self.hp_w = self.hp_input.shape
-                print("✅ Head pose model loaded")
         except Exception as e:
             print(f"⚠️ Head pose model load failed: {e}")
 
@@ -360,8 +435,12 @@ class OpenVINOProctor:
                 raise ValueError(f"Head pose model returned {len(vals)} outputs, need 3")
 
         if self.state.frame_count % 10 == 0:
+            # baseline is None until calibration or check_frame's default kicks in
+            by, bp = self.state.baseline_yaw, self.state.baseline_pitch
+            base = (f"y={by:.1f} p={bp:.1f}" if by is not None and bp is not None
+                    else "uncalibrated")
             print(f"🔄 [HeadPose] yaw={yaw:.1f}° pitch={pitch:.1f}° roll={roll:.1f}° "
-                  f"(baseline: y={self.state.baseline_yaw:.1f} p={self.state.baseline_pitch:.1f})")
+                  f"(baseline: {base})")
 
         return yaw, pitch, roll
 

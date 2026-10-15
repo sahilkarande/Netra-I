@@ -1,4 +1,4 @@
-# ProctoGuard LAN Deployment Guide
+# Netra-I LAN Deployment Guide
 ## Camera Access & ~300 Concurrent Student Support
 
 ---
@@ -23,10 +23,10 @@ Browsers **block `navigator.mediaDevices.getUserMedia()`** (camera access) on pa
 
 ### Step 1: Generate SSL Certificate (One-time)
 ```bash
-cd /path/to/ProctoGuard
+cd /path/to/Netra-I
 bash scripts/generate_lan_cert.sh
 ```
-This creates `cert.pem` and `key.pem` with SAN entries for localhost AND your LAN IP.
+This creates `certs/cert.pem` and `certs/key.pem` with SAN entries for localhost AND your LAN IP.
 
 ### Step 2: Start Server with HTTPS
 ```bash
@@ -64,7 +64,7 @@ Since the certificate is self-signed, students need to accept it **once**:
 - **Added `examId` to config**: The exam ID was missing from the `initExam()` config, preventing Socket.IO room joining
 
 ### 3. Backend (`app.py`) — HTTPS & Headers
-- **`--ssl` CLI flag**: `python app.py --ssl` enables HTTPS using `cert.pem`/`key.pem`
+- **`--ssl` CLI flag**: `python app.py --ssl` enables HTTPS using `certs/cert.pem` / `certs/key.pem`
 - **`Permissions-Policy` header**: Tells the browser that camera and microphone are allowed for this origin
 - **`Feature-Policy` header**: Legacy version of Permissions-Policy for older browsers
 - **Auto LAN IP detection**: Server startup shows the correct HTTPS URL students should use
@@ -119,7 +119,7 @@ getUserMedia()              Face Detection (OpenCV)
 2. **Use Gunicorn with eventlet workers**:
    ```bash
    pip install gunicorn eventlet
-   gunicorn --worker-class eventlet -w 1 --certfile=cert.pem --keyfile=key.pem -b 0.0.0.0:8800 "app:create_app()"
+   gunicorn --worker-class eventlet -w 1 --certfile=certs/cert.pem --keyfile=certs/key.pem -b 0.0.0.0:8800 "app:create_app()"
    ```
 
 3. **Switch from SQLite to PostgreSQL** for concurrent write handling:
@@ -131,8 +131,8 @@ getUserMedia()              Face Detection (OpenCV)
    ```nginx
    server {
        listen 443 ssl;
-       ssl_certificate /path/to/cert.pem;
-       ssl_certificate_key /path/to/key.pem;
+       ssl_certificate /path/to/Netra-I/certs/cert.pem;
+       ssl_certificate_key /path/to/Netra-I/certs/key.pem;
        
        location / {
            proxy_pass http://127.0.0.1:8800;
@@ -148,7 +148,7 @@ getUserMedia()              Face Detection (OpenCV)
 ## Troubleshooting
 
 ### Camera still not working after HTTPS?
-1. **Check the certificate covers the IP**: Run `openssl x509 -in cert.pem -text -noout | grep -A1 "Subject Alternative Name"` — your LAN IP should be listed
+1. **Check the certificate covers the IP**: Run `openssl x509 -in certs/cert.pem -text -noout | grep -A1 "Subject Alternative Name"` — your LAN IP should be listed
 2. **Regenerate certificate**: If IP changed, run `bash scripts/generate_lan_cert.sh` again
 3. **Chrome flag**: Navigate to `chrome://flags/#unsafely-treat-insecure-origin-as-secure` and add `http://YOUR_LAN_IP:8800`
 
@@ -161,3 +161,26 @@ getUserMedia()              Face Detection (OpenCV)
 1. **Increase file descriptors**: `ulimit -n 65536`
 2. **Check SQLite lock contention**: Switch to PostgreSQL for 300+ concurrent writes
 3. **Monitor memory**: The face cascade is now shared, but each proctor instance still uses memory
+
+---
+
+## Ready-made nginx setup
+
+`deploy/nginx_netra_i.conf` is a template for terminating TLS at nginx in front of the app.
+Install it with:
+
+```bash
+bash deploy/deploy_nginx.sh
+```
+
+The script fills in this checkout's path for the certificates, installs the site, tests the
+config and restarts nginx. Behind nginx, start the app **without** `--ssl` (nginx proxies plain
+HTTP to `127.0.0.1:8800`).
+
+## Offline LAN warning
+
+Face sign-in and the pre-exam identity check load face-api.js and its models from public CDNs
+(`cdn.jsdelivr.net`, `justadudewhohacks.github.io`). On a network with no internet access, those
+fail to load, and **camera-proctored exams cannot start** because the identity check cannot run.
+Either allow those hosts through the firewall, or vendor the files into `frontend/static/` and
+point `frontend/static/js/face_liveness.js` and `student/take_exam.html` at the local copies.

@@ -2,19 +2,22 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 
 # ===== Virtual environments =====
 venv/
 env/
 ENV/
 
-# ===== Databases =====
+# ===== Databases and runtime state =====
 instance/
 *.db
 *.db-shm
 *.db-wal
+backup/
 
 # ===== Certificates and keys =====
+certs/
 *.pem
 
 # ===== Environment files =====
@@ -29,6 +32,7 @@ Thumbs.db
 # ===== Compiled models / heavy binaries =====
 ai_models/*.bin
 ai_models/*.xml
+ai_models/*.onnx
 
 # ===== Logs / temporary files =====
 *.log
@@ -36,11 +40,9 @@ ai_models/*.xml
 
 # ===== Sensitive student or user data =====
 data/
-# Optional: specify certain sensitive files if needed
-# data/BDA Feb @026 Batch/students_clean_v2.json
-# data/Student_information_data_aug_2025.csv
-# data/student_data_aug_2025.json
 
 # ===== Scripts containing sensitive info =====
-create_admin.py
 scripts/create_admin.py
+
+# ===== Proctoring evidence (student webcam frames) =====
+frontend/static/violations/

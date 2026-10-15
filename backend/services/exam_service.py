@@ -63,7 +63,7 @@ def calculate_student_score(student_exam_id):
         student_exam.total_points = round(total_points, 2)
         student_exam.percentage = round(percentage, 2)
         student_exam.passed = passed
-        student_exam.status = 'completed'
+        student_exam.status = 'submitted'
         student_exam.completed = True
         
         if student_exam.started_at and student_exam.submitted_at:

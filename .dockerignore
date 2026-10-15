@@ -1,12 +1,26 @@
+# Local environments and caches
 venv/
+env/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
-.env
-app_debug.log
+.pytest_cache/
 .git/
 .gitignore
+
+# Secrets, runtime state and personal data never go into the image
+.env
+certs/
+*.pem
 instance/
+backup/
+data/
+frontend/static/violations/
+*.log
+
+# Not needed at runtime
+archive/
+docs/
+tests/

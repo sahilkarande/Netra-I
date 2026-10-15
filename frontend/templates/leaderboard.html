@@ -6,6 +6,48 @@
 {% endblock %}
 
 {% block content %}
+<style>
+    .lb-locked {
+        max-width: 620px;
+        margin: 3rem auto;
+        padding: 2.5rem 2rem;
+        text-align: center;
+        border-radius: 18px;
+        background: var(--card-bg, #fff);
+        border: 1px dashed var(--border, #d1d5db);
+    }
+    .lb-locked-icon,
+    .lb-locked-icon i {
+        font-size: 2.75rem;
+        color: #f59e0b;
+        margin-bottom: 0.75rem;
+    }
+    .lb-locked h3 {
+        margin: 0 0 0.5rem;
+        font-size: 1.35rem;
+        color: var(--text-primary, #111827);
+    }
+    .lb-locked p {
+        margin: 0 auto 1.5rem;
+        max-width: 460px;
+        line-height: 1.7;
+        color: var(--text-secondary, #6b7280);
+    }
+    tr.lb-row-me {
+        background: rgba(99, 102, 241, 0.12) !important;
+        box-shadow: inset 3px 0 0 #6366f1;
+    }
+    .lb-you-tag {
+        margin-left: 0.4rem;
+        padding: 0.1rem 0.45rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: #6366f1;
+        color: #fff;
+        vertical-align: middle;
+    }
+</style>
 <div class="lb-container">
 
     <!-- ===== HEADER ===== -->
@@ -19,12 +61,30 @@
                 <p class="lb-subtitle">Compare performance and track progress across C-DAC exams</p>
             </div>
         </div>
+        {% if not locked %}
         <div class="lb-header-actions">
             <button type="button" class="lb-btn lb-btn-outline" onclick="exportLeaderboardCSV()">
                 <i class="bi bi-download"></i> Export CSV
             </button>
         </div>
+        {% endif %}
     </div>
+
+    {% if locked %}
+    <!-- ===== LOCKED STATE (instructor closed the board) ===== -->
+    <div class="lb-locked">
+        <div class="lb-locked-icon"><i class="bi bi-lock-fill"></i></div>
+        <h3>The leaderboard is currently closed</h3>
+        <p>
+            Your instructor has not opened the leaderboard for your exams yet.
+            It becomes visible once both the <strong>leaderboard</strong> and the
+            <strong>results</strong> are published.
+        </p>
+        <a href="{{ url_for('student.student_dashboard') }}" class="lb-btn lb-btn-outline" style="text-decoration:none;">
+            <i class="bi bi-arrow-left"></i> Back to dashboard
+        </a>
+    </div>
+    {% else %}
 
     <!-- ===== FILTER PANEL ===== -->
     <div class="lb-filter-card lb-animate lb-d1">
@@ -266,7 +326,8 @@
                 </thead>
                 <tbody>
                     {% for s in leaderboard %}
-                    <tr data-prn="{{ s.prn or '' }}" data-name="{{ s.name or '' }}" data-marks="{{ s.marks_obtained }}"
+                    {% set is_me = current_student_id and s.student_id == current_student_id %}
+                    <tr class="{% if is_me %}lb-row-me{% endif %}" data-prn="{{ s.prn or '' }}" data-name="{{ s.name or '' }}" data-marks="{{ s.marks_obtained }}"
                         data-pct="{{ s.percentage }}" data-exams="{{ s.exams_attempted }}">
 
                         <!-- Checkbox -->
@@ -299,7 +360,7 @@
                                     style="background: linear-gradient(135deg, {{ ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#06b6d4']|random }}, {{ ['#4f46e5','#7c3aed','#db2777','#d97706','#059669','#0891b2']|random }});">
                                     {{ (s.name or 'U')[0]|upper }}
                                 </div>
-                                <span class="lb-sname">{{ s.name or 'Unknown' }}</span>
+                                <span class="lb-sname">{{ s.name or 'Unknown' }}{% if is_me %}<span class="lb-you-tag">YOU</span>{% endif %}</span>
                             </div>
                         </td>
 
@@ -375,14 +436,17 @@
         <p>No students or exams found for the current filters. Try adjusting the date range or batch selection.</p>
     </div>
     {% endif %}
+    {% endif %}
 
 </div>
 
 <!-- ===== FLOATING COMPARE BUTTON ===== -->
+{% if not locked %}
 <button id="compare-btn" class="lb-compare-fab" onclick="openCompare()">
     <i class="bi bi-people-fill"></i>
     Compare (<span id="compare-count">0</span>)
 </button>
+{% endif %}
 
 <!-- ===== COMPARE MODAL ===== -->
 <div class="lb-modal-overlay" id="compare-modal">

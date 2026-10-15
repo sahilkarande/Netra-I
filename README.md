@@ -1,593 +1,236 @@
-# ProctoGuard - Advanced AI-Powered Proctored Exam Platform
-
-A comprehensive, enterprise-grade Python-based web application for conducting secure, proctored online examinations with cutting-edge AI vision proctoring, automated question enhancement, and advanced analytics. Built with Flask, OpenVINO, and modern web technologies for maximum security and reliability.
-
-## Features
-
-### Advanced AI Vision Proctoring
-
-- **Real-time Face Detection**: Uses OpenVINO and OpenCV for high-performance facial tracking
-- **Continuous Identity Verification**: Utilizes `face-api.js` to extract 128-dimensional face descriptors, ensuring the student's identity matches throughout the exam via periodic background checks.
-- **Unified Pre-Exam System Checks**: Comprehensive environment staging that verifies network stability, camera, microphone, an
-d enforces hardware rules before exam entry.
-- **Hardware Environment Scanning**: Actively monitors and flags unauthorized external displays, virtual cameras, and external communication devices (e.g., Bluetooth headsets).
-- **Screen Sharing & Recording Prevention**: Intercepts browser-level display capture APIs to block malicious screen recording or unauthorized remote sharing.
-- **Adaptive Thresholds**: Soft and hard deviation thresholds with cooldown periods for head pose and background noise.
-
-### For Faculty Members
-
-- **Intuitive Exam Creation**: User-friendly interface for exam setup and management
-- **Bulk Data Import**: Support for CSV, Excel, and JSON file formats
-- **AI Question Enhancement**: Claude AI integration for automatic question improvement
-- **Advanced Analytics Dashboard**:
-  - Real-time pass/fail statistics
-  - Detailed question performance analysis
-  - Student-wise performance metrics
-  - Comprehensive proctoring reports
-  - Batch-wise result aggregation
-- **Professional PDF Reports**: Automated generation of detailed result reports
-- **Email Notifications**: Automated result notifications to students
-- **Admin SQL Console**: Direct database access for advanced users
-- **Role-based Access Control**: Separate dashboards for faculty and admin users
-
-### For Students
-
-- **Modern UI/UX**: Clean, responsive interface inspired by Google Forms
-- **Real-time Countdown Timer**: Visual timer with automatic submission
-- **Auto-save Functionality**: Answers saved automatically every few seconds
-- **Instant Result Access**: Immediate score and detailed breakdown after submission
-- **Performance Analytics**: Visual representation of correct/incorrect answers
-- **Secure Exam Environment**: Multiple layers of anti-cheating protection
-
-### Enterprise-Grade Security Features
-
-- **Multi-layered Proctoring**:
-  - Browser tab switch detection with violation counting
-  - Copy/paste prevention with clipboard monitoring
-  - Right-click and context menu blocking
-  - Developer tools detection (F12, Ctrl+Shift+I, etc.)
-  - Keyboard shortcut blocking
-- **Hardware Scanning & Enforcement**:
-  - Detection of external/secondary monitors
-  - Blocking of virtual cameras (OBS, Snap Camera, etc.)
-  - Flagging of unauthorized audio devices (Bluetooth/gaming headsets)
-- **Screen Capture Prevention**: Proactive blocking of `getDisplayMedia` to prevent unauthorized screen extensions and recording.
-- **AI Vision & Identity Monitoring**: Real-time analysis of student behavior along with continuous 128-dim face identity comparisons every 30 seconds.
-- **Activity Logging**: Timestamped logging of all suspicious activities
-- **Automatic Flagging System**: Intelligent detection of cheating attempts
-- **Session Security**: Secure session management with proper timeouts
-- **Data Encryption**: Secure password hashing and data protection
-
-### Advanced Analytics & Reporting
-
-- **Comprehensive Statistics**:
-  - Pass/fail rates with visual charts
-  - Average scores and performance trends
-  - Question difficulty analysis
-  - Time-based performance metrics
-- **Detailed Student Reports**:
-  - Individual performance breakdowns
-  - Proctoring violation summaries
-  - Time spent per question
-  - Comparative analytics
-- **Batch Processing**: Multi-student result aggregation and reporting
-- **Export Capabilities**: PDF reports with professional formatting
-- **Real-time Monitoring**: Live dashboard for ongoing exams
-
-### AI-Powered Features
-
-- **Question Enhancement**: Claude AI improves grammar, clarity, and formatting
-- **Vision-based Proctoring**: OpenVINO-powered real-time monitoring
-- **Automated Grading**: Intelligent scoring with partial credit options
-- **Smart Flagging**: AI-driven detection of suspicious behavior patterns
-
-### Communication Features
-
-- **OTP Email Verification**: Secure registration with email verification
-- **Result Notifications**: Automated email delivery of exam results
-- **SMTP Integration**: Configurable email server support
-- **Fallback Console Display**: Development-friendly OTP display
-
-### Technical Features
-
-- **Scalable Architecture**: Modular design with Blueprint organization
-- **Database Flexibility**: SQLite for development, PostgreSQL/MySQL ready
-- **RESTful API Design**: Clean API endpoints for future integrations
-- **File Upload Handling**: Secure handling of bulk data imports
-- **Error Handling**: Comprehensive error management and logging
-- **Performance Optimization**: Efficient database queries and caching
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.8 or higher
-- pip (Python package manager)
-
-### Installation
-
-1. **Install Dependencies**
-
-```bash
-pip install -r requirements.txt
-```
-
-2. **Configure Environment Variables**
-
-```bash
-# Copy the example file
-cp .env.example .env
-
-# Edit .env and set your values (see .env.example for all options)
-# At minimum, set SECRET_KEY for Flask sessions
-```
-
-3. **Initialize Database**
-
-```bash
-python app.py
-```
-
-This will create the SQLite database and start the development server.
-
-4. **Access the Application**
-   Open your browser and navigate to:
-
-```
-http://localhost:5000
-```
-
-## Usage Guide
-
-### For Faculty
-
-1. **Register an Account**
-
-   - Go to the registration page
-   - Select "Faculty" as your role
-   - Complete registration
-
-2. **Create an Exam**
-
-   - Click "Create New Exam" from your dashboard
-   - Fill in exam details:
-     - Title
-     - Description
-     - Duration (in minutes)
-     - Passing score (percentage)
-
-3. **Upload Questions**
-   - After creating an exam, you'll be directed to upload questions
-   - Prepare a CSV or Excel file with the following columns:
-     - `question`: The question text
-     - `option_a`: First option
-     - `option_b`: Second option
-     - `option_c`: Third option (optional)
-     - `option_d`: Fourth option (optional)
-     - `correct_answer`: Correct option (A, B, C, or D)
-     - `points`: Points for the question (optional, default: 1.0)
-4. **AI Enhancement (Optional)**
-
-   - Check the "Enhance questions with AI" option when uploading
-   - Requires valid ANTHROPIC_API_KEY in .env file
-   - AI will improve grammar, clarity, and formatting
-
-5. **View Analytics**
-   - Access detailed analytics from the exam view
-   - See pass/fail rates, average scores, and question performance
-   - Review flagged attempts for suspicious activity
-
-### For Students
-
-1. **Register an Account**
-
-   - Go to the registration page
-   - Select "Student" as your role
-   - Complete registration
-
-2. **Take an Exam**
-
-   - View available exams on your dashboard
-   - Click "Start Exam" to begin
-   - Read the security warnings carefully
-
-3. **During the Exam**
-
-   - Answer questions by selecting radio buttons
-   - Answers are automatically saved
-   - Watch the countdown timer
-   - Avoid:
-     - Switching tabs or windows
-     - Copying or pasting
-     - Right-clicking
-     - Opening developer tools
-
-4. **Submit and View Results**
-   - Click "Submit Exam" when finished
-   - View your score and detailed breakdown immediately
-   - See which questions were answered correctly/incorrectly
-
-## 📊 Sample Questions File
-
-A sample questions file (`sample_questions.csv`) is included. Format:
-
-```csv
-question,option_a,option_b,option_c,option_d,correct_answer,points
-What is 2+2?,3,4,5,6,B,1.0
-Capital of France?,London,Paris,Berlin,Rome,B,1.0
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-The application uses the following environment variables (see `.env.example` for complete list):
-
-**Required Settings:**
-
-- `SECRET_KEY`: Flask secret key for session management (change in production)
-- `DATABASE_URL`: Database connection string (defaults to SQLite)
-
-**Optional AI Features:**
-
-- `ANTHROPIC_API_KEY`: API key for Claude AI question enhancement
-- `OPENVINO_DEVICE`: Device for OpenVINO inference (CPU/GPU, defaults to CPU)
-
-**Email Configuration:**
-
-- `SMTP_SERVER`: SMTP server for email notifications
-- `SMTP_PORT`: SMTP port (587 for TLS)
-- `SMTP_USERNAME`: SMTP username
-- `SMTP_PASSWORD`: SMTP password/app password
-- `FROM_EMAIL`: Sender email address
-
-**Application Settings:**
-
-- `FLASK_DEBUG`: Enable/disable debug mode (default: True in development)
-- `MAX_CONTENT_LENGTH`: Maximum file upload size in bytes (default: 16MB)
-- `SESSION_TIMEOUT_MINUTES`: Session timeout duration
-- `EXAM_TIME_BUFFER_MINUTES`: Extra time buffer for exams
-
-### Security Settings (Database Configurable)
-
-Each exam has configurable security settings stored in the database:
-
-- `allow_tab_switch`: Allow/disallow tab switching during exam
-- `max_tab_switches`: Maximum allowed tab switches before flagging
-- `randomize_questions`: Randomize question order for each student
-- `show_results_immediately`: Show results immediately after submission
-- `enable_proctoring`: Enable/disable AI vision proctoring
-- `strict_mode`: Enable strict proctoring rules
-
-### AI Vision Proctoring Configuration
-
-Vision proctoring thresholds can be configured in `backend/services/proctor_vision/openvino_vision.py`:
-
-- `SOFT_DEVIATION_THRESHOLD`: Soft threshold for head pose deviation
-- `HARD_DEVIATION_THRESHOLD`: Hard threshold for head pose deviation
-- `COOLDOWN_PERIOD`: Cooldown period between violations
-- `CALIBRATION_FRAMES`: Number of frames for initial calibration
-
-## Project Structure
-
-```
-ProctoGuard/
-│
-├── app.py                          # Main Flask application entry point
-├── models.py                       # SQLAlchemy database models and schemas
-├── requirements.txt                # Python dependencies and versions
-├── cert.pem                        # SSL certificate for HTTPS
-├── key.pem                         # SSL private key for HTTPS
-├── .env                            # Environment variables (not in git)
-├── .env.example                    # Environment variables template
-├── .gitignore                      # Git ignore patterns
-├── README.md                       # Project documentation
-│
-├── backend/                        # Backend application logic
-│   ├── __init__.py
-│   ├── routes.py                   # Flask routes and API endpoints
-│   ├── database.py                 # Database connection and utilities
-│   ├── services/                   # Business logic services
-│   │   ├── pdf_generator.py        # PDF report generation
-│   │   └── proctor_vision/         # AI vision proctoring services
-│   │       ├── __init__.py
-│   │       └── openvino_vision.py  # OpenVINO face detection & head pose estimation
-│   └── utils/                      # Utility functions and helpers
-│       ├── __init__.py
-│       ├── create_db.py            # Database initialization script
-│       ├── email_utils.py          # Email sending utilities
-│       └── view_users.py           # User management utilities
-│
-├── frontend/                       # Frontend templates and static files
-│   ├── templates/                  # Jinja2 HTML templates
-│   │   ├── base.html               # Base template with common layout
-│   │   ├── index.html              # Landing page
-│   │   ├── login.html              # User login page
-│   │   ├── register.html           # User registration page
-│   │   ├── verify_otp.html         # OTP verification page
-│   │   ├── change_password.html    # Password change page
-│   │   ├── leaderboard.html        # Student leaderboard
-│   │   ├── faculty/                # Faculty-specific templates
-│   │   │   ├── dashboard.html      # Faculty dashboard
-│   │   │   ├── create_exam.html    # Exam creation form
-│   │   │   ├── upload_questions.html # Question upload interface
-│   │   │   ├── view_exam.html      # Exam details and management
-│   │   │   ├── analytics.html      # Analytics and reporting dashboard
-│   │   │   ├── manage_students.html # Student management interface
-│   │   │   ├── import_students.html # Bulk student import
-│   │   │   ├── edit_student.html   # Individual student editing
-│   │   │   └── student_report.html # Individual student reports
-│   │   └── student/                # Student-specific templates
-│   │       ├── dashboard.html      # Student dashboard
-│   │       ├── take_exam.html      # Exam taking interface
-│   │       ├── student_profile.html # Student profile page
-│   │       └── result.html         # Exam results display
-│   └── static/                     # Static assets (CSS, JS, images)
-│       ├── css/
-│       │   ├── style.css           # Main stylesheet (all pages)
-│       │   ├── exam.css            # Exam-specific styles
-│       │   └── student_management.css # Student management styles
-│       ├── js/
-│       │   ├── theme.js            # Dark/light theme toggle
-│       │   ├── exam.js             # Exam taking logic & proctoring
-│       │   ├── view_exam.js        # Exam viewing/management
-│       │   ├── analytics.js        # Analytics dashboard charts
-│       │   └── student_management.js # Student CRUD operations
-│       └── images/                 # Logos and image assets
-│
-├── ai_models/                      # OpenVINO ML model files
-│   ├── face-detection-adas-0001.*  # Face detection model
-│   └── head-pose-estimation-adas-0001.* # Head pose estimation model
-│
-├── scripts/                        # Development & maintenance scripts
-│   ├── sql_tools/                  # Database utility scripts
-│   │   ├── db_patch.py
-│   │   ├── db_query_tool.py
-│   │   ├── insert_students.py
-│   │   ├── repair_database.py
-│   │   ├── final_fix.py
-│   │   └── truncate_db.py
-│   └── docs/                       # Project documentation
-│       ├── PROJECT_OVERVIEW.md
-│       └── Project_title_update
-│
-├── data/                           # Sample data files (not in git)
-│   ├── Demo Question papers/       # Demo exam question papers
-│   ├── sample_questions.*          # Sample question files (CSV/JSON/XLSX)
-│   └── student_data_aug_2025.json  # Sample student data
-│
-└── instance/                       # Instance-specific files (database)
-    └── exam_platform.db            # SQLite database (created at runtime)
-```
-
-### 📂 **Directory Explanations**
-
-#### **🔧 Backend Architecture**
-
-- **`backend/`**: Contains all server-side logic organized into modular components
-- **`backend/routes.py`**: RESTful API endpoints for user management, exams, and analytics
-- **`backend/services/`**: Business logic layer with AI vision proctoring and PDF generation
-- **`backend/utils/`**: Helper functions for database operations, email sending, and user management
-
-#### **🎨 Frontend Structure**
-
-- **`frontend/templates/`**: Jinja2 templates organized by user roles (faculty/student)
-- **`frontend/static/`**: Client-side assets — CSS, JavaScript, and images
-- **Template Organization**: Separate directories for faculty and student interfaces
-
-#### **📊 Data & Configuration**
-
-- **`models.py`**: SQLAlchemy ORM models defining database schema
-- **`instance/`**: Runtime-generated files like SQLite database
-- **`data/`**: Sample data and upload storage directory
-- **`ai_models/`**: OpenVINO ML model files for face detection and head pose estimation
-
-#### **🛠️ Development & Operations**
-
-- **`scripts/`**: Utility scripts for database maintenance and patching
-- **`.env.example`**: Template for environment variables with all configuration options
-
-### 🗂️ **Key Files Overview**
-
-| File                                                 | Purpose                 | Key Features                                      |
-| ---------------------------------------------------- | ----------------------- | ------------------------------------------------- |
-| `app.py`                                             | Application entry point | Flask app initialization, blueprint registration  |
-| `models.py`                                          | Database schema         | User, Exam, Question, Answer, ActivityLog models  |
-| `backend/routes.py`                                  | API endpoints           | CRUD operations, authentication, exam management  |
-| `backend/services/proctor_vision/openvino_vision.py` | AI proctoring           | Face detection, head pose estimation, calibration |
-| `frontend/templates/base.html`                       | UI foundation           | Responsive layout, navigation, security scripts   |
-| `requirements.txt`                                   | Dependencies            | Flask, OpenVINO, OpenCV, SQLAlchemy, etc.         |
-
-## 🗄️ Database Schema
-
-The application uses SQLite with the following models:
-
-- **User**: Faculty and student accounts
-- **Exam**: Exam information
-- **Question**: Individual questions
-- **StudentExam**: Student exam attempts
-- **Answer**: Student answers
-- **ActivityLog**: Proctoring activity logs
-
-## 🔐 Security Features Explained
-
-### 1. Tab Switch Detection
-
-- Monitors visibility changes in the browser
-- Alerts student when they switch tabs
-- Counts violations and logs them
-- Flags attempts exceeding threshold
-
-### 2. Copy/Paste Prevention
-
-- Blocks clipboard operations during exam
-- Prevents students from copying questions
-- Prevents pasting answers from external sources
-
-### 3. Right-Click Disabled
-
-- Prevents access to context menu
-- Blocks "View Source" and similar options
-
-### 4. Developer Tools Detection
-
-- Detects keyboard shortcuts for dev tools
-- Blocks F12, Ctrl+Shift+I, Ctrl+Shift+J
-- Logs attempts as high-severity violations
-
-### 5. Activity Logging
-
-- Every suspicious action is logged with timestamp
-- Categorized by severity (low, medium, high)
-- Available for faculty review in analytics
-
-## 📈 Analytics & Reporting
-
-Faculty can access comprehensive analytics including:
-
-1. **Overall Statistics**
-
-   - Total attempts
-   - Pass/fail counts
-   - Average score
-   - Flagged attempts
-
-2. **Question Performance**
-
-   - How many students answered each question
-   - Accuracy percentage per question
-   - Visual progress bars
-
-3. **Student Results**
-
-   - Individual scores and percentages
-   - Time taken per student
-   - Tab switch counts
-   - Submission timestamps
-
-4. **Flagged Attempts**
-   - Students who exceeded security thresholds
-   - Detailed suspicious activity counts
-   - Sortable and filterable
-
-## 🤖 AI Enhancement
-
-The AI enhancement feature uses Anthropic's Claude to:
-
-- Fix grammar and spelling errors
-- Improve question clarity
-- Standardize option formatting
-- Maintain technical accuracy
-- Ensure professional tone
-
-**Requirements:**
-
-- Valid Anthropic API key
-- Internet connection during upload
-- Compatible question format
-
-## 🛠️ Troubleshooting
-
-### Database Issues
-
-```bash
-# Delete and recreate database
-rm exam_platform.db
-python app.py
-```
-
-### Import Errors
-
-```bash
-# Reinstall dependencies
-pip install --upgrade -r requirements.txt
-```
-
-### AI Enhancement Not Working
-
-- Check that ANTHROPIC_API_KEY is set in .env
-- Verify API key is valid
-- Check internet connection
-- Review console logs for errors
-
-## 🚀 Production Deployment
-
-For production use:
-
-1. **Change SECRET_KEY** to a strong random value
-2. **Use production WSGI server** (Gunicorn, uWSGI)
-3. **Use production database** (PostgreSQL, MySQL)
-4. **Enable HTTPS**
-5. **Set debug=False** in app.py
-6. **Configure proper logging**
-7. **Implement rate limiting**
-8. **Add user email verification**
-9. **Implement password reset**
-10. **Add CSRF protection** (already included in Flask-WTF)
-
-## 📝 Future Enhancements
-
-Potential additions to further enhance the platform:
-
-### 🔄 Already Implemented Features
-
-- [x] **AI Vision Proctoring**: Real-time face detection, head pose monitoring, and initial calibration
-- [x] **Continuous Identity Verification**: AI-powered face similarity matching throughout the exam
-- [x] **Strict Hardware Enforcement**: System scans for external displays, virtual cameras, and unauthorized mics
-- [x] **Screen Capture Protection**: Built-in interception to block screen recording extensions
-- [x] **PDF Report Generation**: Professional result reports with detailed analytics
-- [x] **Email Notifications**: OTP verification and result notifications
-- [x] **Multiple File Formats**: CSV, Excel, and JSON support for bulk uploads
-- [x] **Advanced Analytics**: Comprehensive performance dashboards
-
-### 🚀 Planned Enhancements
-
-- [ ] **Live Webcam Proctoring**: Real-time video streaming with cloud processing (beyond current edge AI)
-- [ ] **Advanced Device Fingerprinting**: Deeper OS-level application monitoring (where permission allows)
-- [ ] **Additional File Formats**: Word documents and PDF question imports
-- [ ] **Advanced Export Options**: Excel reports, CSV downloads, data visualization
-- [ ] **Scheduled Exams**: Calendar-based exam scheduling with notifications
-- [ ] **Question Bank Management**: Reusable question pools with tagging system
-- [ ] **Peer Review System**: Collaborative grading and review workflows
-- [ ] **Mobile Application**: Native iOS/Android apps for exam taking
-- [ ] **LMS Integration**: Moodle, Canvas, Blackboard API integrations
-- [ ] **Advanced Proctoring**: Screen sharing detection, multiple camera support
-- [ ] **Biometric Authentication**: Fingerprint/face recognition for login
-- [ ] **Real-time Collaboration**: Live faculty monitoring and intervention
-- [ ] **Advanced AI Features**: Question difficulty prediction, adaptive testing
-- [ ] **Multi-language Support**: Internationalization and localization
-- [ ] **Offline Mode**: Limited functionality without internet connection
-
-## 🤝 Contributing
-
-This is a starter project. Feel free to:
-
-- Add new features
-- Improve security measures
-- Enhance UI/UX
-- Optimize performance
-- Add tests
-- Improve documentation
-
-## License
-
-This project is provided as-is for educational purposes.
-
-## 🙏 Acknowledgments
-
-- Built with Flask web framework
-- AI enhancement powered by Anthropic Claude
-- UI inspired by Google Forms
-- Icons from emoji set
-
-## 📧 Support
-
-For issues or questions:
-
-1. Check the troubleshooting section
-2. Review error logs in the console
-3. Verify your environment configuration
+# Netra-I — Secure Proctored Exam Platform
+
+Netra-I runs multiple-choice exams on a college's own network with an AI invigilator built in.
+Students take the exam in a normal browser. A webcam check flags an empty seat, a second person,
+or a head turned away for too long, and faculty review each flag before marks are published.
+
+It is a Flask + Socket.IO application with OpenVINO computer vision, designed to run on one
+machine on a campus LAN, with no cloud services and no per-student cost.
+
+| Document | Read it for |
+|---|---|
+| **README.md** (this file) | What it does, how to install and run it, where things live |
+| [docs/README_OVERVIEW.md](docs/README_OVERVIEW.md) | A plain-language explanation for faculty, students and administrators |
+| [docs/README_TECHNICAL.md](docs/README_TECHNICAL.md) | Architecture, data model, every route, the proctoring pipeline, security model, scaling |
+| [docs/LAN_DEPLOYMENT_GUIDE.md](docs/LAN_DEPLOYMENT_GUIDE.md) | Running an exam over campus Wi-Fi/LAN with HTTPS |
 
 ---
 
-**Happy Examining! 🎉**
+## Features
+
+### Three roles
+
+| Role | What they do |
+|---|---|
+| **Admin** | Creates faculty accounts, sees every exam and student, has a SQL console |
+| **Faculty** | Creates exams, uploads questions, imports students, watches live, reviews flags, publishes results |
+| **Student** | Passes an equipment and identity check, sits the exam, sees results once published |
+
+### Exams
+- Create one exam or a batch at once; questions from **CSV, Excel or JSON**
+- **Question splitter** turns one question bank into several non-overlapping papers with balanced marks
+- Per-student question and option shuffling, stored so a page refresh gives the same paper
+- Optional **access key** that the teacher reads out in the hall; the paper is not sent to the browser until it is entered
+- Exam window (start/end time), active/inactive switch, per-student or class-wide assignment
+- Server-side timer anchored to the start time, so refreshing never adds time
+- Answers auto-save; late answers are refused once time is up or the paper is submitted
+- Live control: extend time, end the exam for everyone, or end it for one student (pushed to the browser instantly)
+
+### Proctoring
+- **Webcam checks on the server** (OpenVINO): no face, more than one face, head turned away for a sustained period, optional phone/book detection
+- Per-student **calibration**, so a naturally tilted head is not penalised, plus a baseline that adapts as the student settles
+- Gentle, rate-limited warnings ("Gentle reminder 3/25") with per-type cooldowns, and auto-submit at the faculty-set limit
+- A photo is saved **only at a flagged moment**; there is no video recording
+- Browser guards: tab-switch counting, full-screen enforcement, copy/paste and context-menu blocking, screen-recording interception, external-monitor and virtual-camera detection
+- **Identity:** students register their face once, with a liveness challenge (random head movements checked server-side) that rejects photos and screens. Camera-proctored exams verify the student against that registration before the paper opens and re-check during the exam.
+
+### Results
+- Instant scoring on submit
+- Faculty review screen: violation timeline with evidence photos, then **accept** or **invalidate** an attempt with a written reason
+- Separate switches for **publishing results** and **opening the leaderboard** (the leaderboard needs results published first)
+- PDF result per student, batch report, CSV export, question-level analytics
+
+### Security
+- Passwords hashed with PBKDF2; first-login password change for imported students, with a self-set hint
+- Throttling on password login, OTP codes, exam access keys and face sign-in (5 failures → 10-minute lockout)
+- Role checks on every route, and faculty can only act on exams they can access
+- Evidence photos are only served to staff who can access that exam
+- Socket.IO connections are same-origin only, and every event is checked against the logged-in student
+- Random per-installation session key when `SECRET_KEY` is not set
+
+---
+
+## Quick start
+
+**Requirements:** Python 3.11+ (3.12 recommended) and a webcam for testing the exam page. Linux, macOS and Windows all work.
+
+```bash
+git clone <repo-url> Netra-I
+cd Netra-I
+python -m venv venv
+source venv/bin/activate            # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env                # optional; every setting has a default
+```
+
+**AI models.** The OpenVINO model files are not in git. Put these four files in `ai_models/`:
+
+```
+face-detection-adas-0001.xml / .bin
+head-pose-estimation-adas-0001.xml / .bin
+```
+
+They are available from the [Open Model Zoo](https://github.com/openvinotoolkit/open_model_zoo).
+Without them, face detection falls back to an OpenCV Haar cascade and head-pose checks are off.
+The server prints a banner saying which detectors are degraded.
+
+**Create the first admin and start the server:**
+
+```bash
+python scripts/create_admin.py --username admin --email admin@example.com --password '<choose one>'
+python app.py
+```
+
+Open <http://localhost:8800>. The database (`instance/exam_platform.db`) is created on first start.
+
+Cameras only work on `localhost` or over HTTPS. To run an exam for other machines on the network:
+
+```bash
+bash scripts/generate_lan_cert.sh   # once: writes certs/cert.pem and certs/key.pem
+python app.py --ssl                 # or: bash scripts/start_lan_exam.sh
+```
+
+See [docs/LAN_DEPLOYMENT_GUIDE.md](docs/LAN_DEPLOYMENT_GUIDE.md) for the student-side browser steps.
+
+> **Internet access needed for face checks.** face-api.js and its models load from public CDNs.
+> On a fully offline LAN, camera-proctored exams cannot start. The guide explains how to vendor
+> the files locally.
+
+---
+
+## Typical workflow
+
+1. **Admin** creates faculty accounts (*Manage Faculty*).
+2. **Faculty** imports students from CSV/Excel (*Manage Students → Import*; a template is downloadable there). Each student gets a temporary password and must set their own, plus register their face, on first login.
+3. **Faculty** creates an exam, uploads questions (see [docs/samples/](docs/samples/)), picks proctoring strictness, and notes the generated access key.
+4. **Students** start the exam from their dashboard, enter the key, pass the equipment and identity check, and answer.
+5. **Faculty** watches live, then reviews flagged attempts on the exam's *Analytics* page and accepts or invalidates them.
+6. **Faculty** publishes results; students then see scores, breakdowns and PDFs.
+
+Question file columns: `question, option_a, option_b, option_c, option_d, correct_answer, points`
+(`correct_answer` is A–D; `points` defaults to 1).
+
+---
+
+## Configuration
+
+All settings come from environment variables (or `.env`). See [.env.example](.env.example).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SECRET_KEY` | random, stored in `instance/.secret_key` | Signs session cookies |
+| `DATABASE_URL` | `sqlite:///exam_platform.db` (in `instance/`) | Any SQLAlchemy URL; use PostgreSQL for large cohorts |
+| `PORT` | `8800` | HTTP port |
+| `FLASK_DEBUG` | `True` | Debug mode (always off with `--ssl`) |
+| `USE_SSL` | `false` | Mark session cookies HTTPS-only. Set to `true` when running behind an HTTPS proxy (nginx); `--ssl` sets this automatically |
+| `MAX_CONTENT_LENGTH` | 16 MB | Upload limit |
+| `SOCKETIO_CORS_ORIGINS` | *(same-origin only)* | Extra allowed Socket.IO origins, comma-separated |
+| `NETRA_FRAME_INTERVAL_SEC` | `4.0` | Seconds between inspected webcam frames per student |
+| `NETRA_MODEL_DIR` | `ai_models/` | Location of model files |
+| `SMTP_SERVER`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `FROM_EMAIL` | — | OTP email for self-registration. Without them the OTP is printed to the console |
+
+Per-exam settings (duration, pass mark, shuffling, access key, camera/head-pose/object/voice/tab
+checks, warning limit, sensitivity low/medium/high) are chosen on the *Create Exam* page.
+
+---
+
+## Project structure
+
+```
+Netra-I/
+├── app.py                    # Application factory, start-up checks, CLI entry (python app.py [--ssl])
+├── wsgi.py                   # Entry point for gunicorn
+├── requirements.txt
+├── pytest.ini
+├── Dockerfile · docker-compose.yml · .dockerignore
+├── .env.example              # Every configuration variable, documented
+│
+├── backend/
+│   ├── database.py           # SQLAlchemy + Flask-Login instances
+│   ├── models.py             # All tables (users, exams, attempts, violations, face data, audit)
+│   ├── socket_io.py          # Socket.IO instance and origin policy
+│   ├── routes/               # One blueprint per area
+│   │   ├── auth.py           #   login, registration/OTP, password change, face sign-in
+│   │   ├── student.py        #   dashboard, results, PDF, leaderboard, profile
+│   │   ├── exam.py           #   exam runtime + Socket.IO proctoring handlers
+│   │   ├── faculty.py        #   exams, students, results, live control, review, evidence
+│   │   └── admin.py          #   faculty accounts, all students/exams, SQL console
+│   ├── services/             # Logic with no HTTP in it
+│   │   ├── exam_builder.py       # validation + defaults shared by single and batch create
+│   │   ├── exam_service.py       # scoring and per-student shuffle
+│   │   ├── question_splitter.py  # one bank → several papers
+│   │   ├── proctor_service.py    # per-attempt vision instances, violation logging
+│   │   ├── proctor_vision/openvino_vision.py   # the computer-vision engine
+│   │   ├── face_service.py       # face enrolment, matching, lockout, audit
+│   │   ├── liveness_service.py   # liveness challenges and anti-spoof checks
+│   │   └── pdf_generator.py      # result and batch PDFs
+│   └── utils/email_utils.py  # OTP email (console fallback)
+│
+├── frontend/
+│   ├── templates/            # Jinja2 pages: base.html, auth pages, admin/, faculty/, student/
+│   └── static/
+│       ├── css/  js/  images/
+│       └── violations/       # evidence photos, written at runtime (gitignored, staff-only)
+│
+├── ai_models/                # OpenVINO model files (not in git)
+├── tests/                    # pytest suite (48 tests)
+├── scripts/                  # create_admin.py, repair_proctor_settings.py, LAN cert + launcher
+├── deploy/                   # nginx reverse-proxy template + installer
+├── docs/                     # Overview, technical reference, LAN guide, diagrams, samples
+├── archive/                  # Old code no longer used, kept for reference (see archive/README.md)
+│
+├── certs/                    # TLS certificate + key (gitignored)
+├── instance/                 # SQLite database + generated secret key (gitignored)
+├── data/                     # Local question banks and student lists (gitignored)
+└── backup/                   # Local database backups (gitignored)
+```
+
+---
+
+## Testing
+
+```bash
+pip install pytest
+python -m pytest
+```
+
+The suite runs against a throwaway SQLite database and covers page rendering, result visibility,
+registration/OTP, login lockout, role and ownership checks, the access-key gate, answer saving
+rules, force-end, evidence access and Socket.IO authorisation. The camera and face-check
+screens need a real browser and webcam, so do a manual run before exam day.
+
+---
+
+## Deployment
+
+| Setup | How |
+|---|---|
+| Single machine, LAN | `bash scripts/start_lan_exam.sh` (HTTPS from `certs/`) |
+| Behind nginx | `bash deploy/deploy_nginx.sh`, then run the app **without** `--ssl` on port 8800, with `USE_SSL=true` |
+| Docker | `docker compose up --build` (gunicorn + eventlet, one worker) |
+
+Before a real exam:
+
+- Set `SECRET_KEY` explicitly if you run more than one process or restore from backup.
+- Keep `instance/` and `frontend/static/violations/` on persistent storage and back them up.
+- Run one full rehearsal exam on the actual hardware and network.
+
+Known limits: one server process handles roughly **250 concurrent camera-proctored students**
+(measured). Evidence photos are deleted when results are published, but are not otherwise
+cleaned up. See the technical reference for the scaling analysis and next steps.
+
+---
+
+## License
+
+Provided as-is for educational use.

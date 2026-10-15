@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 620" width="980" height="620" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+  <rect width="980" height="620" rx="14" fill="#0b1220"/>
+
+  
+
+  <!-- ── BROWSER TIER ────────────────────────────────────────── -->
+  <rect x="24" y="24" width="300" height="352" rx="12" fill="#1e3a5f" fill-opacity="0.16" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="44" y="50" font-size="13" font-weight="700" fill="#3b82f6" letter-spacing="1.2">BROWSER (student)</text>
+
+  <rect x="44" y="64" width="260" height="58" rx="8" fill="#1e3a5f" fill-opacity="0.35" stroke="#3b82f6" stroke-opacity="0.45"/>
+  <text x="60" y="86" font-size="13" font-weight="600" fill="#93c5fd">take_exam.html</text>
+  <text x="60" y="105" font-size="11" fill="#94a3b8">2500-line single-page exam runtime</text>
+
+  <rect x="44" y="132" width="260" height="66" rx="8" fill="#1e3a5f" fill-opacity="0.35" stroke="#3b82f6" stroke-opacity="0.45"/>
+  <text x="60" y="154" font-size="13" font-weight="600" fill="#93c5fd">face-api.js</text>
+  <text x="60" y="172" font-size="11" fill="#94a3b8">128-dim descriptor, identity match</text>
+  <text x="60" y="189" font-size="11" fill="#64748b">runs client-side only — never sent</text>
+
+  <rect x="44" y="208" width="260" height="66" rx="8" fill="#1e3a5f" fill-opacity="0.35" stroke="#3b82f6" stroke-opacity="0.45"/>
+  <text x="60" y="230" font-size="13" font-weight="600" fill="#93c5fd">Capture loop</text>
+  <text x="60" y="248" font-size="11" fill="#94a3b8">canvas 320x240 → JPEG q0.6</text>
+  <text x="60" y="265" font-size="11" fill="#64748b">setInterval 3000 ms</text>
+
+  <rect x="44" y="284" width="260" height="72" rx="8" fill="#1e3a5f" fill-opacity="0.35" stroke="#3b82f6" stroke-opacity="0.45"/>
+  <text x="60" y="306" font-size="13" font-weight="600" fill="#93c5fd">Browser-side guards</text>
+  <text x="60" y="324" font-size="11" fill="#94a3b8">tab visibility · fullscreen · focus</text>
+  <text x="60" y="341" font-size="11" fill="#94a3b8">display-capture block · devices</text>
+
+  <!-- ── SERVER TIER ─────────────────────────────────────────── -->
+  <rect x="364" y="24" width="316" height="412" rx="12" fill="#4c1d95" fill-opacity="0.16" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="384" y="50" font-size="13" font-weight="700" fill="#8b5cf6" letter-spacing="1.2">FLASK + EVENTLET (1 process)</text>
+
+  <rect x="384" y="64" width="276" height="56" rx="8" fill="#4c1d95" fill-opacity="0.32" stroke="#8b5cf6" stroke-opacity="0.45"/>
+  <text x="400" y="86" font-size="13" font-weight="600" fill="#c4b5fd">5 Blueprints</text>
+  <text x="400" y="104" font-size="11" fill="#94a3b8">auth · admin · faculty · student · exam</text>
+
+  <rect x="384" y="130" width="276" height="56" rx="8" fill="#4c1d95" fill-opacity="0.32" stroke="#8b5cf6" stroke-opacity="0.45"/>
+  <text x="400" y="152" font-size="13" font-weight="600" fill="#c4b5fd">Socket.IO handlers</text>
+  <text x="400" y="170" font-size="11" fill="#94a3b8">frameBinary · calibrationBinary · heartbeat</text>
+
+  <rect x="384" y="196" width="276" height="86" rx="8" fill="#7f1d1d" fill-opacity="0.3" stroke="#ef4444" stroke-opacity="0.6"/>
+  <text x="400" y="218" font-size="13" font-weight="600" fill="#fca5a5">Vision pipeline  ⚠ bottleneck</text>
+  <text x="400" y="236" font-size="11" fill="#cbd5e1">cv2.imdecode → face detect → head pose</text>
+  <text x="400" y="253" font-size="11" fill="#cbd5e1">blocking C calls on the eventlet hub</text>
+  <text x="400" y="271" font-size="11" fill="#6ee7b7">shared models · state only per student</text>
+
+  <rect x="384" y="292" width="276" height="56" rx="8" fill="#4c1d95" fill-opacity="0.32" stroke="#8b5cf6" stroke-opacity="0.45"/>
+  <text x="400" y="314" font-size="13" font-weight="600" fill="#c4b5fd">Services</text>
+  <text x="400" y="332" font-size="11" fill="#94a3b8">exam · proctor · pdf · email</text>
+
+  <rect x="384" y="358" width="276" height="62" rx="8" fill="#4c1d95" fill-opacity="0.32" stroke="#8b5cf6" stroke-opacity="0.45"/>
+  <text x="400" y="380" font-size="13" font-weight="600" fill="#c4b5fd">SQLAlchemy ORM</text>
+  <text x="400" y="398" font-size="11" fill="#94a3b8">8 models · Flask-Login session auth</text>
+
+  <!-- ── STORAGE TIER ────────────────────────────────────────── -->
+  <rect x="720" y="24" width="236" height="412" rx="12" fill="#064e3b" fill-opacity="0.18" stroke="#10b981" stroke-width="1.5"/>
+  <text x="740" y="50" font-size="13" font-weight="700" fill="#10b981" letter-spacing="1.2">PERSISTENCE</text>
+
+  <rect x="740" y="64" width="196" height="86" rx="8" fill="#064e3b" fill-opacity="0.34" stroke="#10b981" stroke-opacity="0.45"/>
+  <text x="756" y="86" font-size="13" font-weight="600" fill="#6ee7b7">SQLite (default)</text>
+  <text x="756" y="104" font-size="11" fill="#94a3b8">instance/exam_platform.db</text>
+  <text x="756" y="121" font-size="11" fill="#94a3b8">users · exam · question</text>
+  <text x="756" y="138" font-size="11" fill="#94a3b8">student_exam · answers</text>
+
+  <rect x="740" y="160" width="196" height="86" rx="8" fill="#064e3b" fill-opacity="0.34" stroke="#10b981" stroke-opacity="0.45"/>
+  <text x="756" y="182" font-size="13" font-weight="600" fill="#6ee7b7">Violation evidence</text>
+  <text x="756" y="200" font-size="11" fill="#94a3b8">static/violations/</text>
+  <text x="756" y="217" font-size="11" fill="#94a3b8">&lt;exam&gt;_&lt;date&gt;/&lt;prn&gt;/*.jpg</text>
+  <text x="756" y="234" font-size="11" fill="#fbbf24">written on flag only</text>
+
+  <rect x="740" y="256" width="196" height="76" rx="8" fill="#064e3b" fill-opacity="0.34" stroke="#10b981" stroke-opacity="0.45"/>
+  <text x="756" y="278" font-size="13" font-weight="600" fill="#6ee7b7">ai_models/</text>
+  <text x="756" y="296" font-size="11" fill="#94a3b8">face-detection-adas-0001</text>
+  <text x="756" y="313" font-size="11" fill="#94a3b8">head-pose-estimation-adas</text>
+  <text x="756" y="329" font-size="11" fill="#6ee7b7">compiled once, shared</text>
+
+  <rect x="740" y="342" width="196" height="78" rx="8" fill="#334155" fill-opacity="0.34" stroke="#64748b" stroke-opacity="0.5"/>
+  <text x="756" y="364" font-size="13" font-weight="600" fill="#cbd5e1">Redis</text>
+  <text x="756" y="382" font-size="11" fill="#94a3b8">declared in docker-compose</text>
+  <text x="756" y="399" font-size="11" fill="#f87171">never wired as a</text>
+  <text x="756" y="414" font-size="11" fill="#f87171">Socket.IO message_queue</text>
+
+  <!-- ── ARROWS ──────────────────────────────────────────────── -->
+  <line x1="304" y1="92" x2="384" y2="92" stroke="#64748b" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="312" y="84" font-size="10" fill="#94a3b8">HTTPS</text>
+
+  <line x1="304" y1="244" x2="384" y2="220" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrAmber)"/>
+  <text x="300" y="268" font-size="10" fill="#fbbf24">WebSocket binary</text>
+
+  <line x1="660" y1="240" x2="740" y2="200" stroke="#64748b" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="660" y1="388" x2="740" y2="110" stroke="#64748b" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="660" y1="232" x2="740" y2="292" stroke="#64748b" stroke-width="1.6" marker-end="url(#arr)" stroke-dasharray="4 3"/>
+
+  <line x1="384" y1="160" x2="304" y2="180" stroke="#3b82f6" stroke-width="1.6" marker-end="url(#arrBlue)"/>
+  <text x="300" y="150" font-size="10" fill="#93c5fd">proctor_result</text>
+
+  <!-- ── THROUGHPUT FOOTNOTE ─────────────────────────────────── -->
+  <rect x="24" y="452" width="932" height="140" rx="10" fill="#0f172a" fill-opacity="0.5" stroke="#334155"/>
+  <text x="44" y="478" font-size="12" font-weight="700" fill="#e2e8f0" letter-spacing="0.6">THROUGHPUT AT 300 CONCURRENT STUDENTS</text>
+
+  <text x="44" y="504" font-size="11.5" fill="#94a3b8">Client emit rate</text>
+  <text x="210" y="504" font-size="11.5" fill="#e2e8f0">300 ÷ 4 s  =  75 frames/sec arriving</text>
+
+  <text x="44" y="526" font-size="11.5" fill="#94a3b8">Server accept rate</text>
+  <text x="210" y="526" font-size="11.5" fill="#e2e8f0">300 ÷ 4 s  =  75 frames/sec inferred</text>
+
+  <text x="44" y="548" font-size="11.5" fill="#94a3b8">Measured cost</text>
+  <text x="210" y="548" font-size="11.5" fill="#6ee7b7">15.6 ms/frame (decode 0.6 + detect 15.0)</text>
+
+  <text x="44" y="570" font-size="11.5" fill="#94a3b8">CPU budget</text>
+  <text x="210" y="570" font-size="11.5" fill="#fbbf24">64 frames/sec on one hub → ≈ 250 students before saturation</text>
+
+  <text x="640" y="504" font-size="11.5" fill="#94a3b8">Inbound bandwidth</text>
+  <text x="772" y="504" font-size="11.5" fill="#6ee7b7">≈ 1.5 MB/s — not a constraint</text>
+  <text x="640" y="526" font-size="11.5" fill="#94a3b8">RAM</text>
+  <text x="772" y="526" font-size="11.5" fill="#6ee7b7">one shared model set; freed on submit</text>
+</svg>

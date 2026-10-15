@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Access Key - {{ exam.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .key-gate {
+    min-height: 70vh; display: flex; align-items: center; justify-content: center;
+    padding: 2rem 1rem;
+  }
+  .key-card {
+    width: 100%; max-width: 420px; padding: 2rem;
+    border-radius: 16px; border: 1px solid var(--border-color, rgba(127,127,127,0.25));
+    background: var(--card-bg, rgba(127,127,127,0.06));
+    text-align: center;
+  }
+  .key-card h2 { font-size: 1.3rem; margin-bottom: 0.4rem; }
+  .key-card p { opacity: 0.75; font-size: 0.92rem; margin-bottom: 1.4rem; }
+  .key-card input {
+    width: 100%; padding: 0.8rem 1rem; margin-bottom: 0.6rem;
+    font-family: monospace; font-size: 1.2rem; letter-spacing: 0.25em;
+    text-transform: uppercase; text-align: center;
+    border-radius: 10px; border: 1.5px solid rgba(127,127,127,0.35);
+    background: transparent; color: inherit;
+  }
+  .key-card .key-error { color: #ef4444; min-height: 1.3em; font-size: 0.85rem; margin-bottom: 0.8rem; }
+  .key-card button {
+    width: 100%; padding: 0.8rem; border: none; border-radius: 10px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff;
+    font-weight: 600; font-size: 1rem; cursor: pointer;
+  }
+  .key-card button:disabled { opacity: 0.6; cursor: wait; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="key-gate">
+  <form class="key-card" id="keyForm" autocomplete="off">
+    <h2><i class="bi bi-key-fill"></i> {{ exam.title }}</h2>
+    <p>Enter the access key your instructor has announced to open this exam.</p>
+    <input id="keyInput" name="access_key" maxlength="20" required autofocus
+           aria-label="Exam access key">
+    <div class="key-error" id="keyError" role="alert"></div>
+    <button type="submit" id="keyBtn"><i class="bi bi-unlock-fill"></i> Verify &amp; Continue</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const form = document.getElementById('keyForm');
+    const input = document.getElementById('keyInput');
+    const error = document.getElementById('keyError');
+    const btn = document.getElementById('keyBtn');
+
+    input.addEventListener('input', () => {
+      input.value = input.value.toUpperCase();
+      error.textContent = '';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const key = input.value.trim().toUpperCase();
+      if (!key) { error.textContent = 'Please enter the access key.'; return; }
+
+      btn.disabled = true;
+      try {
+        const resp = await fetch('{{ url_for("exam.verify_exam_key", exam_id=exam.id) }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'access_key=' + encodeURIComponent(key)
+        });
+        const data = await resp.json();
+        if (data.success) {
+          /* The server now renders the paper for this session */
+          window.location.reload();
+          return;
+        }
+        error.textContent = data.error || 'Invalid key. Please try again.';
+        input.select();
+      } catch (err) {
+        error.textContent = 'Network error. Please try again.';
+      }
+      btn.disabled = false;
+    });
+  })();
+</script>
+{% endblock %}

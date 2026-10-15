@@ -394,7 +394,7 @@
                         '—' }}</td>
                     <td>
                         <button class="btn-delete-faculty"
-                            onclick="deleteFaculty({{ item.user.id }}, '{{ item.user.full_name or item.user.username }}')">
+                            onclick='deleteFaculty({{ item.user.id }}, {{ (item.user.full_name or item.user.username)|tojson }})'>
                             <i class="bi bi-trash"></i> Delete
                         </button>
                     </td>
@@ -420,8 +420,14 @@
         try {
             const resp = await fetch(`/admin/delete-faculty/${id}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
             });
+            
+            if (resp.redirected || !resp.headers.get('content-type')?.includes('application/json')) {
+                window.location.reload();
+                return;
+            }
+
             const data = await resp.json();
 
             if (data.success) {
@@ -431,7 +437,7 @@
                 alert('Error: ' + (data.error || 'Unknown error'));
             }
         } catch (err) {
-            alert('Network error: ' + err.message);
+            alert('Operation failed: ' + err.message);
         }
     }
 </script>
