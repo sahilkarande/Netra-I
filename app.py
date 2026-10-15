@@ -232,6 +232,10 @@ def create_app():
     # ──────────────────────────────────────────────────────────────
     from backend.socket_io import socketio
     socketio.init_app(app)
+
+    # CSRF tokens on every state-changing request (see backend/security.py)
+    from backend.security import init_csrf
+    init_csrf(app)
     print("✅ Socket.IO initialized for binary proctoring")
 
     # ──────────────────────────────────────────────────────────────
@@ -255,6 +259,14 @@ def create_app():
             'display-capture=(self)'
         )
         
+        # ── Hardening ──
+        # No framing by other sites (clickjacking on the exam page), no MIME
+        # sniffing, and no full URLs leaked to other origins.
+        response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+        response.headers.setdefault('Content-Security-Policy', "frame-ancestors 'self'")
+        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        response.headers.setdefault('Referrer-Policy', 'same-origin')
+
         # ── Feature-Policy (legacy browsers) ──
         response.headers['Feature-Policy'] = (
             "camera 'self'; microphone 'self'; fullscreen 'self'"

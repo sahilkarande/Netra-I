@@ -3,6 +3,7 @@
 Each test names the audit finding it guards.
 """
 
+import os
 import re
 from datetime import datetime, timedelta
 
@@ -546,3 +547,244 @@ def test_p1_5_exam_page_journals_answers_locally(app, seed, started_attempt):
     assert 'localStorage.setItem(JOURNAL_KEY' in html
     assert "ans.name = 'answers'" in html                  # submit carries answers
     assert 'remaining_seconds' in html                     # countdown resync
+
+
+# ── P1-1: CSRF ──────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def csrf_on(app):
+    app.config['CSRF_ENABLED'] = True
+    yield
+    app.config['CSRF_ENABLED'] = False
+
+
+def _page_token(client, path='/login'):
+    html = client.get(path).data.decode()
+    return re.search(r'<meta name="csrf-token" content="([^"]+)"', html).group(1)
+
+
+def test_p1_1_login_requires_token(app, seed, csrf_on):
+    client = app.test_client()
+    token = _page_token(client)
+    assert client.post('/login', data={'username': 'stud1', 'password': PASSWORD}).status_code == 302
+    assert client.get('/student/dashboard').status_code == 302          # not logged in
+    ok = client.post('/login', data={'username': 'stud1', 'password': PASSWORD, 'csrf_token': token})
+    assert ok.status_code == 302 and '/student/dashboard' in ok.headers['Location']
+
+
+def test_p1_1_state_change_without_token_is_refused(app, seed, csrf_on):
+    client = app.test_client()
+    token = _page_token(client)
+    client.post('/login', data={'username': 'faca', 'password': PASSWORD, 'csrf_token': token})
+    token = _page_token(client, '/faculty/dashboard')               # rotated at login
+
+    forged = client.post('/faculty/set_results_visibility', json={'visible': True})
+    assert forged.status_code == 400 and forged.get_json()['csrf'] is True
+    with app.app_context():
+        assert db.session.get(Exam, seed['exam']).results_published is False
+
+    real = client.post('/faculty/set_results_visibility', json={'visible': True},
+                       headers={'X-CSRFToken': token})
+    assert real.status_code == 200
+    with app.app_context():
+        assert db.session.get(Exam, seed['exam']).results_published is True
+
+
+def test_p1_1_wrong_token_is_refused(app, seed, csrf_on):
+    client = app.test_client()
+    _page_token(client)
+    resp = client.post('/login', data={'username': 'stud1', 'password': PASSWORD,
+                                       'csrf_token': 'not-the-token'})
+    assert resp.status_code == 302
+    assert client.get('/student/dashboard').status_code == 302
+
+
+def test_p1_1_pages_carry_the_token_and_hook(app, seed):
+    html = app.test_client().get('/login').data.decode()
+    assert '<meta name="csrf-token"' in html
+    assert "headers.set('X-CSRFToken', TOKEN)" in html
+    assert 'HTMLFormElement.prototype.submit' in html
+
+
+def test_p1_1_socketio_is_exempt(app, seed, csrf_on):
+    from backend.socket_io import socketio
+    client = app.test_client()
+    sock = socketio.test_client(app, flask_test_client=client)
+    assert sock.is_connected()
+    sock.disconnect()
+
+
+# ── P1-6: faculty batch report PDF ──────────────────────────────────────────
+
+def _report_payload(seed, **extra):
+    payload = {'batch_name': 'B1', 'exam_ids': [seed['exam']], 'prn_order': [],
+               'mark_edits': {}, 'col_names': [], 'col_notes': []}
+    payload.update(extra)
+    return payload
+
+
+def test_p1_6_report_pdf_is_generated(app, seed):
+    import base64
+    _set(app, User, seed['s1'], batch='B1')
+    fac = app.test_client()
+    login(fac, 'faca')
+    resp = fac.post('/faculty/student_report/pdf',
+                    json=_report_payload(seed, mark_edits={'0_0': '2'}, col_notes=['R&D <note>']))
+    data = resp.get_json()
+    assert resp.status_code == 200 and data['success'] is True
+    pdf = base64.b64decode(data['pdf_b64'])
+    assert pdf.startswith(b'%PDF') and data['filename'].endswith('.pdf')
+
+
+def test_p1_6_report_pdf_scoped_and_staff_only(app, seed):
+    _set(app, User, seed['s1'], batch='B1')
+    other = app.test_client()
+    login(other, 'facb')
+    assert other.post('/faculty/student_report/pdf', json=_report_payload(seed)).status_code == 403
+    student = app.test_client()
+    login(student, 'stud1')
+    assert student.post('/faculty/student_report/pdf', json=_report_payload(seed)).status_code == 403
+
+
+# ── P1-7: no dead AI checkbox ───────────────────────────────────────────────
+
+def test_p1_7_upload_page_has_no_ai_checkbox(app, seed):
+    fac = app.test_client()
+    login(fac, 'faca')
+    page = fac.get(f"/faculty/exam/{seed['exam']}/upload").data
+    assert b'enhance_with_ai' not in page and b'ANTHROPIC_API_KEY' not in page
+
+
+# ── P1-8: question uploads are validated ────────────────────────────────────
+
+def _upload(client, exam_id, body: bytes, name='q.csv'):
+    import io
+    return client.post(f'/faculty/exam/{exam_id}/upload',
+                       data={'file': (io.BytesIO(body), name)},
+                       content_type='multipart/form-data')
+
+
+def _question_count(app, exam_id):
+    from backend.models import Question
+    with app.app_context():
+        return Question.query.filter_by(exam_id=exam_id).count()
+
+
+@pytest.mark.parametrize('row,problem', [
+    (b'Q?,a,b,c,d,E,1', b'is not A, B, C or D'),
+    (b'Q?,a,b,c,d,,1', b'correct answer is missing'),
+    (b'Q?,a,b,,,C,1', b'option C is empty'),
+    (b'Q?,a,b,c,d,A,abc', b'is not a number'),
+    (b'Q?,a,,c,d,A,1', b'options A and B are required'),
+])
+def test_p1_8_bad_rows_reject_the_whole_file(app, seed, row, problem):
+    fac = app.test_client()
+    login(fac, 'faca')
+    body = b'question,option_a,option_b,option_c,option_d,correct_answer,points\nGood?,x,y,z,w,B,1\n' + row + b'\n'
+    resp = _upload(fac, seed['exam'], body)
+    assert resp.status_code == 302
+    assert _question_count(app, seed['exam']) == 2          # nothing added, not even the good row
+    page = fac.get(f"/faculty/exam/{seed['exam']}/upload").data
+    assert b'Row 3' in page and problem in page
+
+
+def test_p1_8_two_option_questions_store_empty_options(app, seed):
+    from backend.models import Question
+    fac = app.test_client()
+    login(fac, 'faca')
+    _upload(fac, seed['exam'], b'question,option_a,option_b,correct_answer\nTrue or false?,True,False,b\n')
+    with app.app_context():
+        q = Question.query.filter_by(question_text='True or false?').one()
+        assert (q.option_c, q.option_d, q.correct_answer) == (None, None, 'B')
+
+
+def test_p1_8_batch_create_rejects_bad_question_file(app, seed):
+    import io, json
+    fac = app.test_client()
+    login(fac, 'faca')
+    resp = fac.post('/api/faculty/batch-create-exams', data={
+        'exams_json': json.dumps([{'title': 'Bad set', 'duration_minutes': 30, 'passing_score': 50}]),
+        'file_0': (io.BytesIO(b'question,option_a,option_b,correct_answer\nQ?,a,b,Z\n'), 'set.csv'),
+    }, content_type='multipart/form-data')
+    assert resp.get_json()['success'] is False
+    with app.app_context():
+        assert Exam.query.filter_by(title='Bad set').count() == 0
+
+
+# ── P1-11: backups ──────────────────────────────────────────────────────────
+
+def test_p1_11_backup_round_trip(tmp_path):
+    import sqlite3
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'backup_db', os.path.join(os.path.dirname(__file__), '..', 'scripts', 'backup_db.py'))
+    backup_db = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(backup_db)
+
+    src = tmp_path / 'exam_platform.db'
+    con = sqlite3.connect(src)
+    con.execute('PRAGMA journal_mode=WAL')
+    con.execute('CREATE TABLE t (x INTEGER)')
+    con.execute('INSERT INTO t VALUES (42)')
+    con.commit()                                       # still partly in the -wal file
+
+    dest = tmp_path / 'backups'
+    for i in range(3):
+        path = backup_db.backup(str(src), str(dest), keep=2,
+                                now=datetime(2026, 1, 1, 9, 0, i))
+    con.close()
+    copy = sqlite3.connect(path)
+    assert copy.execute('select x from t').fetchone() == (42,)
+    assert copy.execute('PRAGMA journal_mode').fetchone()[0] == 'delete'
+    copy.close()
+    assert len(list(dest.iterdir())) == 2                # pruned to --keep, no side files
+
+
+def test_p1_11_backup_resolves_instance_path():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'backup_db', os.path.join(os.path.dirname(__file__), '..', 'scripts', 'backup_db.py'))
+    backup_db = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(backup_db)
+    assert backup_db.resolve_db_path('sqlite:///exam_platform.db').endswith(
+        os.path.join('instance', 'exam_platform.db'))
+
+
+# ── P2: cheap hardening ─────────────────────────────────────────────────────
+
+def test_p2_1_security_headers(app):
+    resp = app.test_client().get('/login')
+    assert resp.headers['X-Frame-Options'] == 'SAMEORIGIN'
+    assert resp.headers['X-Content-Type-Options'] == 'nosniff'
+    assert resp.headers['Referrer-Policy'] == 'same-origin'
+    assert "frame-ancestors 'self'" in resp.headers['Content-Security-Policy']
+
+
+def test_p2_2_socket_message_limit():
+    from backend.socket_io import socketio
+    assert socketio.server_options['max_http_buffer_size'] <= 1_000_000
+
+
+def test_p2_3_warning_count_survives_restart(app, seed):
+    from backend.services import proctor_service
+    _set(app, StudentExam, seed['attempt'], total_violations=7)
+    with app.app_context():
+        exam = db.session.get(Exam, seed['exam'])
+        proctor_service.cleanup_proctor_instance(seed['attempt'])
+        state, _vision = proctor_service.get_proctor_instance(seed['attempt'], exam)
+        assert state.warning_count == 7
+        proctor_service.cleanup_proctor_instance(seed['attempt'])
+
+
+def test_p2_12_pdf_handles_markup_in_text(app, seed):
+    from backend.models import Question
+    with app.app_context():
+        q = db.session.get(Question, seed['q1'])
+        q.question_text = "R&D: what is print(type([]))? <class 'list'>"
+        q.option_a = "<class 'list'> & more"
+        db.session.get(Exam, seed['exam']).results_published = True
+        db.session.commit()
+    client = app.test_client()
+    login(client, 'stud1')
+    resp = client.get(f"/student/exam/{seed['attempt']}/download-pdf")
+    assert resp.status_code == 200 and resp.data.startswith(b'%PDF')

@@ -10,6 +10,48 @@
 
 <link rel="icon" href="{{ url_for('static', filename='images/applogo.png') }}" type="image/png">
 
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script>
+  /* CSRF: every same-origin state-changing request carries the session token.
+     fetch() gets an X-CSRFToken header; HTML forms get a hidden field, both on
+     a normal submit and on form.submit() called from script. */
+  (function () {
+    const TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+    const SAFE = /^(GET|HEAD|OPTIONS|TRACE)$/i;
+    const sameOrigin = (url) => {
+      try { return new URL(url, location.href).origin === location.origin; } catch (_) { return false; }
+    };
+
+    const realFetch = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+      init = init || {};
+      const method = init.method || (input instanceof Request ? input.method : 'GET');
+      const url = input instanceof Request ? input.url : input;
+      if (!SAFE.test(method) && sameOrigin(url)) {
+        const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+        if (!headers.has('X-CSRFToken')) headers.set('X-CSRFToken', TOKEN);
+        init = Object.assign({}, init, { headers });
+      }
+      return realFetch(input, init);
+    };
+
+    function addToken(form) {
+      if (!form || SAFE.test(form.method || 'GET') || !sameOrigin(form.action || location.href)) return;
+      let field = form.querySelector('input[name="csrf_token"]');
+      if (!field) {
+        field = document.createElement('input');
+        field.type = 'hidden';
+        field.name = 'csrf_token';
+        form.appendChild(field);
+      }
+      field.value = TOKEN;
+    }
+    document.addEventListener('submit', (e) => addToken(e.target), true);
+    const realSubmit = HTMLFormElement.prototype.submit;
+    HTMLFormElement.prototype.submit = function () { addToken(this); return realSubmit.call(this); };
+  })();
+</script>
+
 <!-- All third-party assets are served locally (static/vendor) so pages work offline -->
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
 

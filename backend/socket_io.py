@@ -24,5 +24,6 @@ socketio = SocketIO(
     logger=False,
     ping_timeout=60,
     ping_interval=25,
-    max_http_buffer_size=10000000
+    # Proctoring frames are ~15 KB; a 10 MB ceiling only invited memory abuse
+    max_http_buffer_size=1_000_000
 )

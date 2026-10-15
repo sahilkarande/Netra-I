@@ -139,6 +139,10 @@ def get_proctor_instance(student_exam_id: int, exam):
                 max_warnings=max_warnings,
                 evidence_dir=evidence_dir
             )
+            # Engine state lives in memory; after a server restart, carry on
+            # from the warnings already recorded rather than starting at zero.
+            if student_exam and student_exam.total_violations:
+                proctor_state.warning_count = int(student_exam.total_violations)
             vision = OpenVINOProctor(
                 proctor_state,
                 device="CPU",

@@ -26,7 +26,9 @@ PASSWORD = 'Passw0rd!'
 @pytest.fixture(scope='session')
 def app():
     application = create_app()
-    application.config.update(TESTING=True)
+    # CSRF is exercised by its own tests (test_phase1_hardening.py); the rest
+    # of the suite posts directly.
+    application.config.update(TESTING=True, CSRF_ENABLED=False)
     # Anything the app writes under instance/ (e.g. credential sheets) goes
     # to a throwaway folder, never the real installation's.
     application.instance_path = os.path.join(_DB_DIR, 'instance')

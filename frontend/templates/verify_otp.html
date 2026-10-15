@@ -44,6 +44,7 @@
 
                 <!-- OTP Form -->
                 <form method="POST" id="otpForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <!-- OTP Input -->
                     <div class="otp-input-group">
                         <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" autocomplete="off" data-index="0" required>
@@ -191,6 +192,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}',
                     }
                 });
 

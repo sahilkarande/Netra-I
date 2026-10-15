@@ -16,6 +16,16 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from reportlab.pdfgen import canvas
 from reportlab.platypus.flowables import HRFlowable
 from io import BytesIO
+from xml.sax.saxutils import escape as _xml_escape
+
+
+def _esc(value) -> str:
+    """Text for a ReportLab Paragraph, which parses its input as markup.
+
+    Question banks routinely contain '<', '>' and '&' (e.g. "<class 'list'>"),
+    which ReportLab would otherwise swallow as tags or reject.
+    """
+    return _xml_escape('' if value is None else str(value))
 from datetime import datetime
 
 
@@ -197,7 +207,7 @@ def create_info_cards(student, exam, student_exam, styles):
     elements.append(Paragraph("Student Information", styles['SectionHeading']))
     
     student_data = [
-        ['Full Name:', Paragraph(f"<b>{student.full_name or student.username}</b>", styles['Normal'])],
+        ['Full Name:', Paragraph(f"<b>{_esc(student.full_name or student.username)}</b>", styles['Normal'])],
         ['Username:', student.username],
         ['Email:', student.email],
     ]
@@ -234,7 +244,7 @@ def create_info_cards(student, exam, student_exam, styles):
     elements.append(Paragraph("Examination Details", styles['SectionHeading']))
     
     exam_data = [
-        ['Exam Title:', Paragraph(f"<b>{exam.title}</b>", styles['Normal'])],
+        ['Exam Title:', Paragraph(f"<b>{_esc(exam.title)}</b>", styles['Normal'])],
         ['Description:', exam.description[:80] + '...' if exam.description and len(exam.description) > 80 else exam.description or 'N/A'],
         ['Duration:', f"{exam.duration_minutes} minutes"],
         ['Total Questions:', str(len(exam.questions))],
@@ -432,7 +442,7 @@ def create_detailed_questions(answers_with_questions, styles):
         question_elements.append(header_table)
         
         # Question text
-        q_text = Paragraph(f"<b>Q.</b> {question.question_text}", styles['QuestionText'])
+        q_text = Paragraph(f"<b>Q.</b> {_esc(question.question_text)}", styles['QuestionText'])
         question_elements.append(Spacer(1, 0.08*inch))
         question_elements.append(q_text)
         question_elements.append(Spacer(1, 0.1*inch))
@@ -444,6 +454,7 @@ def create_detailed_questions(answers_with_questions, styles):
         
         for label, option_text in zip(option_labels, option_values):
             if option_text:  # Only show non-empty options
+                option_text = _esc(option_text)
                 # Determine styling based on correct answer and student's answer
                 is_correct_option = (label == question.correct_answer)
                 is_student_answer = (label == answer.selected_answer)
@@ -474,8 +485,8 @@ def create_detailed_questions(answers_with_questions, styles):
         question_elements.append(Spacer(1, 0.08*inch))
         
         answer_info_data = [[
-            Paragraph(f"<b>Your Answer:</b> {answer.selected_answer or 'Not Answered'}", styles['Normal']),
-            Paragraph(f"<b>Correct Answer:</b> {question.correct_answer}", styles['Normal'])
+            Paragraph(f"<b>Your Answer:</b> {_esc(answer.selected_answer or 'Not Answered')}", styles['Normal']),
+            Paragraph(f"<b>Correct Answer:</b> {_esc(question.correct_answer)}", styles['Normal'])
         ]]
         
         answer_info_table = Table(answer_info_data, colWidths=[3.3*inch, 3.2*inch])
@@ -612,7 +623,7 @@ def generate_batch_report_pdf(batch_name, exam_titles, report_data, summary_data
     # ---------------- HEADER ----------------
     elements.append(Paragraph("📊 BATCH PERFORMANCE REPORT", styles['MainTitle']))
     
-    subtitle = f"Batch: <b>{batch_name}</b> | Exams: <b>{', '.join(exam_titles)}</b>"
+    subtitle = f"Batch: <b>{_esc(batch_name)}</b> | Exams: <b>{_esc(', '.join(exam_titles))}</b>"
     elements.append(Paragraph(subtitle, styles['SubTitle']))
 
     elements.append(HRFlowable(
@@ -660,9 +671,9 @@ def generate_batch_report_pdf(batch_name, exam_titles, report_data, summary_data
     for i, title in enumerate(exam_titles):
         short_title = title if len(title) <= 25 else title[:22] + "..."
         note = col_notes[i].strip() if col_notes and i < len(col_notes) and col_notes[i].strip() else ''
-        header_html = f"<b>{short_title}</b>"
+        header_html = f"<b>{_esc(short_title)}</b>"
         if note:
-            header_html += f"<br/><i><font size='7' color='#94a3b8'>{note}</font></i>"
+            header_html += f"<br/><i><font size='7' color='#94a3b8'>{_esc(note)}</font></i>"
         wrapped_headers.append(Paragraph(header_html, styles['Normal']))
 
     wrapped_headers.extend([

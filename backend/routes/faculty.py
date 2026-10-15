@@ -497,60 +497,43 @@ def upload_questions(exam_id):
             flash('No file selected', 'error')
             return redirect(request.url)
             
-        filename = secure_filename(file.filename).lower()
-        try:
-            questions_data = []
-            if filename.endswith('.csv'):
-                stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-                questions_data = list(csv.DictReader(stream))
-            elif filename.endswith('.json'):
-                questions_data = json.loads(file.stream.read().decode("UTF8"))
-            elif filename.endswith('.xlsx') or filename.endswith('.xls'):
-                import pandas as pd
-                df = pd.read_excel(file.stream)
-                questions_data = df.to_dict(orient='records')
-            
-            if not questions_data:
-                flash('No valid data found in file', 'error')
-                return redirect(request.url)
+        from backend.services.question_splitter import validate_questions
 
-            # Check for questions count
-            count = 0
-            for row in questions_data:
-                # Robust column mapping
-                question_text = row.get('question') or row.get('question_text') or row.get('text')
-                if not question_text: continue
-                
-                a = row.get('a') or row.get('option_a') or row.get('option1') or row.get('Option A')
-                b = row.get('b') or row.get('option_b') or row.get('option2') or row.get('Option B')
-                c = row.get('c') or row.get('option_c') or row.get('option3') or row.get('Option C')
-                d = row.get('d') or row.get('option_d') or row.get('option4') or row.get('Option D')
-                ans = str(row.get('answer') or row.get('correct_answer') or row.get('correct') or 'A').strip().upper()
-                points = float(row.get('points') or row.get('score') or 1.0)
-
-                q = Question(
-                    exam_id=exam_id,
-                    question_text=question_text,
-                    option_a=str(a),
-                    option_b=str(b),
-                    option_c=str(c),
-                    option_d=str(d),
-                    correct_answer=ans,
-                    points=points
-                )
-                db.session.add(q)
-                count += 1
-            
-            db.session.commit()
-            flash(f'Successfully uploaded {count} questions!', 'success')
-            return redirect(url_for('faculty.view_exam', exam_id=exam_id))
-        except Exception as e:
-            db.session.rollback()
-            traceback.print_exc()
-            current_app.logger.exception('upload_questions failed')
-            flash('Could not read the question file. Check its columns and values.', 'error')
+        filename = secure_filename(file.filename or '').lower()
+        questions, errors = validate_questions(filename, file.read())
+        if errors:
+            # All-or-nothing: a paper is never half-uploaded
+            shown = errors[:8]
+            more = f' (+{len(errors) - len(shown)} more)' if len(errors) > len(shown) else ''
+            flash('Nothing was uploaded. Fix these rows and try again: '
+                  + ' | '.join(shown) + more, 'error')
             return redirect(request.url)
-            
+
+        try:
+            next_order = (db.session.query(func.max(Question.order_number))
+                          .filter_by(exam_id=exam_id).scalar() or 0)
+            for i, q in enumerate(questions, start=1):
+                db.session.add(Question(
+                    exam_id=exam_id,
+                    question_text=q['question'],
+                    option_a=q['option_a'],
+                    option_b=q['option_b'],
+                    option_c=q['option_c'],
+                    option_d=q['option_d'],
+                    correct_answer=q['correct_answer'],
+                    points=q['points'],
+                    order_number=next_order + i,
+                ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('upload_questions failed')
+            flash('Could not save the questions. Please try again.', 'error')
+            return redirect(request.url)
+
+        flash(f'Successfully uploaded {len(questions)} questions!', 'success')
+        return redirect(url_for('faculty.view_exam', exam_id=exam_id))
+
     return render_template('faculty/upload_questions.html', exam=exam)
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>')
@@ -788,6 +771,83 @@ def faculty_students():
                          departments=departments,
                          credentials_token=session.get('credentials_token'))
 
+def _empty_summary():
+    return {'total_students': 0, 'appeared': 0, 'passed': 0, 'failed': 0,
+            'absent': 0, 'average_marks': 0.0, 'pass_percentage': 0.0}
+
+
+def _summarise_rows(report_data):
+    """Recompute the summary block from finished report rows."""
+    summary = _empty_summary()
+    summary['total_students'] = len(report_data)
+    total_pct = 0.0
+    for row in report_data:
+        if row['status'] == 'absent':
+            summary['absent'] += 1
+            continue
+        summary['appeared'] += 1
+        summary['passed' if row['status'] == 'pass' else 'failed'] += 1
+        total_pct += row['percentage']
+    if summary['appeared']:
+        summary['average_marks'] = total_pct / summary['appeared']
+        summary['pass_percentage'] = summary['passed'] / summary['appeared'] * 100
+    return summary
+
+
+def _build_batch_report(selected_batch, selected_exam_ids, exams):
+    """Rows for the batch report: one per student, one mark column per exam.
+
+    Shared by the on-screen report and its PDF so both always agree. Only
+    exams in `exams` (what this staff member can access) are included.
+    """
+    report_data, exam_titles = [], []
+    if not (selected_batch and selected_exam_ids):
+        return exam_titles, report_data, _empty_summary()
+
+    by_id = {e.id: e for e in exams}
+    selected_exams = [by_id[eid] for eid in selected_exam_ids if eid in by_id]
+    exam_titles = [e.title for e in selected_exams]
+
+    students = account_service.scoped_students_query(current_user).filter(
+        User.batch == selected_batch).all()
+
+    for student in students:
+        row = {
+            'prn_number': student.prn_number,
+            'full_name': student.full_name or student.username,
+            'exam_marks': [],
+            'total_marks': 0.0,
+            'max_possible': 0.0,
+            'percentage': 0.0,
+            'status': 'absent',
+        }
+        for exam in selected_exams:
+            se = StudentExam.query.filter_by(student_id=student.id, exam_id=exam.id).first()
+            if se and se.status in ('submitted', 'completed'):
+                score = se.score or 0.0
+                row['exam_marks'].append(round(score, 2))
+                row['total_marks'] += score
+                row['max_possible'] += (se.total_points or 100.0)
+            else:
+                row['exam_marks'].append('Absent')
+        _finish_row(row)
+        report_data.append(row)
+
+    return exam_titles, report_data, _summarise_rows(report_data)
+
+
+def _finish_row(row):
+    """Percentage and pass/fail from a row's marks."""
+    marks = [m for m in row['exam_marks'] if m != 'Absent']
+    if not marks:
+        row['status'] = 'absent'
+        row['percentage'] = 0.0
+        return
+    if row['max_possible'] > 0:
+        row['percentage'] = row['total_marks'] / row['max_possible'] * 100
+    row['status'] = 'pass' if row['percentage'] >= 50 else 'fail'
+
+
 @faculty_bp.route('/faculty/student_report', methods=['GET'])
 @login_required
 @staff_required
@@ -809,87 +869,9 @@ def faculty_student_report():
     selected_exam_ids_str = request.args.getlist('exam_ids')
     selected_exam_ids = [int(eid) for eid in selected_exam_ids_str if eid.isdigit()]
 
-    report_data = []
-    exam_titles = []
-    summary = {
-        'total_students': 0,
-        'appeared': 0,
-        'passed': 0,
-        'failed': 0,
-        'absent': 0,
-        'average_marks': 0.0,
-        'pass_percentage': 0.0
-    }
-    
-    if selected_batch and selected_exam_ids:
-        # Get students in the selected batch
-        students = account_service.scoped_students_query(current_user).filter(User.batch == selected_batch).all()
-        summary['total_students'] = len(students)
-        
-        # Get selected exam objects in order
-        selected_exams = []
-        for eid in selected_exam_ids:
-            for ex in exams:
-                if ex.id == eid:
-                    selected_exams.append(ex)
-                    exam_titles.append(ex.title)
-                    break
-        
-        total_marks_all = 0
-        
-        for student in students:
-            student_row = {
-                'prn_number': student.prn_number,
-                'full_name': student.full_name or student.username,
-                'exam_marks': [],
-                'total_marks': 0.0,
-                'max_possible': 0.0,
-                'percentage': 0.0,
-                'status': 'absent'
-            }
-            
-            appeared_in_any = False
-            passed_all = True
-            
-            for exam in selected_exams:
-                # Find StudentExam for this student and exam
-                student_exam = StudentExam.query.filter_by(student_id=student.id, exam_id=exam.id).first()
-                
-                if student_exam and student_exam.status in ['submitted', 'completed']:
-                    appeared_in_any = True
-                    score = student_exam.score or 0.0
-                    student_row['exam_marks'].append(round(score, 2))
-                    student_row['total_marks'] += score
-                    student_row['max_possible'] += (student_exam.total_points or 100.0) # Using total_points if available
-                    
-                    if not student_exam.passed:
-                        passed_all = False
-                else:
-                    student_row['exam_marks'].append('Absent')
-                    passed_all = False
-                    
-            if appeared_in_any:
-                summary['appeared'] += 1
-                if student_row['max_possible'] > 0:
-                    student_row['percentage'] = (student_row['total_marks'] / student_row['max_possible']) * 100
-                
-                if student_row['percentage'] >= 50:
-                    student_row['status'] = 'pass'
-                    summary['passed'] += 1
-                else:
-                    student_row['status'] = 'fail'
-                    summary['failed'] += 1
-                    
-                total_marks_all += student_row['percentage']
-            else:
-                summary['absent'] += 1
-                
-            report_data.append(student_row)
-            
-        if summary['appeared'] > 0:
-            summary['average_marks'] = total_marks_all / summary['appeared']
-            summary['pass_percentage'] = (summary['passed'] / summary['appeared']) * 100
-            
+    exam_titles, report_data, summary = _build_batch_report(
+        selected_batch, selected_exam_ids, exams)
+
     return render_template('faculty/student_report.html',
                          batches=batches,
                          exams=exams,
@@ -903,8 +885,70 @@ def faculty_student_report():
 @login_required
 @staff_required
 def faculty_student_report_pdf():
-    # Placeholder for PDF generation
-    return "PDF Report generation triggered"
+    """Batch report as a PDF, matching what the faculty sees on screen.
+
+    Marks come from the database; the page's optional hand edits, column
+    names, notes and row order are presentation only. Edited rows are flagged
+    in the PDF so a changed mark is never passed off as the recorded one.
+    """
+    import base64
+    from backend.services.pdf_generator import generate_batch_report_pdf
+
+    payload = request.get_json(silent=True) or {}
+    batch_name = str(payload.get('batch_name') or '').strip()
+    try:
+        exam_ids = [int(e) for e in (payload.get('exam_ids') or [])]
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid exam selection."}), 400
+    if not batch_name or not exam_ids:
+        return jsonify({"success": False, "error": "Choose a batch and at least one exam."}), 400
+
+    exam_titles, report_data, _summary = _build_batch_report(
+        batch_name, exam_ids, _get_faculty_exams())
+    if not exam_titles:
+        return jsonify({"success": False, "error": "None of those exams are available to you."}), 403
+
+    # Hand edits: {"<row>_<exam>": value} in on-screen (database) row order
+    edited = set()
+    for key, value in (payload.get('mark_edits') or {}).items():
+        try:
+            si, mi = (int(x) for x in str(key).split('_', 1))
+            row = report_data[si]
+            if not 0 <= mi < len(row['exam_marks']):
+                continue
+            new = 'Absent' if str(value).strip().lower() == 'absent' else round(float(value), 2)
+        except (ValueError, IndexError, TypeError):
+            continue
+        row['exam_marks'][mi] = new
+        edited.add(si)
+    for si in edited:
+        row = report_data[si]
+        row['total_marks'] = sum(m for m in row['exam_marks'] if m != 'Absent')
+        _finish_row(row)
+        row['full_name'] = f"{row['full_name']} (edited)"
+
+    # Visible order / filtering from the page, by PRN
+    prn_order = [str(p) for p in (payload.get('prn_order') or []) if str(p)]
+    if prn_order:
+        by_prn = {}
+        for row in report_data:
+            by_prn.setdefault(str(row['prn_number'] or ''), []).append(row)
+        report_data = [r for p in prn_order for r in by_prn.pop(p, [])]
+
+    col_names = [str(c).strip() for c in (payload.get('col_names') or [])]
+    if len(col_names) == len(exam_titles):
+        exam_titles = [c or t for c, t in zip(col_names, exam_titles)]
+    col_notes = [str(n) for n in (payload.get('col_notes') or [])][:len(exam_titles)]
+
+    pdf = generate_batch_report_pdf(batch_name, exam_titles, report_data,
+                                    _summarise_rows(report_data), col_notes=col_notes)
+    data = pdf.getvalue() if hasattr(pdf, 'getvalue') else bytes(pdf)
+    safe_batch = ''.join(c if c.isalnum() or c in '-_' else '_' for c in batch_name) or 'batch'
+    return jsonify({
+        "success": True,
+        "filename": f"{safe_batch}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+        "pdf_b64": base64.b64encode(data).decode('ascii'),
+    })
 
 @faculty_bp.route('/faculty/student/<int:student_id>/profile')
 @login_required
@@ -1227,9 +1271,17 @@ def batch_create_exams():
             questions_count = 0
             upload = request.files.get(f'file_{index}')
             if upload and upload.filename:
-                ok, _message, questions = question_splitter.parse_questions(
+                questions, q_errors = question_splitter.validate_questions(
                     secure_filename(upload.filename), upload.read())
-                if ok:
+                if q_errors:
+                    # Same rule as a single upload: no half-built paper
+                    db.session.delete(new_exam)     # it was flushed for its id
+                    db.session.flush()
+                    failed.append({"row": index + 1,
+                                   "title": row.get('title') or f'Row {index + 1}',
+                                   "errors": q_errors[:8]})
+                    continue
+                if questions:
                     for order, q in enumerate(questions, start=1):
                         db.session.add(Question(
                             exam_id=new_exam.id,
