@@ -135,11 +135,24 @@ def faculty_dashboard():
     leaderboard_visible_count = sum(1 for e in exams if e.show_leaderboard)
     visibility = _visibility_state(exams)
     
-    # Get recent submissions
-    recent_activities = StudentExam.query.filter(StudentExam.exam_id.in_(exam_ids)).order_by(StudentExam.submitted_at.desc()).limit(10).all()
-        
-    return render_template('faculty/dashboard.html', 
+    # Latest submissions (finished attempts only — the list is labelled as such)
+    recent_activities = (StudentExam.query
+                         .filter(StudentExam.exam_id.in_(exam_ids),
+                                 StudentExam.submitted_at.isnot(None))
+                         .order_by(StudentExam.submitted_at.desc())
+                         .limit(8).all()) if exam_ids else []
+
+    from backend.services import dashboard_service
+    exam_rows = dashboard_service.exam_rows(exams)
+
+    return render_template('faculty/dashboard.html',
                          exams=exams,
+                         exam_rows=exam_rows,
+                         attention=dashboard_service.attention_items(exam_rows),
+                         score_bands=dashboard_service.score_distribution(exam_ids),
+                         active_count=sum(1 for r in exam_rows if r['status'] in ('live', 'open')),
+                         scheduled_count=sum(1 for r in exam_rows if r['status'] == 'scheduled'),
+                         submitted_count=len(submitted_exams),
                          total_attempts=total_attempts,
                          unique_students=unique_students,
                          avg_class_score=avg_class_score,

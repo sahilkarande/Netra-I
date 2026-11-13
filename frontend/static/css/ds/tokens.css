@@ -1,0 +1,204 @@
+/*
+ * Netra-I design system · tokens
+ *
+ * Two layers:
+ *   1. Primitives  raw colour ramps and scales. Never used by components.
+ *   2. Semantic    what a value is for (surface, text, accent, danger …).
+ *                  Components use only these, so a theme changes tokens
+ *                  and nothing else.
+ *
+ * Theme selection (same pattern as the rest of the app):
+ *   no data-theme       follows the device (prefers-color-scheme)
+ *   data-theme="light"  forces light
+ *   data-theme="dark"   forces dark
+ *
+ * Contrast for every text pairing is checked in tests/test_design_system.py.
+ */
+
+:root {
+  /* ── Primitives · colour ─────────────────────────────── */
+  --cobalt-50:  #EEF3FD;
+  --cobalt-100: #E1EAFB;
+  --cobalt-200: #C5D5F6;
+  --cobalt-300: #95B5FF;
+  --cobalt-400: #7AA2FF;
+  --cobalt-600: #1F4FD1;
+  --cobalt-700: #1A43B4;
+  --cobalt-950: #0C1530;
+
+  --slate-0:   #FFFFFF;
+  --slate-25:  #F7F8FA;
+  --slate-50:  #F2F4F7;
+  --slate-100: #E9ECF1;
+  --slate-200: #DDE2EA;
+  --slate-300: #C5CCD7;
+  --slate-400: #9AA3B1;
+  --slate-600: #5F6979;
+  --slate-700: #465163;
+  --slate-950: #111723;
+
+  --graphite-950: #0C0E11;
+  --graphite-900: #14171C;
+  --graphite-875: #181C21;
+  --graphite-850: #1B1F25;
+  --graphite-800: #20252C;
+  --graphite-750: #2A3039;
+  --graphite-700: #3A424D;
+  --graphite-400: #7E8796;
+  --graphite-300: #A6AEBB;
+  --graphite-100: #E7EAEF;
+
+  --green-600: #13794A;  --green-50: #E5F4EC;  --green-400: #45C285;
+  --amber-600: #A35A07;  --amber-50: #FCF1DF;  --amber-400: #E6A748;
+  --red-600:   #BE3229;  --red-50:   #FBE9E7;  --red-400:   #F26B61;
+  --teal-600:  #0B7A70;  --teal-400: #45C7B3;
+
+  /* ── Semantic · light (default) ──────────────────────── */
+  --bg-canvas:   var(--slate-50);    /* app background */
+  --bg-surface:  var(--slate-0);     /* panels, tables, sidebar */
+  --bg-subtle:   var(--slate-25);    /* table headers, wells */
+  --bg-raised:   var(--slate-0);     /* menus, dialogs, toasts */
+  --bg-hover:    var(--slate-25);
+  --bg-pressed:  var(--slate-100);
+  --bg-selected: var(--cobalt-50);
+
+  --border:        var(--slate-200);
+  --border-strong: var(--slate-300);
+
+  --text:        var(--slate-950);
+  --text-muted:  var(--slate-700);
+  --text-subtle: var(--slate-600);
+  --text-on-accent: #FFFFFF;
+
+  --accent:        var(--cobalt-600);
+  --accent-hover:  var(--cobalt-700);
+  --accent-subtle: var(--cobalt-50);
+  --focus-ring:    rgba(31, 79, 209, 0.35);
+
+  --success: var(--green-600);  --success-subtle: var(--green-50);
+  --warning: var(--amber-600);  --warning-subtle: var(--amber-50);
+  --danger:  var(--red-600);    --danger-subtle:  var(--red-50);
+
+  --chart-1: var(--cobalt-600);
+  --chart-2: var(--teal-600);
+  --chart-grid: var(--slate-200);
+
+  --scrim: rgba(17, 23, 35, 0.42);
+  --shadow-xs: 0 1px 2px rgba(17, 23, 35, 0.05);
+  --shadow-sm: 0 1px 2px rgba(17, 23, 35, 0.06), 0 1px 1px rgba(17, 23, 35, 0.04);
+  --shadow-overlay: 0 16px 40px -12px rgba(17, 23, 35, 0.22), 0 2px 6px rgba(17, 23, 35, 0.06);
+  --shadow-thumb: 0 1px 2px rgba(17, 23, 35, 0.25);   /* switch knob */
+
+  color-scheme: light;
+
+  /* ── Typography ──────────────────────────────────────── */
+  --font-display: "Instrument Sans", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --text-2xs: 0.6875rem;  /* 11 · table headings, eyebrows */
+  --text-xs:  0.75rem;    /* 12 · captions, badges */
+  --text-sm:  0.8125rem;  /* 13 · dense UI, tables */
+  --text-base: 0.9375rem; /* 15 · body */
+  --text-md:  1.0625rem;  /* 17 · question text */
+  --text-lg:  1.25rem;    /* 20 · section titles */
+  --text-xl:  1.5rem;     /* 24 · page titles (compact) */
+  --text-2xl: 1.875rem;   /* 30 · page titles, stat values */
+  --text-3xl: 2.5rem;     /* 40 · marketing only */
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+
+  /* ── Space (4 px grid) ───────────────────────────────── */
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px;  --space-6: 24px;  --space-8: 32px;  --space-10: 40px;
+  --space-12: 48px; --space-16: 64px;
+
+  /* ── Shape ───────────────────────────────────────────── */
+  --radius-sm: 4px;     /* badges, chips */
+  --radius-md: 6px;     /* buttons, inputs, nav items */
+  --radius-lg: 8px;     /* panels, cards, tables */
+  --radius-xl: 12px;    /* dialogs */
+  --radius-full: 999px;
+
+  /* ── Motion ──────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;   /* hover, press, focus */
+  --duration-base: 180ms;   /* menus, tabs, toasts */
+  --duration-slow: 260ms;   /* dialogs, drawers, entrance */
+
+  /* ── Layout ──────────────────────────────────────────── */
+  --sidebar-width: 236px;
+  --topbar-height: 56px;
+  --page-max: 1360px;
+  --z-sticky: 20;
+  --z-drawer: 40;
+  --z-menu: 50;
+  --z-toast: 60;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-canvas:   var(--graphite-950);
+    --bg-surface:  var(--graphite-900);
+    --bg-subtle:   var(--graphite-875);
+    --bg-raised:   var(--graphite-850);
+    --bg-hover:    var(--graphite-850);
+    --bg-pressed:  var(--graphite-800);
+    --bg-selected: rgba(122, 162, 255, 0.14);
+    --border:        var(--graphite-750);
+    --border-strong: var(--graphite-700);
+    --text:        var(--graphite-100);
+    --text-muted:  var(--graphite-300);
+    --text-subtle: var(--graphite-400);
+    --text-on-accent: var(--cobalt-950);
+    --accent:        var(--cobalt-400);
+    --accent-hover:  var(--cobalt-300);
+    --accent-subtle: rgba(122, 162, 255, 0.14);
+    --focus-ring:    rgba(122, 162, 255, 0.45);
+    --success: var(--green-400);  --success-subtle: rgba(69, 194, 133, 0.13);
+    --warning: var(--amber-400);  --warning-subtle: rgba(230, 167, 72, 0.13);
+    --danger:  var(--red-400);    --danger-subtle:  rgba(242, 107, 97, 0.13);
+    --chart-1: var(--cobalt-400);
+    --chart-2: var(--teal-400);
+    --chart-grid: var(--graphite-750);
+    --scrim: rgba(0, 0, 0, 0.6);
+    --shadow-xs: none;
+    --shadow-sm: 0 0 0 1px rgba(0, 0, 0, 0.2);
+    --shadow-overlay: 0 20px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--graphite-750);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-canvas:   var(--graphite-950);
+  --bg-surface:  var(--graphite-900);
+  --bg-subtle:   var(--graphite-875);
+  --bg-raised:   var(--graphite-850);
+  --bg-hover:    var(--graphite-850);
+  --bg-pressed:  var(--graphite-800);
+  --bg-selected: rgba(122, 162, 255, 0.14);
+  --border:        var(--graphite-750);
+  --border-strong: var(--graphite-700);
+  --text:        var(--graphite-100);
+  --text-muted:  var(--graphite-300);
+  --text-subtle: var(--graphite-400);
+  --text-on-accent: var(--cobalt-950);
+  --accent:        var(--cobalt-400);
+  --accent-hover:  var(--cobalt-300);
+  --accent-subtle: rgba(122, 162, 255, 0.14);
+  --focus-ring:    rgba(122, 162, 255, 0.45);
+  --success: var(--green-400);  --success-subtle: rgba(69, 194, 133, 0.13);
+  --warning: var(--amber-400);  --warning-subtle: rgba(230, 167, 72, 0.13);
+  --danger:  var(--red-400);    --danger-subtle:  rgba(242, 107, 97, 0.13);
+  --chart-1: var(--cobalt-400);
+  --chart-2: var(--teal-400);
+  --chart-grid: var(--graphite-750);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-xs: none;
+  --shadow-sm: 0 0 0 1px rgba(0, 0, 0, 0.2);
+  --shadow-overlay: 0 20px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--graphite-750);
+  color-scheme: dark;
+}

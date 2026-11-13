@@ -1,0 +1,15 @@
+{# Flash messages as toasts. Errors stay until dismissed; others fade after 5 s. #}
+{% set tones = {'error': 'danger', 'danger': 'danger', 'warning': 'warning', 'success': 'success'} %}
+{% set icons = {'danger': 'x-circle-fill', 'warning': 'exclamation-triangle-fill', 'success': 'check-circle-fill', 'accent': 'info-circle-fill'} %}
+<div class="nx-toasts" aria-live="polite">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      {% set tone = tones.get(category, 'accent') %}
+      <div class="nx-toast nx-tone-{{ tone }}" data-tone="{{ tone }}" role="{{ 'alert' if tone == 'danger' else 'status' }}">
+        <i class="bi bi-{{ icons[tone] }}" aria-hidden="true"></i>
+        <div class="nx-toast__text">{{ message }}</div>
+        <button type="button" class="nx-toast__close" aria-label="Dismiss">&times;</button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+</div>

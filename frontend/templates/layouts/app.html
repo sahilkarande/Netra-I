@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+{#
+  Netra-I app shell (design system).
+  Pages that have been redesigned extend this instead of base.html. It loads
+  only the design-system stylesheets — no Bootstrap, no legacy style.css — so
+  redesigned pages cannot be affected by old rules and vice versa.
+
+  Blocks: title, topbar_title, content, extra_css, extra_js
+#}
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Netra-I{% endblock %} · Netra-I</title>
+  <link rel="icon" href="{{ url_for('static', filename='images/applogo.png') }}" type="image/png">
+
+  {% include 'partials/theme_init.html' %}
+  {% include 'partials/csrf.html' %}
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/fonts.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/components.css') }}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <a class="nx-skip" href="#main">Skip to content</a>
+
+  <div class="nx-app">
+    {% include 'partials/sidebar.html' %}
+    <div class="nx-scrim" aria-hidden="true"></div>
+
+    <div class="nx-main">
+      <header class="nx-topbar">
+        <button type="button" class="nx-btn nx-btn--ghost nx-btn--icon nx-topbar__menu-btn"
+                data-nx-drawer-toggle aria-controls="nx-sidebar" aria-expanded="false" aria-label="Open navigation">
+          <i class="bi bi-list" aria-hidden="true"></i>
+        </button>
+        <div class="nx-topbar__title">{% block topbar_title %}{% endblock %}</div>
+        {% include 'partials/topbar_end.html' %}
+      </header>
+      <main id="main" class="nx-page" tabindex="-1">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {% include 'partials/toasts.html' %}
+
+  <script src="{{ url_for('static', filename='js/ds/app.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

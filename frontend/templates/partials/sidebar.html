@@ -1,0 +1,49 @@
+{#
+  App-shell sidebar. Items depend on the signed-in role; the item for the
+  current endpoint is marked aria-current="page".
+#}
+{% set endpoint = request.endpoint or '' %}
+{% macro nav_item(label, icon, endpoint_name, href=None, also=()) -%}
+  {%- set active = endpoint == endpoint_name or endpoint in also -%}
+  <a class="nx-nav__item" href="{{ href or url_for(endpoint_name) }}"{% if active %} aria-current="page"{% endif %}>
+    <i class="bi bi-{{ icon }}" aria-hidden="true"></i><span>{{ label }}</span>
+  </a>
+{%- endmacro %}
+
+<aside class="nx-sidebar" id="nx-sidebar" aria-label="Main navigation">
+  <a class="nx-brand" href="{{ url_for('auth.index') }}" aria-label="Netra-I home">
+    <img class="nx-brand__cdac nx-brand__cdac--on-light" src="{{ url_for('static', filename='images/brand/cdac-mark-on-light.png') }}" alt="C-DAC" width="37" height="26">
+    <img class="nx-brand__cdac nx-brand__cdac--on-dark" src="{{ url_for('static', filename='images/brand/cdac-mark-on-dark.png') }}" alt="" width="37" height="26">
+    <span class="nx-brand__rule" aria-hidden="true"></span>
+    <span>
+      <span class="nx-brand__name">Netra-I</span>
+      <span class="nx-brand__org">Exam platform</span>
+    </span>
+  </a>
+
+  {% if current_user.role in ('faculty', 'admin') %}
+  <nav class="nx-nav" aria-label="Faculty">
+    {{ nav_item('Dashboard', 'grid-1x2', 'faculty.faculty_dashboard', also=('faculty.view_exam', 'faculty.exam_analytics', 'faculty.upload_questions')) }}
+    {{ nav_item('New exam', 'plus-square', 'faculty.create_exam') }}
+    {{ nav_item('Students', 'people', 'faculty.faculty_students', also=('faculty.faculty_edit_student', 'faculty.faculty_student_profile')) }}
+    {{ nav_item('Reports', 'file-earmark-bar-graph', 'faculty.faculty_student_report') }}
+    {{ nav_item('Leaderboard', 'trophy', 'student.global_leaderboard') }}
+
+    <div class="nx-nav__group">Tools</div>
+    {{ nav_item('Question splitter', 'scissors', 'faculty.split_questions_page') }}
+
+    {% if current_user.role == 'admin' %}
+    <div class="nx-nav__group">Administration</div>
+    {{ nav_item('Overview', 'speedometer2', 'admin.admin_dashboard') }}
+    {{ nav_item('Faculty', 'person-badge', 'admin.manage_faculty') }}
+    {{ nav_item('All students', 'person-lines-fill', 'admin.admin_students') }}
+    {{ nav_item('All exams', 'collection', 'admin.admin_all_exams') }}
+    {{ nav_item('SQL console', 'terminal', 'admin.admin_sql_console') }}
+    {% endif %}
+  </nav>
+  {% endif %}
+
+  <div class="nx-sidebar__foot">
+    {{ (current_user.course or current_user.department or 'C-DAC') if current_user.is_authenticated else 'C-DAC' }}
+  </div>
+</aside>

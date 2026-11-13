@@ -1,0 +1,10 @@
+{# Applies the saved theme before first paint, so a page never flashes the
+   wrong theme. "netra-theme" holds "light" or "dark"; absent = follow device. #}
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('netra-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>

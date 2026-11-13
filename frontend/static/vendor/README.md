@@ -16,6 +16,7 @@ network with **no internet access**. Nothing in `frontend/templates` or
 | `face-api/` | face-api.js | 0.22.2 | npm |
 | `face-api/models/` | tiny_face_detector, face_landmark_68_tiny, face_recognition weights | 0.22.2 | github.com/justadudewhohacks/face-api.js `weights/` |
 | `fonts/` | @fontsource/outfit, @fontsource/plus-jakarta-sans | 5.3.0 | npm (latin, weights 300–700) |
+| `fonts/` (design system) | @fontsource/instrument-sans (500–700), @fontsource/ibm-plex-sans (400–600), @fontsource/ibm-plex-mono (400–500) | 5.3.0 | npm (latin) — loaded by `css/ds/fonts.css` |
 
 Each folder keeps the upstream licence file. To upgrade, replace the files and
 update this table; do not point templates back at a CDN.

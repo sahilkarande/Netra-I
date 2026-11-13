@@ -1,0 +1,188 @@
+/*
+ * Netra-I design system · layout
+ * The app shell: a fixed sidebar for navigation, a slim top bar for context
+ * and account, and a centred page column. Below 1024 px the sidebar becomes
+ * a drawer opened from the top bar.
+ */
+
+.nx-app {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+.nx-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-3);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.nx-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-5);
+  color: var(--text);
+}
+.nx-brand:hover { color: var(--text); }
+.nx-brand__cdac { height: 26px; width: auto; flex: none; }
+.nx-brand__cdac--on-dark { display: none; }
+.nx-brand__rule { width: 1px; height: 24px; background: var(--border-strong); flex: none; }
+.nx-brand__name { font: 700 var(--text-md)/1.1 var(--font-display); letter-spacing: -0.01em; }
+.nx-brand__org { display: block; font: 500 var(--text-2xs)/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-subtle); }
+
+/* The C-DAC mark is a black-or-white raster logo: swap the file with the theme */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .nx-brand__cdac--on-light { display: none; }
+  :root:not([data-theme="light"]) .nx-brand__cdac--on-dark { display: block; }
+}
+:root[data-theme="dark"] .nx-brand__cdac--on-light { display: none; }
+:root[data-theme="dark"] .nx-brand__cdac--on-dark { display: block; }
+
+.nx-nav { display: grid; gap: 2px; }
+.nx-nav__group {
+  padding: var(--space-5) var(--space-2) var(--space-2);
+  font: 500 var(--text-2xs)/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.nx-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+.nx-nav__item .bi { font-size: 16px; width: 18px; text-align: center; flex: none; }
+.nx-nav__item:hover { background: var(--bg-hover); color: var(--text); }
+.nx-nav__item[aria-current="page"] { background: var(--bg-selected); color: var(--accent); }
+.nx-nav__badge {
+  margin-left: auto;
+  font: 500 var(--text-2xs)/1 var(--font-mono);
+  color: var(--text-subtle);
+}
+
+.nx-sidebar__foot {
+  margin-top: auto;
+  padding: var(--space-4) var(--space-2) 0;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+/* ── Main column ─────────────────────────────────────────── */
+.nx-main { min-width: 0; display: flex; flex-direction: column; }
+
+.nx-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--topbar-height);
+  padding: 0 var(--space-6);
+  background: var(--bg-surface);
+  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.nx-topbar__title { font-size: var(--text-sm); color: var(--text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-topbar__title b { color: var(--text); font-weight: 500; }
+.nx-topbar__end { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
+.nx-topbar .nx-topbar__menu-btn { display: none; }
+
+.nx-page {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-16);
+  display: grid;
+  gap: var(--space-6);
+  align-content: start;
+}
+
+.nx-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.nx-page-header__title { font-size: var(--text-2xl); font-weight: 600; letter-spacing: -0.02em; }
+.nx-page-header__meta { margin-top: var(--space-1); color: var(--text-muted); font-size: var(--text-sm); }
+.nx-page-header__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* ── Grids ───────────────────────────────────────────────── */
+.nx-grid-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.nx-grid-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: var(--space-4);
+  align-items: start;
+}
+.nx-stack { display: grid; gap: var(--space-4); align-content: start; min-width: 0; }
+
+/* ── Responsive ──────────────────────────────────────────── */
+.nx-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-drawer) - 1);
+  background: var(--scrim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
+
+@media (max-width: 1180px) {
+  .nx-grid-main { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 1023px) {
+  .nx-app { grid-template-columns: minmax(0, 1fr); }
+  .nx-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: var(--z-drawer);
+    width: min(84vw, 280px);
+    transform: translateX(-100%);
+    transition: transform var(--duration-slow) var(--ease-out);
+    box-shadow: var(--shadow-overlay);
+  }
+  .nx-app.is-drawer-open .nx-sidebar { transform: none; }
+  .nx-app.is-drawer-open .nx-scrim { opacity: 1; pointer-events: auto; }
+  .nx-topbar { padding: 0 var(--space-4); }
+  .nx-topbar .nx-topbar__menu-btn { display: inline-flex; }
+  .nx-page { padding: var(--space-6) var(--space-4) var(--space-12); }
+  .nx-grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .nx-user-btn__name { display: none; }
+}
+
+@media (max-width: 520px) {
+  .nx-page-header__title { font-size: var(--text-xl); }
+  .nx-page-header__actions { width: 100%; }
+  .nx-page-header__actions > * { flex: 1; justify-content: center; }
+  .nx-topbar__title { display: none; }
+}

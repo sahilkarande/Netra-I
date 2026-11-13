@@ -13,6 +13,7 @@ machine on a campus LAN, with no cloud services and no per-student cost.
 | [docs/README_OVERVIEW.md](docs/README_OVERVIEW.md) | A plain-language explanation for faculty, students and administrators |
 | [docs/README_TECHNICAL.md](docs/README_TECHNICAL.md) | Architecture, data model, every route, the proctoring pipeline, security model, scaling |
 | [docs/LAN_DEPLOYMENT_GUIDE.md](docs/LAN_DEPLOYMENT_GUIDE.md) | Running an exam over campus Wi-Fi/LAN with HTTPS |
+| [docs/design-system.md](docs/design-system.md) | Colours, type, components and layouts for the redesigned UI |
 
 ---
 
@@ -177,6 +178,7 @@ Netra-I/
 │   │   ├── proctor_service.py    # per-attempt vision instances, violation logging
 │   │   ├── proctor_vision/openvino_vision.py   # the computer-vision engine
 │   │   ├── account_service.py    # temp passwords, faculty scoping of students, safe deletion
+│   │   ├── dashboard_service.py  # faculty dashboard summaries (read-only)
 │   │   ├── face_service.py       # face enrolment, matching, lockout, audit
 │   │   ├── liveness_service.py   # liveness challenges and anti-spoof checks
 │   │   └── pdf_generator.py      # result and batch PDFs
@@ -184,8 +186,10 @@ Netra-I/
 │
 ├── frontend/
 │   ├── templates/            # Jinja2 pages: base.html, auth pages, admin/, faculty/, student/
+│   │                         # layouts/, partials/, components/ = design-system shell and macros
 │   └── static/
 │       ├── css/  js/  images/
+│       ├── css/ds/  js/ds/       # design system (see docs/design-system.md)
 │       ├── vendor/           # every third-party library, font and face model (offline)
 │       └── violations/       # evidence photos, written at runtime (gitignored, staff-only)
 │

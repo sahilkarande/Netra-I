@@ -1,0 +1,35 @@
+{% import 'components/ui.html' as ui %}
+{# Right side of the top bar: theme and account menus. The bar itself and its
+   title slot live in layouts/app.html so pages can fill the title block. #}
+  <div class="nx-topbar__end">
+    <div class="nx-menu-wrap">
+      <button type="button" class="nx-btn nx-btn--ghost nx-btn--icon" data-nx-menu-toggle="nx-theme-menu" aria-label="Theme">
+        <i class="bi bi-circle-half" data-nx-theme-icon aria-hidden="true"></i>
+      </button>
+      <div class="nx-menu" id="nx-theme-menu" role="menu" aria-label="Theme">
+        <div class="nx-menu__label nx-eyebrow">Appearance</div>
+        <button type="button" class="nx-menu__item" role="menuitemradio" data-nx-theme="system" aria-checked="true"><i class="bi bi-circle-half" aria-hidden="true"></i>Match device<i class="bi bi-check2 nx-menu__check" aria-hidden="true"></i></button>
+        <button type="button" class="nx-menu__item" role="menuitemradio" data-nx-theme="light" aria-checked="false"><i class="bi bi-sun" aria-hidden="true"></i>Light<i class="bi bi-check2 nx-menu__check" aria-hidden="true"></i></button>
+        <button type="button" class="nx-menu__item" role="menuitemradio" data-nx-theme="dark" aria-checked="false"><i class="bi bi-moon-stars" aria-hidden="true"></i>Dark<i class="bi bi-check2 nx-menu__check" aria-hidden="true"></i></button>
+      </div>
+    </div>
+
+    {% if current_user.is_authenticated %}
+    <div class="nx-menu-wrap">
+      <button type="button" class="nx-user-btn" data-nx-menu-toggle="nx-user-menu" aria-label="Account">
+        <span class="nx-avatar">{{ ui.initials(current_user.full_name or current_user.username) }}</span>
+        <span class="nx-user-btn__name">{{ current_user.full_name or current_user.username }}</span>
+        <i class="bi bi-chevron-down" aria-hidden="true"></i>
+      </button>
+      <div class="nx-menu" id="nx-user-menu" role="menu" aria-label="Account">
+        <div class="nx-menu__header">
+          <b>{{ current_user.full_name or current_user.username }}</b>
+          <span>{{ current_user.email }} · {{ current_user.role|capitalize }}</span>
+        </div>
+        <a class="nx-menu__item" role="menuitem" href="{{ url_for('auth.change_password') }}"><i class="bi bi-shield-lock" aria-hidden="true"></i>Change password</a>
+        <div class="nx-menu__sep" role="separator"></div>
+        <a class="nx-menu__item nx-menu__item--danger" role="menuitem" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right" aria-hidden="true"></i>Sign out</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
