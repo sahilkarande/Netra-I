@@ -186,3 +186,86 @@
   .nx-page-header__actions > * { flex: 1; justify-content: center; }
   .nx-topbar__title { display: none; }
 }
+
+/* ── Auth shell (layouts/auth.html) ──────────────────────────
+   Brand rail on the left, form on the right. The rail's faint grid is the
+   seating plan of an exam hall: rows of desks, evenly spaced. */
+.nx-auth {
+  display: grid;
+  grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
+  min-height: 100vh;
+}
+.nx-auth__rail {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: var(--space-8) var(--space-10);
+  background-color: var(--bg-surface);
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: -1px -1px;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+/* fade the seating grid out toward the text */
+.nx-auth__rail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, var(--bg-surface) 0%, transparent 16%, transparent 24%, var(--bg-surface) 54%);
+  pointer-events: none;
+}
+.nx-auth__rail > * { position: relative; }
+.nx-auth__pitch { margin-top: auto; display: grid; gap: var(--space-6); }
+.nx-auth__headline {
+  font: 600 var(--text-2xl)/1.15 var(--font-display);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  max-width: 16ch;
+}
+.nx-auth__facts { list-style: none; display: grid; gap: var(--space-4); }
+.nx-auth__facts li { display: flex; gap: var(--space-3); font-size: var(--text-sm); color: var(--text-muted); max-width: 38ch; }
+.nx-auth__facts b { color: var(--text); font-weight: 600; }
+.nx-auth__facts .bi {
+  width: 28px; height: 28px; flex: none; display: grid; place-items: center;
+  border-radius: var(--radius-md); background: var(--accent-subtle); color: var(--accent); font-size: 14px;
+}
+.nx-auth__foot { font-size: var(--text-xs); color: var(--text-subtle); }
+
+.nx-auth__main { display: flex; flex-direction: column; min-width: 0; }
+.nx-auth__bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-4) var(--space-6);
+}
+.nx-auth__mobile-brand { display: none; padding: 0; }
+.nx-auth__content {
+  flex: 1;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-6) var(--space-16);
+  display: grid;
+  align-content: center;
+  gap: var(--space-6);
+}
+.nx-auth__content--wide { max-width: 640px; }
+
+.nx-auth-head { display: grid; gap: var(--space-2); }
+.nx-auth-head .nx-steps { margin-bottom: var(--space-5); }
+.nx-auth-head h1 { font-size: var(--text-2xl); letter-spacing: -0.02em; }
+.nx-auth-head p { color: var(--text-muted); font-size: var(--text-sm); }
+.nx-auth-alt { font-size: var(--text-sm); color: var(--text-muted); text-align: center; }
+
+@media (max-width: 900px) {
+  .nx-auth { grid-template-columns: minmax(0, 1fr); }
+  .nx-auth__rail { display: none; }
+  .nx-auth__bar { justify-content: space-between; border-bottom: 1px solid var(--border); background: var(--bg-surface); }
+  .nx-auth__mobile-brand { display: flex; }
+  .nx-auth__content { align-content: start; padding-top: var(--space-8); }
+}

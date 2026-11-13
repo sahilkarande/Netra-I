@@ -1,148 +1,76 @@
-{% extends "base.html" %}
-{% block title %}Register - ExamPro{% endblock %}
+{% extends "layouts/auth.html" %}
+
+{% block title %}Create account{% endblock %}
+
+{% block rail_title %}Create your student account.{% endblock %}
+{% block rail_body %}
+<ul class="nx-auth__facts">
+  <li><i class="bi bi-envelope-check" aria-hidden="true"></i><span><b>Verify your email.</b> We send a 6-digit code that is valid for 10 minutes.</span></li>
+  <li><i class="bi bi-person-bounding-box" aria-hidden="true"></i><span><b>Register your face.</b> Exams that use the camera confirm it is you before the paper opens.</span></li>
+  <li><i class="bi bi-person-badge" aria-hidden="true"></i><span><b>Faculty accounts</b> are created by an administrator, not here.</span></li>
+</ul>
+{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div style="max-width: 550px; margin: 2rem auto;">
-        <div class="card">
-            <div class="card-header text-center">
-                <h1 class="card-title">Create Account</h1>
-                <p class="card-subtitle">Join our secure exam platform</p>
-            </div>
+<header class="nx-auth-head nx-enter">
+  <h1>Create account</h1>
+  <p>For students. Use the email address your institute has on record.</p>
+</header>
 
-            <form method="POST" id="registerForm">
-                <!-- Full Name -->
-                <div class="form-group">
-                    <label class="form-label" for="full_name">Full Name</label>
-                    <input type="text" id="full_name" name="full_name" class="form-input" placeholder="Enter your full name" required>
-                </div>
+<form method="POST" class="nx-form nx-enter" style="--i: 1" id="registerForm" novalidate data-validate>
+  <div class="nx-field">
+    <label class="nx-label" for="full_name">Full name</label>
+    <input type="text" id="full_name" name="full_name" class="nx-input" required autocomplete="name">
+  </div>
 
-                <!-- Username -->
-                <div class="form-group">
-                    <label class="form-label" for="username">Username</label>
-                    <input type="text" id="username" name="username" class="form-input" placeholder="Choose a username" required>
-                </div>
-
-                <!-- Email -->
-                <div class="form-group">
-                    <label class="form-label" for="email">Email Address</label>
-                    <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email" required>
-                </div>
-
-                <!-- Phone -->
-                <div class="form-group">
-                    <label class="form-label" for="phone">Phone Number</label>
-                    <input type="tel" id="phone" name="phone" class="form-input" placeholder="Enter your phone number" required>
-                </div>
-
-                <!-- Role -->
-                <div class="form-group">
-                    <label class="form-label" for="role">I am a:</label>
-                    <select id="role" name="role" class="form-select" required onchange="toggleRoleFields()">
-                        <option value="">Select your role...</option>
-                        <option value="student">Student</option>
-                        <option value="faculty">Faculty</option>
-                    </select>
-                </div>
-
-                <!-- Student Fields -->
-                <div id="student-fields" style="display:none;">
-                    <div class="form-group">
-                        <label class="form-label" for="prn_number">PRN Number</label>
-                        <input type="text" id="prn_number" name="prn_number" class="form-input" placeholder="Enter your 12-digit PRN number" oninput="updateRollId()">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="roll_id">Roll ID</label>
-                        <input type="text" id="roll_id" name="roll_id" class="form-input" placeholder="Auto-generated from PRN" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="batch">Batch</label>
-                        <input type="text" id="batch" name="batch" class="form-input" placeholder="Enter your batch (e.g., DBDA March 2025)">
-                    </div>
-                </div>
-
-                <!-- Faculty Fields -->
-                <div id="faculty-fields" style="display:none;">
-                    <div class="form-group">
-                        <label class="form-label" for="employee_id">Employee ID</label>
-                        <input type="text" id="employee_id" name="employee_id" class="form-input" placeholder="Enter your Employee ID">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="department">Department</label>
-                        <select id="department" name="department" class="form-select">
-                            <option value="Education & Training">Education & Training</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Password -->
-                <div class="form-group">
-                    <label class="form-label" for="password">Password</label>
-                    <input type="password" id="password" name="password" class="form-input" placeholder="Create a strong password" required>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
-                    Create Account
-                </button>
-            </form>
-
-            <div style="text-align: center; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
-                <p style="color: var(--text-secondary);">Already have an account? 
-                    <a href="{{ url_for('auth.login') }}" style="color: var(--primary-color); font-weight: 600; text-decoration: none;">Login here</a>
-                </p>
-            </div>
-        </div>
+  <div class="nx-form-row">
+    <div class="nx-field">
+      <label class="nx-label" for="username">Username</label>
+      <input type="text" id="username" name="username" class="nx-input" required autocomplete="username" spellcheck="false" autocapitalize="off">
     </div>
-</div>
+    <div class="nx-field">
+      <label class="nx-label" for="email">Email</label>
+      <input type="email" id="email" name="email" class="nx-input" required autocomplete="email">
+    </div>
+  </div>
 
-<script>
-function toggleRoleFields() {
-    const role = document.getElementById('role').value;
-    const studentFields = document.getElementById('student-fields');
-    const facultyFields = document.getElementById('faculty-fields');
-    const prn = document.getElementById('prn_number');
-    const roll = document.getElementById('roll_id');
-    const batch = document.getElementById('batch');
-    const empId = document.getElementById('employee_id');
-    const dept = document.getElementById('department');
+  <div class="nx-form-row">
+    <div class="nx-field">
+      <label class="nx-label" for="prn_number">PRN <span class="nx-label__aside">12 digits</span></label>
+      <input type="text" id="prn_number" name="prn_number" class="nx-input nx-mono" inputmode="numeric"
+             maxlength="12" pattern="\d{12}" autocomplete="off">
+      <p class="nx-help" id="prnHelp">Roll ID is taken from the last two digits.</p>
+      <input type="hidden" id="roll_id" name="roll_id">
+    </div>
+    <div class="nx-field">
+      <label class="nx-label" for="batch">Batch <span class="nx-label__aside">optional</span></label>
+      <input type="text" id="batch" name="batch" class="nx-input" maxlength="20" placeholder="e.g. DBDA-A26">
+    </div>
+  </div>
 
-    if (role === 'student') {
-        studentFields.style.display = 'block';
-        facultyFields.style.display = 'none';
-        prn.required = true;
-        empId.required = false;
-        // Clear faculty fields
-        empId.value = '';
-        dept.value = 'Education & Training';
-    } 
-    else if (role === 'faculty') {
-        studentFields.style.display = 'none';
-        facultyFields.style.display = 'block';
-        prn.required = false;
-        empId.required = true;
-        // Clear student fields to avoid backend confusion
-        prn.value = '0';
-        roll.value = '0';
-        batch.value = '0';
-    } 
-    else {
-        studentFields.style.display = 'none';
-        facultyFields.style.display = 'none';
-        prn.required = false;
-        empId.required = false;
-    }
-}
+  <div class="nx-field">
+    <label class="nx-label" for="phone">Phone <span class="nx-label__aside">optional</span></label>
+    <input type="tel" id="phone" name="phone" class="nx-input" maxlength="20" autocomplete="tel">
+  </div>
 
-// Auto-generate Roll ID from PRN
-function updateRollId() {
-    const prn = document.getElementById('prn_number').value.trim();
-    const rollField = document.getElementById('roll_id');
-    if (prn.length >= 2) {
-        rollField.value = prn.slice(-2);
-    } else {
-        rollField.value = '';
-    }
-}
-</script>
+  <div class="nx-field">
+    <label class="nx-label" for="password">Password <span class="nx-label__aside">at least 6 characters</span></label>
+    <div class="nx-input-wrap">
+      <input type="password" id="password" name="password" class="nx-input" required minlength="6" autocomplete="new-password">
+      <button type="button" class="nx-input-wrap__btn" data-reveal="password" aria-label="Show password" aria-pressed="false">
+        <i class="bi bi-eye" aria-hidden="true"></i>
+      </button>
+    </div>
+  </div>
+
+  <button type="submit" class="nx-btn nx-btn--primary nx-btn--lg nx-btn--block" id="registerBtn">
+    <span>Create account</span>
+  </button>
+</form>
+
+<p class="nx-auth-alt nx-enter" style="--i: 2">Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/auth_forms.js') }}"></script>
 {% endblock %}

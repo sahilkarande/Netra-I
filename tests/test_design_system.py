@@ -14,7 +14,7 @@ import pytest
 
 from backend.database import db
 from backend.models import Exam, StudentExam, User
-from tests.conftest import login
+from tests.conftest import PASSWORD, login
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DS = os.path.join(ROOT, 'frontend', 'static', 'css', 'ds')
@@ -34,6 +34,15 @@ REDESIGNED = [
     'frontend/static/css/ds/components.css',
     'frontend/static/js/ds/app.js',
     'frontend/static/js/pages/faculty_dashboard.js',
+    'frontend/templates/layouts/auth.html',
+    'frontend/templates/login.html',
+    'frontend/templates/register.html',
+    'frontend/templates/verify_otp.html',
+    'frontend/templates/change_password.html',
+    'frontend/static/js/pages/login.js',
+    'frontend/static/js/pages/auth_forms.js',
+    'frontend/static/js/pages/verify_otp.js',
+    'frontend/static/js/pages/change_password.js',
 ]
 
 
@@ -236,3 +245,108 @@ def test_score_distribution_counts_every_submission(app, seed):
     counts = {b['label']: b['count'] for b in bands}
     # seeded attempt is 50%; plus 0, 20 -> 0–20; 20.5 -> 21–40; 61 -> 61–80; 100 -> 81–100
     assert counts == {'0–20': 2, '21–40': 1, '41–60': 1, '61–80': 1, '81–100': 1}
+
+
+# ── Sign-in flow ────────────────────────────────────────────────────────────
+
+def _assert_auth_shell(html):
+    assert 'css/ds/tokens.css' in html and 'nx-auth__rail' in html
+    assert 'css/style.css' not in html and 'bootstrap.min.css' not in html
+    assert 'css/auth.css' not in html
+    assert '<meta name="csrf-token"' in html
+
+
+def test_login_page(app):
+    html = app.test_client().get('/login').data.decode()
+    _assert_auth_shell(html)
+    assert 'name="username"' in html and 'name="password"' in html
+    assert 'Remember me' not in html                          # logins are never remembered
+    assert 'id="capsWarning"' in html and 'id="showHintLink"' in html
+    assert 'data-face-login-url="/face/login"' in html
+    assert 'js/face_liveness.js' in html
+
+
+def test_register_page_matches_what_the_server_does(app):
+    html = app.test_client().get('/register').data.decode()
+    _assert_auth_shell(html)
+    assert 'name="role"' not in html and 'employee_id' not in html   # students only
+    for name in ('full_name', 'username', 'email', 'prn_number', 'roll_id', 'batch', 'phone', 'password'):
+        assert f'name="{name}"' in html, name
+
+
+def test_register_saves_batch_and_phone(app, monkeypatch):
+    monkeypatch.setattr('backend.routes.auth.send_otp_email', lambda *a, **k: True)
+    app.test_client().post('/register', data={
+        'username': 'newbie', 'email': 'n@example.com', 'password': 'secret123',
+        'full_name': 'New Bie', 'batch': 'DBDA-A26', 'phone': '9876543210'})
+    with app.app_context():
+        u = User.query.filter_by(username='newbie').one()
+        assert (u.batch, u.phone) == ('DBDA-A26', '9876543210')
+
+
+def test_verify_otp_page(app):
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['verify_email'] = 'n@example.com'
+    html = client.get('/verify-otp').data.decode()
+    _assert_auth_shell(html)
+    assert 'n@example.com' in html and 'For user' not in html
+    assert html.count('aria-label="Digit') == 6
+    assert 'name="otp"' in html
+
+
+def _first_login_student(app):
+    with app.app_context():
+        u = User.query.filter_by(username='stud2').one()
+        u.password_changed = False
+        db.session.commit()
+    client = app.test_client()
+    login(client, 'stud2')
+    return client
+
+
+def test_first_login_shows_onboarding_steps(app, seed):
+    client = _first_login_student(app)
+    html = client.get('/change-password').data.decode()
+    _assert_auth_shell(html)
+    assert 'Set your password' in html and 'Temporary password' in html
+    assert 'aria-current="step"' in html and 'nx-steps' in html
+    assert 'id="faceCard"' not in html                          # face comes in step 2
+
+
+def _change(client):
+    return client.post('/change-password', data={
+        'old_password': PASSWORD, 'new_password': 'Fresh#2026',
+        'confirm_password': 'Fresh#2026', 'password_hint': 'fest'})
+
+
+def test_student_without_face_goes_to_face_step(app, seed):
+    client = _first_login_student(app)
+    resp = _change(client)
+    assert resp.status_code == 302 and resp.headers['Location'].endswith('/change-password?step=face')
+    html = client.get('/change-password?step=face').data.decode()
+    assert 'Register your face' in html and 'id="faceCard"' in html
+    assert 'passwordChangeForm' not in html
+
+
+def test_student_with_face_goes_to_dashboard(app, seed):
+    from backend.models import FaceEnrollment
+    with app.app_context():
+        db.session.add(FaceEnrollment(user_id=seed['s2'], descriptors=b'\0' * 512,
+                                      sample_count=1, is_locked=True))
+        db.session.commit()
+    client = _first_login_student(app)
+    resp = _change(client)
+    assert resp.status_code == 302 and not resp.headers['Location'].endswith('step=face')
+
+
+def test_staff_change_password_page(app, seed):
+    client = app.test_client()
+    login(client, 'faca')
+    html = client.get('/change-password').data.decode()
+    assert 'Change password' in html and 'nx-steps' not in html
+    assert 'optional' in html                                  # hint optional for staff
+    resp = client.post('/change-password', data={
+        'old_password': PASSWORD, 'new_password': 'Fresh#2026',
+        'confirm_password': 'Fresh#2026', 'password_hint': ''})
+    assert resp.status_code == 302 and 'step=face' not in resp.headers['Location']

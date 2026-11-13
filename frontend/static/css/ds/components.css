@@ -467,3 +467,123 @@ a.nx-table__primary:hover { color: var(--accent); }
   .nx-panel__actions { width: 100%; margin-left: 0; }
   .nx-panel__actions .nx-search { flex: 1; }
 }
+
+/* ── Forms ───────────────────────────────────────────────────
+   <div class="nx-field"><label class="nx-label">…</label><input class="nx-input">
+   <p class="nx-help">…</p></div>; .is-invalid on the field marks an error. */
+.nx-form { display: grid; gap: var(--space-4); }
+.nx-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.nx-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.nx-field { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.nx-label { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--text-sm); font-weight: 500; color: var(--text); }
+.nx-label__aside { font-weight: 400; font-size: var(--text-xs); color: var(--text-subtle); }
+.nx-label__aside a { font-weight: 500; }
+.nx-help { font-size: var(--text-xs); color: var(--text-subtle); }
+.nx-field.is-invalid .nx-input { border-color: var(--danger); }
+.nx-field.is-invalid .nx-help { color: var(--danger); }
+.nx-field.is-valid .nx-input { border-color: var(--success); }
+.nx-input--lg { height: 42px; font-size: var(--text-base); }
+.nx-input[readonly] { background: var(--bg-subtle); color: var(--text-muted); }
+
+.nx-input-wrap { position: relative; display: flex; align-items: center; }
+.nx-input-wrap .nx-input { padding-right: 42px; }
+.nx-input-wrap__btn {
+  position: absolute; right: 4px;
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-subtle);
+}
+.nx-input-wrap__btn:hover { color: var(--text); background: var(--bg-hover); }
+
+.nx-check { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-muted); cursor: pointer; }
+.nx-check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+.nx-btn--block { width: 100%; }
+.nx-btn--lg { height: 42px; font-size: var(--text-base); }
+.nx-link-btn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-weight: 500; }
+.nx-link-btn:hover { color: var(--accent-hover); text-decoration: underline; }
+
+.nx-alert {
+  display: flex; gap: var(--space-3); align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: var(--tone-subtle, var(--accent-subtle));
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.nx-alert .bi { color: var(--tone, var(--accent)); margin-top: 2px; flex: none; }
+.nx-alert b { font-weight: 600; }
+
+.nx-divider { display: flex; align-items: center; gap: var(--space-3); font: 500 var(--text-2xs)/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-subtle); }
+.nx-divider::before, .nx-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+.nx-caps { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--warning); }
+
+/* ── One-time code boxes ─────────────────────────────────── */
+.nx-otp { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-2); }
+.nx-otp input {
+  height: 52px; min-width: 0; text-align: center;
+  font: 500 var(--text-xl)/1 var(--font-mono);
+  background: var(--bg-surface); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.nx-otp input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+.nx-otp input.is-filled { border-color: var(--text-subtle); }
+
+/* ── Steps (onboarding) ──────────────────────────────────── */
+.nx-steps { list-style: none; display: flex; gap: var(--space-2); }
+.nx-steps li {
+  flex: 1; display: flex; align-items: center; gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 2px solid var(--border);
+  font-size: var(--text-xs); color: var(--text-subtle); font-weight: 500;
+}
+.nx-steps__n { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; font: 600 var(--text-2xs)/1 var(--font-mono); background: var(--bg-pressed); color: var(--text-muted); flex: none; }
+.nx-steps li[aria-current="step"] { border-top-color: var(--accent); color: var(--text); }
+.nx-steps li[aria-current="step"] .nx-steps__n { background: var(--accent); color: var(--text-on-accent); }
+.nx-steps li.is-done { border-top-color: var(--success); color: var(--text-muted); }
+.nx-steps li.is-done .nx-steps__n { background: var(--success-subtle); color: var(--success); }
+
+/* ── Live checklist ──────────────────────────────────────── */
+.nx-checklist { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); font-size: var(--text-xs); color: var(--text-subtle); }
+.nx-checklist li { display: flex; align-items: center; gap: var(--space-2); transition: color var(--duration-base) var(--ease-out); }
+.nx-checklist .bi { font-size: 14px; }
+.nx-checklist li.is-ok { color: var(--success); }
+
+/* ── Face capture ────────────────────────────────────────── */
+.nx-face { display: grid; gap: var(--space-3); }
+.nx-face__stage {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  display: none;
+}
+.nx-face__stage.is-on { display: block; }
+.nx-face__stage video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.nx-face__oval {
+  position: absolute; left: 50%; top: 48%;
+  width: 46%; aspect-ratio: 3 / 4;
+  transform: translate(-50%, -50%);
+  border: 2px dashed var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 999px var(--scrim);
+  pointer-events: none;
+}
+.nx-face__status { font-size: var(--text-sm); color: var(--text-muted); min-height: 1.5em; }
+.nx-face__status.is-ok { color: var(--success); }
+.nx-face__status.is-err { color: var(--danger); }
+.nx-face__dots { display: flex; gap: 6px; }
+.nx-face__dots span { width: 24px; height: 4px; border-radius: var(--radius-full); background: var(--border-strong); transition: background var(--duration-base) var(--ease-out); }
+.nx-face__dots span.is-done { background: var(--success); }
+.nx-face__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+@media (max-width: 520px) {
+  .nx-form-row, .nx-checklist { grid-template-columns: minmax(0, 1fr); }
+  .nx-otp input { height: 46px; font-size: var(--text-lg); }
+}

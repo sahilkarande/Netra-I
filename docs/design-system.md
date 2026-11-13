@@ -4,7 +4,7 @@ The rules and building blocks for every redesigned page. Pages move onto the
 system one at a time; until a page is redesigned it keeps `base.html` and the
 legacy stylesheets, untouched.
 
-**Redesigned so far:** faculty dashboard.
+**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding).
 
 ---
 
@@ -38,7 +38,9 @@ frontend/static/js/ds/app.js        theme menu, dropdowns, drawer, nx.toast()
 frontend/static/js/pages/<page>.js  page behaviour (no inline scripts)
 
 frontend/templates/
-  layouts/app.html          the shell; redesigned pages extend this
+  layouts/app.html          the app shell (sidebar); signed-in pages extend this
+  layouts/auth.html         sign-in shell (brand panel + form); set uses_face = True
+                            before extending to load the face-liveness client
   partials/                 theme_init, csrf, sidebar, topbar_end, toasts
   components/ui.html        Jinja macros: button, badge, stat, page_header,
                             empty_state, initials
@@ -119,6 +121,20 @@ Import the macros with `{% import 'components/ui.html' as ui %}`.
 | `.nx-attention__item.nx-tone-*` | "Needs attention" links with a severity stripe. |
 | `.nx-menu` + `data-nx-menu-toggle="<id>"` | Dropdowns; keyboard and Esc handled by `app.js`. |
 | `nx.toast(message, tone)` | Feedback after an action. Errors stay until dismissed. |
+
+### Forms (sign-in flow)
+
+| Component | Use |
+|---|---|
+| `.nx-form`, `.nx-form-row`, `.nx-field`, `.nx-label` (+ `__aside`), `.nx-help` | Form structure; `.is-invalid` on a field shows its help text as the error |
+| `.nx-input-wrap` + `[data-reveal="<input id>"]` | Password with a show/hide button (`js/pages/auth_forms.js`) |
+| `form[data-validate]` | Inline validation from the inputs' own `required` / `minlength` / `pattern` / `type`; no browser bubbles |
+| `.nx-alert.nx-tone-*` | Inline notice inside a form |
+| `.nx-otp` | Six one-digit boxes with paste support (`js/pages/verify_otp.js`) |
+| `.nx-steps` | Multi-step flows; `aria-current="step"` on the current one, `.is-done` before it |
+| `.nx-checklist` (`li.is-ok`) | Live requirements, e.g. password rules |
+| `.nx-face` (`__stage`, `__oval`, `__status`, `__dots`, `__actions`) | Camera capture for the face-liveness client |
+| `.nx-divider` | Labelled separator ("Or sign in with your face") |
 
 **Confirmations.** Don't use `window.confirm()`. Confirm destructive actions
 in place (see the two-step delete in `js/pages/faculty_dashboard.js`).

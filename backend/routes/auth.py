@@ -82,6 +82,8 @@ def register():
         full_name = (request.form.get('full_name') or '').strip() or None
         prn_number = (request.form.get('prn_number') or '').strip() or None
         roll_id = (request.form.get('roll_id') or '').strip() or None
+        batch = (request.form.get('batch') or '').strip()[:20] or None
+        phone = (request.form.get('phone') or '').strip()[:20] or None
 
         # Self-registration only ever creates students. Faculty accounts are
         # made by an admin; trusting a posted 'role' would let anyone register
@@ -121,6 +123,8 @@ def register():
             full_name=full_name,
             prn_number=prn_number,
             roll_id=roll_id,
+            batch=batch,
+            phone=phone,
             is_verified=False,
             # They chose this password themselves, so no forced change.
             password_changed=True,
@@ -248,8 +252,22 @@ def logout():
 @auth_bp.route('/change-password', methods=['GET', 'POST'])
 @login_required
 def change_password():
-    """Change password page - forced for first-time students, optional for everyone else"""
+    """Change password page - forced for first-time students, optional for everyone else.
+
+    For students it doubles as first-login onboarding: step 1 sets a password
+    and hint, step 2 registers their face, which camera-proctored exams need
+    before the paper opens.
+    """
     is_forced = current_user.must_change_password
+
+    def page(hint_value):
+        return render_template(
+            'change_password.html',
+            is_forced=is_forced,
+            hint_value=hint_value,
+            step=request.args.get('step'),
+            face_registered=face_service.enrollment_locked(current_user),
+        )
 
     if request.method == 'POST':
         old_password = request.form.get('old_password') or ''
@@ -282,11 +300,7 @@ def change_password():
         if errors:
             for message in errors:
                 flash(message, 'error')
-            return render_template(
-                'change_password.html',
-                is_forced=is_forced,
-                hint_value=password_hint
-            )
+            return page(password_hint)
 
         try:
             current_user.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
@@ -295,6 +309,11 @@ def change_password():
             current_user.password_hint = password_hint or None
             db.session.commit()
 
+            # A student who has not registered their face yet goes straight to
+            # step 2 — otherwise they find out at the exam door.
+            if current_user.role == 'student' and not face_service.enrollment_locked(current_user):
+                flash('Password saved. One more step: register your face for camera-proctored exams.', 'success')
+                return redirect(url_for('auth.change_password', step='face'))
             flash('Password changed successfully!', 'success')
             return redirect(url_for('auth.index'))
 
@@ -302,17 +321,9 @@ def change_password():
             db.session.rollback()
             current_app.logger.exception('change_password failed')
             flash('Could not change your password. Please try again.', 'error')
-            return render_template(
-                'change_password.html',
-                is_forced=is_forced,
-                hint_value=password_hint
-            )
+            return page(password_hint)
 
-    return render_template(
-        'change_password.html',
-        is_forced=is_forced,
-        hint_value=current_user.password_hint or ''
-    )
+    return page(current_user.password_hint or '')
 
 
 @auth_bp.route('/password-hint', methods=['POST'])

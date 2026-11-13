@@ -1,261 +1,66 @@
-{% extends "base.html" %}
-{% block title %}Login - Netra-I{% endblock %}
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
-{% endblock %}
+{% set uses_face = True %}
+{% extends "layouts/auth.html" %}
+
+{% block title %}Sign in{% endblock %}
 
 {% block content %}
-<script src="{{ url_for('static', filename='js/face_liveness.js') }}"></script>
-<div class="auth-page">
-  <div class="auth-shell">
-    <div class="auth-card auth-login-card">
-      <aside class="auth-header">
-        <div class="auth-header-icon"><i class="bi bi-shield-lock-fill"></i></div>
-        <h1>Welcome Back</h1>
-        <p>Securely sign in to Netra-I and continue to your examination platform.</p>
-        <div class="auth-header-meta">
-          <div><i class="bi bi-shield-check"></i><span>Secure credential transmission</span></div>
-          <div><i class="bi bi-person-check"></i><span>Face sign-in with liveness check</span></div>
-          <div><i class="bi bi-lightning-charge"></i><span>Quick access with fewer clicks</span></div>
-        </div>
-      </aside>
+<header class="nx-auth-head nx-enter">
+  <h1>Sign in</h1>
+  <p>Use your username, email or 12-digit PRN.</p>
+</header>
 
-      <main class="auth-body">
-        <form method="POST" class="auth-form login-form" id="loginForm">
-          <div class="auth-field">
-            <label class="auth-label" for="username"><i class="bi bi-person-badge"></i> Username / PRN Number</label>
-            <input type="text" id="username" name="username" class="auth-input" placeholder="Username, email or PRN" required autofocus autocomplete="username">
-          </div>
+<form method="POST" class="nx-form nx-enter" style="--i: 1" id="loginForm" novalidate
+      data-hint-url="{{ url_for('auth.password_hint') }}"
+      data-face-available-url="{{ url_for('auth.face_available') }}"
+      data-face-challenge-url="{{ url_for('auth.face_challenge') }}"
+      data-face-login-url="{{ url_for('auth.face_login') }}">
 
-          <div class="auth-field">
-            <label class="auth-label" for="password"><i class="bi bi-key-fill"></i> Password</label>
-            <div class="auth-input-wrap">
-              <input type="password" id="password" name="password" class="auth-input" placeholder="Enter your password" required autocomplete="current-password">
-              <button type="button" class="auth-toggle" id="togglePassword" aria-label="Show password"><i class="bi bi-eye"></i></button>
-            </div>
-            <div class="caps-warning" id="capsWarning"><i class="bi bi-exclamation-triangle"></i> Caps Lock is on</div>
-          </div>
-
-          <div class="auth-field full"><div id="hintBox" class="auth-hint"></div></div>
-
-          <div class="auth-field full">
-            <div class="auth-options">
-              <label class="auth-check" for="remember"><input type="checkbox" id="remember" name="remember"> Remember me</label>
-              <a href="#" id="showHintLink" class="auth-link">Show password hint</a>
-            </div>
-          </div>
-
-          <div class="auth-actions">
-            <button type="submit" class="auth-primary" id="loginBtn"><i class="bi bi-box-arrow-in-right"></i> Login to Platform</button>
-          </div>
-
-          <div class="auth-divider"><span>alternative sign-in</span></div>
-
-          <div class="auth-lower">
-            <div class="auth-panel">
-              <h3 class="auth-panel-title"><i class="bi bi-person-badge"></i> Face sign-in</h3>
-              <p class="auth-panel-subtitle">You will be asked to follow a few random head movements. A photo or a phone screen will not pass.</p>
-              <div id="faceBlock" style="display:none;">
-                <div id="faceCamWrap" class="face-stage">
-                  <video id="faceLoginVideo" autoplay muted playsinline></video>
-                  <div class="face-oval"></div>
-                </div>
-                <p id="faceMsg" class="face-status"></p>
-                <button type="button" id="faceLoginBtn" class="btn-face"><i class="bi bi-camera"></i> Sign in with my face</button>
-              </div>
-            </div>
-            <div class="auth-security">
-              <strong><i class="bi bi-shield-check"></i> Built for secure access</strong><br>
-              Your password remains the primary sign-in method. Face sign-in runs a liveness check before matching, so a photo or a screen is rejected — but it is not proof of physical presence, and exams keep their own checks.
-            </div>
-          </div>
-        </form>
-        <div class="auth-footer-note">Never share your password or password hint with anyone.</div>
-      </main>
-    </div>
+  <div class="nx-field">
+    <label class="nx-label" for="username">Username, email or PRN</label>
+    <input type="text" id="username" name="username" class="nx-input nx-input--lg"
+           required autofocus autocomplete="username" spellcheck="false" autocapitalize="off">
   </div>
-</div>
 
-<script>
-const togglePassword = document.querySelector("#togglePassword");
-    const password = document.querySelector("#password");
+  <div class="nx-field">
+    <label class="nx-label" for="password">
+      Password
+      <span class="nx-label__aside"><button type="button" class="nx-link-btn" id="showHintLink">Show my hint</button></span>
+    </label>
+    <div class="nx-input-wrap">
+      <input type="password" id="password" name="password" class="nx-input nx-input--lg"
+             required autocomplete="current-password">
+      <button type="button" class="nx-input-wrap__btn" id="togglePassword" aria-label="Show password" aria-pressed="false">
+        <i class="bi bi-eye" aria-hidden="true"></i>
+      </button>
+    </div>
+    <p class="nx-caps" id="capsWarning" hidden><i class="bi bi-capslock-fill" aria-hidden="true"></i>Caps Lock is on</p>
+  </div>
 
-    togglePassword.addEventListener("click", function () {
+  <div class="nx-alert nx-tone-accent" id="hintBox" role="status" hidden>
+    <i class="bi bi-lightbulb" aria-hidden="true"></i>
+    <span id="hintText"></span>
+  </div>
 
-        const type = password.getAttribute("type") === "password" ? "text" : "password";
-        password.setAttribute("type", type);
+  <button type="submit" class="nx-btn nx-btn--primary nx-btn--lg nx-btn--block" id="loginBtn">
+    <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i><span>Sign in</span>
+  </button>
+</form>
 
-        this.classList.toggle("bi-eye");
-        this.classList.toggle("bi-eye-slash");
-    });
+<section class="nx-face nx-enter" style="--i: 2" id="faceBlock" hidden aria-labelledby="face-title">
+  <div class="nx-divider"><span id="face-title">Or sign in with your face</span></div>
+  <div class="nx-face__stage" id="faceCamWrap">
+    <video id="faceLoginVideo" autoplay muted playsinline></video>
+    <div class="nx-face__oval" aria-hidden="true"></div>
+  </div>
+  <p class="nx-face__status" id="faceMsg" role="status">You'll be asked to follow a few random head movements. A photo or a phone screen will not pass.</p>
+  <button type="button" class="nx-btn nx-btn--secondary nx-btn--lg nx-btn--block" id="faceLoginBtn">
+    <i class="bi bi-person-bounding-box" aria-hidden="true"></i><span>Sign in with my face</span>
+  </button>
+</section>
 
-    // ── Password hint lookup ──────────────────────────────────────
-    const showHintLink = document.getElementById("showHintLink");
-    const hintBox = document.getElementById("hintBox");
-    const usernameField = document.getElementById("username");
+<p class="nx-auth-alt nx-enter" style="--i: 3">Forgot your password? Ask your faculty or administrator to reset it.</p>
+{% endblock %}
 
-    function renderHint(message, isHint) {
-        hintBox.style.display = "block";
-        hintBox.textContent = "";
-
-        if (isHint) {
-            const label = document.createElement("strong");
-            label.style.color = "#6366f1";
-            label.textContent = "Your hint: ";
-            hintBox.appendChild(label);
-        }
-        hintBox.appendChild(document.createTextNode(message));
-    }
-
-    showHintLink.addEventListener("click", async function (e) {
-        e.preventDefault();
-
-        const identifier = usernameField.value.trim();
-        if (!identifier) {
-            renderHint("Enter your username, email or PRN above, then click again.", false);
-            usernameField.focus();
-            return;
-        }
-
-        showHintLink.textContent = "Loading...";
-        try {
-            const response = await fetch("{{ url_for('auth.password_hint') }}", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Requested-With": "XMLHttpRequest"
-                },
-                body: JSON.stringify({ username: identifier })
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                renderHint(data.hint, true);
-            } else {
-                renderHint(data.message || "No hint available for that account.", false);
-            }
-        } catch (err) {
-            renderHint("Could not load your hint right now. Please try again.", false);
-        } finally {
-            showHintLink.textContent = "Show my password hint";
-        }
-    });
-
-    /* ══════════════════════════════════════════════════════════
-       FACE SIGN-IN
-       The browser computes the descriptor; the SERVER decides
-       whether it matches. A client-side verdict would be forgeable.
-    ══════════════════════════════════════════════════════════ */
-    /* ══════════════════════════════════════════════════════════
-       FACE SIGN-IN — random liveness challenge, then identity.
-       Both verdicts are the SERVER's; this only drives the camera.
-    ══════════════════════════════════════════════════════════ */
-    (function faceLogin() {
-        const block   = document.getElementById('faceBlock');
-        const camWrap = document.getElementById('faceCamWrap');
-        const video   = document.getElementById('faceLoginVideo');
-        const msg     = document.getElementById('faceMsg');
-        const btn     = document.getElementById('faceLoginBtn');
-        const idField = document.getElementById('username');
-
-        if (!block || !btn || !video || !idField) return;
-
-        let liveness = null, busy = false, lastChecked = null;
-
-        const say = (t, color) => {
-            msg.textContent = t;
-            msg.style.color = color || '';
-        };
-
-        /* Offer face sign-in only when the typed account has actually enrolled. */
-        async function maybeOffer() {
-            const id = idField.value.trim();
-            if (id === lastChecked) return;
-            lastChecked = id;
-
-            if (!id || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                block.style.display = 'none';
-                return;
-            }
-            try {
-                const res = await fetch("{{ url_for('auth.face_available') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json',
-                               'X-Requested-With': 'XMLHttpRequest' },
-                    body: JSON.stringify({ username: id })
-                });
-                const data = await res.json();
-                block.style.display = data.available ? '' : 'none';
-            } catch (e) {
-                block.style.display = 'none';
-            }
-        }
-
-        btn.addEventListener('click', async function () {
-            if (busy) return;
-            const id = idField.value.trim();
-            if (!id) {
-                say('Enter your username, email or PRN first.', '#ef4444');
-                idField.focus();
-                return;
-            }
-
-            busy = true;
-            btn.disabled = true;
-            camWrap.classList.add('on');
-
-            liveness = new NetraFaceLiveness({
-                video: video,
-                onPrompt: (text, i, total) => say(total
-                    ? 'Step ' + (i + 1) + ' of ' + total + ' — ' + text
-                    : text)
-            });
-
-            let payload;
-            try {
-                payload = await liveness.runChallenge(
-                    'login', "{{ url_for('auth.face_challenge') }}");
-            } catch (e) {
-                busy = false;
-                btn.disabled = false;
-                camWrap.classList.remove('on');
-                say(e.message || 'Liveness check could not be completed.', '#ef4444');
-                return;
-            }
-
-            camWrap.classList.remove('on');
-            say('Verifying that this is a live person…');
-
-            try {
-                const res = await fetch("{{ url_for('auth.face_login') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json',
-                               'X-Requested-With': 'XMLHttpRequest' },
-                    body: JSON.stringify({ username: id, nonce: payload.nonce,
-                                           steps: payload.steps })
-                });
-                const data = await res.json();
-
-                if (data.success && data.redirect) {
-                    say('Verified — signing you in…', '#10b981');
-                    window.location.href = data.redirect;
-                    return;
-                }
-
-                say(data.message || 'Face not recognised.', '#ef4444');
-                if (data.redirect) window.location.href = data.redirect;
-            } catch (e) {
-                say('Could not reach the server. Please use your password.', '#ef4444');
-            }
-
-            busy = false;
-            btn.disabled = false;
-        });
-
-        idField.addEventListener('change', maybeOffer);
-        idField.addEventListener('blur', maybeOffer);
-        if (idField.value.trim()) maybeOffer();
-        window.addEventListener('beforeunload', () => { if (liveness) liveness.cancel(); });
-    })();
-</script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/login.js') }}"></script>
 {% endblock %}
