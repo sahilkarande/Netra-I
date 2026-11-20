@@ -214,9 +214,6 @@ def create_app():
     # Configuration
     app.config['SECRET_KEY'] = load_secret_key(app.instance_path)
 
-    # Times are stored in UTC and shown in the exam hall's zone
-    from backend.services import time_service
-    time_service.init_app(app)
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///exam_platform.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
@@ -342,6 +339,13 @@ def create_app():
     # ──────────────────────────────────────────────────────────────
     # ROUTE REGISTRATION
     # ──────────────────────────────────────────────────────────────
+    # Template filters: times in the exam hall's zone, safe question text.
+    # Registered after the config above: touching app.jinja_env earlier would
+    # create it before TEMPLATES_AUTO_RELOAD is set.
+    from backend.services import time_service, text_format
+    time_service.init_app(app)
+    text_format.init_app(app)
+
     with app.app_context():
         from backend.routes import register_blueprints
         register_blueprints(app)

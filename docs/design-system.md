@@ -4,7 +4,7 @@ The rules and building blocks for every redesigned page. Pages move onto the
 system one at a time; until a page is redesigned it keeps `base.html` and the
 legacy stylesheets, untouched.
 
-**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard.
+**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views).
 
 ---
 
@@ -152,6 +152,19 @@ Import the macros with `{% import 'components/ui.html' as ui %}`.
 Exam state for a student (open, upcoming, in progress, submitted, result out,
 invalidated, closed) comes from `backend/services/student_dashboard_service.py`.
 Offer only the action the server will accept for that state.
+
+### Result page and profile
+
+| Component | Use |
+|---|---|
+| `.nx-result` (`__score`, `__pct`, `__bar`, `__facts`) | Score card: percentage, points, pass/fail, bar with pass-mark tick, counts |
+| `.nx-review` (`__item--correct/--incorrect/--skipped`, `__opt.is-correct/.is-wrong`) | Answer review; every question on the paper, skipped ones included |
+| `.nx-prose`, `.nx-code` | Question and option text. Render it with the `qtext` filter (`backend/services/text_format.py`), which escapes everything and then adds back fenced and inline code |
+| `.nx-count` | Count inside a segmented button |
+| `.nx-reset` | Staff password reset in two steps, showing the temporary password once |
+
+Stored times are UTC: print them with the `localtime` filter, e.g.
+`{{ se.submitted_at|localtime('%d %b %Y, %H:%M') }}`.
 
 **Confirmations.** Don't use `window.confirm()`. Confirm destructive actions
 in place (see the two-step delete in `js/pages/faculty_dashboard.js`).

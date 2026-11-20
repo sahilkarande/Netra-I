@@ -18,6 +18,7 @@ from backend.models import User, Exam, Question, StudentExam, StudentAnswer, Exa
 from backend.services.pdf_generator import generate_batch_report_pdf
 from backend.services.proctor_service import PROCTOR_INSTANCES, _heartbeat_registry, _last_frame_processed
 from backend.services.exam_service import assign_shuffle, finalize_overdue_attempts
+from backend.services import face_service
 from backend.socket_io import socketio
 from backend.services import account_service
 
@@ -975,7 +976,9 @@ def faculty_student_profile(student_id):
     student_exams = (StudentExam.query.filter(StudentExam.student_id == student_id,
                                               StudentExam.exam_id.in_(accessible)).all()
                      if accessible else [])
-    return render_template('student/student_profile.html', student=student, student_exams=student_exams)
+    student_exams.sort(key=lambda se: se.submitted_at or se.started_at or datetime.min, reverse=True)
+    return render_template('student/student_profile.html', student=student, student_exams=student_exams,
+                           face_registered=face_service.enrollment_locked(student))
 
 @faculty_bp.route('/faculty/student/<int:student_id>/edit', methods=['GET', 'POST'])
 @login_required

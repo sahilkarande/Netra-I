@@ -102,26 +102,60 @@ def student_exam_result(student_exam_id):
             flash('Your instructor has not published the results for this exam yet.', 'info')
         return redirect(url_for('student.student_dashboard'))
 
-    answers = StudentAnswer.query.filter_by(student_exam_id=student_exam.id).all()
-    answers_with_questions = [{'answer': a, 'question': a.question} for a in answers]
+    review = _answer_review(student_exam)
+    counts = {k: sum(1 for r in review if r['status'] == k) for k in ('correct', 'incorrect', 'skipped')}
 
-    return render_template('student/result.html', 
-                         student_exam=student_exam,
-                         exam=exam,
-                         answers_with_questions=answers_with_questions)
+    return render_template('student/result.html',
+                           student_exam=student_exam,
+                           exam=exam,
+                           review=review,
+                           counts=counts)
+
+
+def _answer_review(student_exam):
+    """Every question on the paper, in the order this student saw it, with
+    their answer. Questions they skipped have no answer row, so they are
+    listed from the exam's questions rather than from the answers."""
+    from backend.models import Question
+    questions = Question.query.filter_by(exam_id=student_exam.exam_id).order_by(Question.id).all()
+    order = student_exam.get_question_order() or []
+    if order:
+        position = {qid: i for i, qid in enumerate(order)}
+        questions.sort(key=lambda q: position.get(q.id, len(order)))
+    answers = {a.question_id: a for a in
+               StudentAnswer.query.filter_by(student_exam_id=student_exam.id)}
+
+    review = []
+    for q in questions:
+        a = answers.get(q.id)
+        chosen = (a.selected_answer or '').strip().upper() if a else ''
+        status = 'skipped' if not chosen else ('correct' if a.is_correct else 'incorrect')
+        options = [(letter, text) for letter, text in
+                   (('A', q.option_a), ('B', q.option_b), ('C', q.option_c), ('D', q.option_d)) if text]
+        review.append({'question': q, 'chosen': chosen, 'status': status, 'options': options,
+                       'correct': (q.correct_answer or '').strip().upper()})
+    return review
+
 
 @student_bp.route('/student/<int:student_id>/profile')
 @login_required
 def student_profile(student_id):
-    if student_id != current_user.id and current_user.role not in ('faculty', 'admin'):
+    # Staff use the faculty profile, which is scoped to the students and exams
+    # they manage; this route would otherwise show any student's whole record
+    if current_user.role in ('faculty', 'admin'):
+        return redirect(url_for('faculty.faculty_student_profile', student_id=student_id))
+    if student_id != current_user.id:
         return redirect(url_for('auth.index'))
-    student = User.query.get_or_404(student_id)
-    student_exams = StudentExam.query.filter_by(student_id=student_id).all()
-    if current_user.role == 'student':
-        # A student's own profile must not leak scores that are not published yet
-        student_exams = [se for se in student_exams if se.result_visible_to_student]
+
+    from backend.services import face_service
+    student = current_user
+    attempts = StudentExam.query.filter_by(student_id=student.id).all()
+    finished = [se for se in attempts if se.completed or se.status in ('submitted', 'completed')]
+    finished.sort(key=lambda se: se.submitted_at or datetime.min, reverse=True)
     return render_template('student/student_profile.html', student=student,
-                           student_exams=student_exams)
+                           student_exams=finished,
+                           face_registered=face_service.enrollment_locked(student))
+
 
 @student_bp.route('/student/exam/<int:student_exam_id>/download-pdf')
 @login_required

@@ -51,6 +51,10 @@ REDESIGNED = [
     'frontend/static/js/pages/exam_key.js',
     'frontend/templates/student/dashboard.html',
     'frontend/static/js/pages/student_dashboard.js',
+    'frontend/templates/student/result.html',
+    'frontend/templates/student/student_profile.html',
+    'frontend/static/js/pages/result.js',
+    'frontend/static/js/pages/student_profile.js',
 ]
 
 
@@ -517,3 +521,76 @@ def test_exam_state():
     assert exam_state(later, None, now) == 'upcoming'
     over = E(); over.end_time = now - timedelta(hours=1)
     assert exam_state(over, None, now) == 'closed'
+
+
+# ── Result page and profile ─────────────────────────────────────────────────
+
+from backend.models import Question, StudentAnswer  # noqa: E402
+from backend.services.text_format import format_question  # noqa: E402
+
+
+def _released_with_answers(app, seed):
+    """stud1's attempt: Q1 answered correctly, Q2 skipped; results released."""
+    with app.app_context():
+        Exam.query.get(seed['exam']).results_published = True
+        db.session.add(StudentAnswer(student_exam_id=seed['attempt'], question_id=seed['q1'],
+                                     selected_answer='A', is_correct=True))
+        db.session.commit()
+
+
+def test_result_page_reviews_every_question(app, seed, as_user):
+    _released_with_answers(app, seed)
+    html = as_user('stud1').get(f"/student/exam/{seed['attempt']}/result").data.decode()
+    assert 'css/ds/tokens.css' in html and 'css/style.css' not in html
+    assert html.count('class="nx-review__item ') == 2                # skipped Q2 is listed too
+    assert 'data-status="correct"' in html and 'data-status="skipped"' in html
+    assert 'Your answer' in html and 'Correct answer' in html
+    assert f'/student/exam/{seed["attempt"]}/download-pdf' in html
+    assert 'Math.random' not in html
+
+
+def test_result_page_still_locked_until_released(app, seed, as_user):
+    resp = as_user('stud1').get(f"/student/exam/{seed['attempt']}/result")
+    assert resp.status_code == 302
+
+
+def test_question_text_is_escaped_and_formats_code():
+    html = str(format_question('Run `ls`<script>x</script>\\n```py\nprint(1)\n```'))
+    assert '<script>' not in html and '&lt;script&gt;' in html
+    assert '<code>ls</code>' in html
+    assert '<pre class="nx-code"><code>print(1)</code></pre>' in html
+
+
+def test_result_page_renders_question_text_safely(app, seed, as_user):
+    _released_with_answers(app, seed)
+    with app.app_context():
+        Question.query.get(seed['q1']).question_text = '<img src=x onerror=alert(1)>'
+        db.session.commit()
+    html = as_user('stud1').get(f"/student/exam/{seed['attempt']}/result").data.decode()
+    assert '<img src=x' not in html and '&lt;img src=x' in html
+
+
+def test_own_profile_hides_unreleased_scores(app, seed, as_user):
+    html = as_user('stud1').get(f"/student/{seed['s1']}/profile").data.decode()
+    assert 'css/ds/tokens.css' in html
+    assert 'On hold' in html and '50%' not in html
+    assert 'Reset password' not in html and 'student_profile.js' not in html
+    assert re.search(r'href="/student/\d+/profile"\s+aria-current="page"', html)
+
+
+def test_students_cannot_open_other_profiles(app, seed, as_user):
+    resp = as_user('stud2').get(f"/student/{seed['s1']}/profile")
+    assert resp.status_code == 302 and f"/student/{seed['s1']}" not in resp.headers['Location']
+
+
+def test_staff_are_sent_to_the_scoped_profile(app, seed, as_user):
+    resp = as_user('faca').get(f"/student/{seed['s1']}/profile")
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith(f"/faculty/student/{seed['s1']}/profile")
+
+
+def test_staff_profile_shows_scores_and_reset(app, seed, as_user):
+    html = as_user('admin1').get(f"/faculty/student/{seed['s1']}/profile").data.decode()
+    assert '50%' in html and 'not released' in html
+    assert f'data-reset-url="/faculty/change-student-password/{seed["s1"]}"' in html
+    assert 'student_profile.js' in html and 'confirm(' not in html
