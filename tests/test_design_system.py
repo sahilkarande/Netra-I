@@ -57,6 +57,8 @@ REDESIGNED = [
     'frontend/static/js/pages/student_profile.js',
     'frontend/templates/faculty/view_exam.html',
     'frontend/static/js/pages/view_exam.js',
+    'frontend/templates/faculty/analytics.html',
+    'frontend/static/js/pages/analytics.js',
 ]
 
 
@@ -647,3 +649,46 @@ def test_picker_hides_other_departments_exam_titles(app, seed, as_user):
 def test_confirm_helper_replaces_window_confirm():
     js = open(os.path.join(ROOT, 'frontend/static/js/ds/app.js')).read()
     assert 'nx.confirmPress' in js and 'window.confirm' not in js.replace('instead of window.confirm', '')
+
+
+# ── Analytics ───────────────────────────────────────────────────────────────
+
+def _analytics(as_user, seed):
+    resp = as_user('faca').get(f"/faculty/exam/{seed['exam']}/analytics")
+    assert resp.status_code == 200
+    return resp.data.decode()
+
+
+def test_analytics_on_design_system(app, seed, as_user):
+    html = _analytics(as_user, seed)
+    assert 'css/ds/tokens.css' in html and 'css/style.css' not in html
+    assert 'chart.umd.js' not in html and 'js/pages/analytics.js' in html
+    assert 'confirm(' not in html and 'alert(' not in html and 'onclick=' not in html
+    assert 'class="nx-bars"' in html                               # score chart drawn server-side
+    assert '<dialog class="nx-dialog' in html
+
+
+def test_analytics_numbers(app, seed, as_user):
+    html = _analytics(as_user, seed)                               # one submitted attempt, 50%, passed
+    assert '1 / 1' in html                                         # submitted of attempts
+    assert '100<small>%</small>' in html                           # pass rate over submitted attempts
+
+
+def test_analytics_flags_attempts_for_review(app, seed, as_user):
+    with app.app_context():
+        StudentExam.query.get(seed['attempt']).total_violations = 5
+        db.session.commit()
+    html = _analytics(as_user, seed)
+    assert '1 flagged attempt to review' in html
+    assert f'data-review-open="{seed["attempt"]}"' in html
+    assert 'data-review="1"' in html
+
+
+def test_analytics_question_accuracy_counts_skips(app, seed, as_user):
+    with app.app_context():
+        db.session.add(StudentAnswer(student_exam_id=seed['attempt'], question_id=seed['q1'],
+                                     selected_answer='A', is_correct=True))
+        db.session.commit()
+    html = _analytics(as_user, seed)
+    assert html.count('class="nx-qstats__row"') == 2
+    assert '1 skipped' in html                                     # Q2 was not answered

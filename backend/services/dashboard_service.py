@@ -135,11 +135,31 @@ def attention_items(rows: List[dict], limit: int = 3) -> List[dict]:
     return items[:limit]
 
 
+def band_counts(percentages: Iterable) -> List[dict]:
+    """Count percentages into the 20-point score bands used by the charts."""
+    bands = [{'label': f'{lo}–{hi}', 'low': lo, 'high': hi, 'count': 0} for lo, hi in SCORE_BANDS]
+    for pct in percentages:
+        value = max(0.0, min(100.0, float(pct or 0)))
+        for band in bands:
+            if value <= band['high'] or band is bands[-1]:
+                band['count'] += 1
+                break
+    peak = max((b['count'] for b in bands), default=0)
+    for band in bands:
+        band['share'] = (band['count'] / peak) if peak else 0
+    return bands
+
+
 def score_distribution(exam_ids: List[int]) -> List[dict]:
     """Submitted attempts per 20-point score band, for the dashboard chart."""
-    bands = [{'label': f'{lo}–{hi}', 'low': lo, 'high': hi, 'count': 0} for lo, hi in SCORE_BANDS]
     if not exam_ids:
-        return bands
+        return band_counts([])
+    pcts = (db.session.query(StudentExam.percentage)
+            .filter(StudentExam.exam_id.in_(exam_ids),
+                    db.or_(StudentExam.status.in_(('submitted', 'completed')),
+                           StudentExam.completed == True))  # noqa: E712
+            .all())
+    return band_counts(p for (p,) in pcts)
     pcts = (db.session.query(StudentExam.percentage)
             .filter(StudentExam.exam_id.in_(exam_ids),
                     db.or_(StudentExam.status.in_(('submitted', 'completed')),

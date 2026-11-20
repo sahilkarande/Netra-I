@@ -611,42 +611,65 @@ def exam_analytics(exam_id):
         return redirect(url_for('faculty.faculty_dashboard'))
     finalize_overdue_attempts(exam_ids=[exam.id])
 
+    from backend.services.dashboard_service import band_counts, FLAG_THRESHOLD
+
     student_exams = StudentExam.query.filter_by(exam_id=exam_id).all()
-    
-    total_attempts = len(student_exams)
-    completed_exams = [se for se in student_exams if se.status == 'completed' or se.status == 'submitted']
-    passed = sum(1 for se in completed_exams if se.passed)
-    failed = sum(1 for se in completed_exams if not se.passed)
-    
-    avg_score = sum(se.percentage or 0 for se in completed_exams) / len(completed_exams) if completed_exams else 0
-    avg_time = sum(se.time_taken_minutes or 0 for se in completed_exams) / len(completed_exams) if completed_exams else 0
-    
-    flagged_exams = [se for se in student_exams if (se.total_violations or 0) >= 3 or (se.tab_switch_count or 0) > (exam.max_tab_switches or 5)]
-    
-    # Question-wise performance
+    finished = [se for se in student_exams
+                if se.completed or se.status in ('submitted', 'completed', 'force_ended')]
+    scored = [se for se in finished if not se.is_invalidated]
+    passed = sum(1 for se in scored if se.passed)
+    failed = len(scored) - passed
+    avg_score = (sum(se.percentage or 0 for se in scored) / len(scored)) if scored else 0
+    timed = [se.time_taken_minutes for se in scored if se.time_taken_minutes is not None]
+    avg_time = (sum(timed) / len(timed)) if timed else None
+
+    def flagged(se):
+        return ((se.total_violations or 0) >= FLAG_THRESHOLD
+                or (se.tab_switch_count or 0) > (exam.max_tab_switches or 5))
+    flagged_exams = [se for se in student_exams if flagged(se)]
+    needs_review = [se for se in flagged_exams if not se.faculty_review_note and not se.is_invalidated]
+
+    # Most actionable first: flagged and unreviewed, then by score
+    rows = sorted(student_exams, key=lambda se: (
+        0 if se in needs_review else 1,
+        -(se.percentage or 0)))
+
+    # Per-question accuracy over submitted attempts, in paper order
+    answered = {}
+    finished_ids = {se.id for se in scored}
+    for a in StudentAnswer.query.filter(StudentAnswer.student_exam_id.in_(finished_ids)).all() if finished_ids else []:
+        stat = answered.setdefault(a.question_id, {'total': 0, 'correct': 0})
+        stat['total'] += 1
+        stat['correct'] += 1 if a.is_correct else 0
     question_stats = []
-    for q in exam.questions:
-        q_answers = [a for a in q.answers if a.student_exam.exam_id == exam_id]
-        total_q = len(q_answers)
-        correct_q = sum(1 for a in q_answers if a.is_correct)
-        accuracy = (correct_q / total_q * 100) if total_q > 0 else 0
+    for i, q in enumerate(sorted(exam.questions, key=lambda q: q.id), start=1):
+        stat = answered.get(q.id, {'total': 0, 'correct': 0})
         question_stats.append({
-            'question': q.question_text,
-            'total_answers': total_q,
-            'correct_answers': correct_q,
-            'accuracy': accuracy
+            'number': i,
+            'question': q,
+            'answered': stat['total'],
+            'skipped': max(0, len(scored) - stat['total']),
+            'correct': stat['correct'],
+            'accuracy': (stat['correct'] / len(scored) * 100) if scored else None,
         })
-    
-    return render_template('faculty/analytics.html', 
-                         exam=exam, 
-                         student_exams=student_exams,
-                         total_attempts=total_attempts,
-                         passed=passed,
-                         failed=failed,
-                         avg_score=avg_score,
-                         avg_time=avg_time,
-                         flagged_exams=flagged_exams,
-                         question_stats=question_stats)
+    hardest = sorted([q for q in question_stats if q['accuracy'] is not None],
+                     key=lambda q: q['accuracy'])[:5]
+
+    return render_template('faculty/analytics.html',
+                           exam=exam,
+                           rows=rows,
+                           total_attempts=len(student_exams),
+                           finished_count=len(finished),
+                           scored_count=len(scored),
+                           passed=passed,
+                           failed=failed,
+                           avg_score=avg_score,
+                           avg_time=avg_time,
+                           flagged_ids={se.id for se in flagged_exams},
+                           needs_review_ids={se.id for se in needs_review},
+                           score_bands=band_counts(se.percentage for se in scored),
+                           question_stats=question_stats,
+                           hardest=hardest)
 
 @faculty_bp.route('/api/faculty/publish-results/<int:exam_id>', methods=['POST'])
 @login_required

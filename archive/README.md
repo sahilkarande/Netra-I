@@ -10,6 +10,7 @@ real database.
 | `backend_utils/create_db.py` | Stand-alone schema creator with its own model definitions | Defines an outdated schema; the app now creates tables itself on start-up. |
 | `backend_utils/delete_all_questions.py` | Was `backend/utils/view_users.py` | Despite its old name, it **deletes every question**. Renamed so the name says what it does. |
 | `frontend/js/exam.js` | Old exam-page script | `student/take_exam.html` carries its own runtime inline. |
+| `frontend/js/analytics.js` | Chart.js setup for the old analytics page | Analytics now draws its charts server-side as SVG; the old page never passed it any scores, so its charts were always empty. |
 | `frontend/js/theme.js` | Old theme toggle | `base.html` implements the theme toggle inline. |
 | `frontend/images/CDAC_Logo_org.png` | Logo | Not referenced by any template. |
 | `frontend/css/auth.css` | Styles for the old sign-in pages | Login, register, OTP and change-password now use the design system (`css/ds/`). |

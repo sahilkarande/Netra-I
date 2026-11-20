@@ -248,7 +248,6 @@
     </section>
 
     {# ── Score distribution ────────────────────────────────── #}
-    {% set peak = score_bands|map(attribute='count')|max %}
     <section class="nx-panel nx-enter" style="--i: 8" aria-labelledby="dist-title">
       <div class="nx-panel__head">
         <div>
@@ -256,40 +255,7 @@
           <span class="nx-panel__sub">Submitted attempts, all exams</span>
         </div>
       </div>
-      {% if peak %}
-      {% set half = ((peak + 1) // 2) %}
-      <div class="nx-bars">
-        <svg viewBox="0 0 300 140" role="img"
-             aria-label="Attempts per score band: {% for b in score_bands %}{{ b.label }} percent {{ b.count }}{{ ', ' if not loop.last }}{% endfor %}">
-          <g class="grid">
-            <line x1="30" x2="296" y1="24" y2="24"></line>
-            <line x1="30" x2="296" y1="{{ 110 - (half / peak * 86) }}" y2="{{ 110 - (half / peak * 86) }}"></line>
-            <line x1="30" x2="296" y1="110" y2="110"></line>
-          </g>
-          <g class="axis" text-anchor="end">
-            <text x="24" y="27">{{ peak }}</text>
-            <text x="24" y="{{ 113 - (half / peak * 86) }}">{{ half }}</text>
-            <text x="24" y="113">0</text>
-          </g>
-          {% for b in score_bands %}
-          {% set h = b.count / peak * 86 %}
-          {% set x = 36 + loop.index0 * 52.4 %}
-          <g class="bar-group">
-            <title>{{ b.label }}%: {{ b.count }} attempt{{ 's' if b.count != 1 }}</title>
-            <rect class="bar{% if loop.last %} bar--top{% endif %}" x="{{ x }}" y="{{ 110 - h }}" width="40" height="{{ [h, 0.5]|max }}" rx="2"></rect>
-            {% if b.count %}<text class="val" x="{{ x + 20 }}" y="{{ 106 - h }}" text-anchor="middle">{{ b.count }}</text>{% endif %}
-            <text class="axis-label" x="{{ x + 20 }}" y="126" text-anchor="middle">{{ b.label }}</text>
-          </g>
-          {% endfor %}
-        </svg>
-        <div class="nx-legend">
-          <span><i style="background: var(--chart-1)"></i>Attempts per score band (%)</span>
-          <span><i style="background: var(--chart-2)"></i>81–100</span>
-        </div>
-      </div>
-      {% else %}
-      {% call ui.empty_state('No scores yet', 'The chart fills in as students submit.', icon='bar-chart') %}{% endcall %}
-      {% endif %}
+      {{ ui.score_chart(score_bands) }}
     </section>
 
   </div>
