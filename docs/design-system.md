@@ -4,7 +4,7 @@ The rules and building blocks for every redesigned page. Pages move onto the
 system one at a time; until a page is redesigned it keeps `base.html` and the
 legacy stylesheets, untouched.
 
-**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding).
+**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit).
 
 ---
 
@@ -34,6 +34,8 @@ frontend/static/css/ds/
   layout.css       app shell: sidebar, top bar, page column, grids, drawer
   components.css   buttons, switches, inputs, badges, panels, stats, tables,
                    cards, feed, menus, toasts, empty states, bar chart
+  exam.css         the exam runtime (system check, paper, camera widget,
+                   dialogs) and the access-key gate
 frontend/static/js/ds/app.js        theme menu, dropdowns, drawer, nx.toast()
 frontend/static/js/pages/<page>.js  page behaviour (no inline scripts)
 
@@ -41,7 +43,9 @@ frontend/templates/
   layouts/app.html          the app shell (sidebar); signed-in pages extend this
   layouts/auth.html         sign-in shell (brand panel + form); set uses_face = True
                             before extending to load the face-liveness client
-  partials/                 theme_init, csrf, sidebar, topbar_end, toasts
+  layouts/exam.html         distraction-free exam shell: no sidebar, no account
+                            menu; takes body_class and uses_face
+  partials/                 theme_init, csrf, sidebar, topbar_end, theme_menu, toasts
   components/ui.html        Jinja macros: button, badge, stat, page_header,
                             empty_state, initials
 ```
@@ -138,6 +142,20 @@ Import the macros with `{% import 'components/ui.html' as ui %}`.
 
 **Confirmations.** Don't use `window.confirm()`. Confirm destructive actions
 in place (see the two-step delete in `js/pages/faculty_dashboard.js`).
+
+### Exam runtime
+
+`student/take_exam.html` keeps its proctoring, timer and autosave script
+inline, and that script toggles the exam's own class names (`qn-ans`,
+`opt-selected`, `timer-box.crit`, `toast-item.tw` …). Those names are styled
+in `exam.css` on tokens; the old `--exam-*` variables are aliases for
+semantic tokens. Rules for changing it:
+
+- Keep every element ID: the script and `tests/test_design_system.py` rely on them.
+- Text from the server or the OS (toasts, the activity log, device names)
+  is set with `textContent`, never `innerHTML`.
+- Canvas drawing reads colours from tokens with `examColour('--success')`.
+- No emoji; use Bootstrap Icons.
 
 ---
 

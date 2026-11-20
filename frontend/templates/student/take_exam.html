@@ -1,143 +1,16 @@
-{% extends "base.html" %}
-{% block title %}{{ exam.title }} – Secure Exam{% endblock %}
-
-{# ── Inject exam-mode class so CSS can hide nav/footer ── #}
-{% block body_class %}exam-mode{% endblock %}
+{% set uses_face = True %}
+{% set body_class = 'exam-mode' %}
+{% extends "layouts/exam.html" %}
+{% block title %}{{ exam.title }}{% endblock %}
 
 {% block content %}
-<script src="{{ url_for('static', filename='js/face_liveness.js') }}"></script>
-<style>
-  /* Hide all question slides; only the .active one is shown */
-  .question-slide { display: none !important; }
-  .question-slide.active { display: block !important; }
-
-  /* ── Whitespace-aware question & option text ──
-     white-space: pre-wrap  →  honours <br> we inject AND wraps long lines.
-     font-family stack keeps code readable while staying legible for prose. */
-  .q-text {
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.65;
-  }
-  .opt-text {
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.55;
-  }
-</style>
-
-{# ══════════════════════════════════════
-ACCESS KEY OVERLAY (shown only when exam requires a key)
-══════════════════════════════════════ #}
-{% if needs_key %}
-<div id="key-overlay" style="
-  position:fixed; inset:0; z-index:9999;
-  background:radial-gradient(ellipse at 60% 40%, #0d1b2a 0%, #060d16 100%);
-  display:none; align-items:center; justify-content:center;
-">
-  <div style="
-    background:rgba(255,255,255,0.04);
-    border:1px solid rgba(255,255,255,0.10);
-    border-radius:20px;
-    padding:2.5rem 2rem;
-    max-width:420px;
-    width:92%;
-    text-align:center;
-    box-shadow:0 24px 64px rgba(0,0,0,0.5);
-    backdrop-filter:blur(12px);
-  ">
-    <div style="font-size:3rem; margin-bottom:0.5rem;">🔑</div>
-    <h2 style="color:#e8eaf0; font-size:1.4rem; margin:0 0 0.4rem;">Exam Access Key Required</h2>
-    <p style="color:#8899aa; font-size:0.9rem; margin:0 0 1.5rem;">
-      Enter the key shared by your faculty to unlock <strong style="color:#a5b4fc;">{{ exam.title }}</strong>.
-    </p>
-
-    <div style="position:relative; margin-bottom:1rem;">
-      <input id="keyInput" type="text" maxlength="12" placeholder="Enter access key" autocomplete="off"
-        spellcheck="false" style="
-          width:100%; box-sizing:border-box;
-          padding:0.85rem 1rem;
-          font-size:1.2rem; letter-spacing:0.25em; text-transform:uppercase; text-align:center;
-          background:rgba(255,255,255,0.06);
-          border:1.5px solid rgba(255,255,255,0.15);
-          border-radius:10px;
-          color:#e8eaf0;
-          outline:none;
-          font-family:monospace;
-          transition:border-color 0.2s;
-        " oninput="this.value=this.value.toUpperCase(); document.getElementById('keyError').textContent='';"
-        onkeydown="if(event.key==='Enter') verifyKey();">
-    </div>
-
-    <div id="keyError" style="color:#f87171; font-size:0.85rem; min-height:1.2em; margin-bottom:0.8rem;"></div>
-
-    <button id="keyBtn" onclick="verifyKey()" style="
-        width:100%; padding:0.85rem;
-        background:linear-gradient(135deg,#6366f1,#4f46e5);
-        color:#fff; border:none; border-radius:10px;
-        font-size:1rem; font-weight:600; cursor:pointer;
-        transition:opacity 0.2s;
-      ">
-      <i class="bi bi-unlock-fill"></i> Verify &amp; Continue
-    </button>
-  </div>
-</div>
-
-<script>
-  (function () {
-    const keyOverlay = document.getElementById('key-overlay');
-    const keyInput = document.getElementById('keyInput');
-    const keyError = document.getElementById('keyError');
-    const keyBtn = document.getElementById('keyBtn');
-
-    window.addEventListener('DOMContentLoaded', () => keyInput && keyInput.focus());
-
-    window.verifyKey = async function () {
-      const key = (keyInput.value || '').trim().toUpperCase();
-      if (!key) { keyError.textContent = 'Please enter the access key.'; return; }
-
-      keyBtn.disabled = true;
-      keyBtn.textContent = 'Verifying…';
-
-      try {
-        const resp = await fetch('{{ url_for("exam.verify_exam_key", exam_id=exam.id) }}', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'access_key=' + encodeURIComponent(key)
-        });
-        const data = await resp.json();
-
-        if (data.success) {
-          keyOverlay.style.transition = 'opacity 0.4s';
-          keyOverlay.style.opacity = '0';
-          setTimeout(() => {
-            keyOverlay.style.display = 'none';
-            keyOverlay.style.opacity = '';
-            /* Key verified — now show the instructions modal */
-            const instr = document.getElementById('modal-instr');
-            if (instr) instr.style.display = 'flex';
-          }, 400);
-        } else {
-          keyError.textContent = data.error || 'Invalid key. Please try again.';
-          keyInput.select();
-        }
-      } catch (e) {
-        keyError.textContent = 'Network error. Please try again.';
-      } finally {
-        keyBtn.disabled = false;
-        keyBtn.innerHTML = '<i class="bi bi-unlock-fill"></i> Verify &amp; Continue';
-      }
-    };
-  })();
-</script>
-{% endif %}
 
 {# ══════════════════════════════════════════════════════════
    SCREEN RECORDING BLOCKER (fixed, always in DOM)
 ══════════════════════════════════════════════════════════ #}
 <div id="sc-rec-blocker" style="display:none;">
   <div class="scrb-inner">
-    <div class="scrb-ico"><i class="bi bi-record-circle-fill" style="font-size:48px;color:#f05454;"></i></div>
+    <div class="scrb-ico"><i class="bi bi-record-circle" aria-hidden="true"></i></div>
     <div class="scrb-title">Screen Recording / Sharing Detected</div>
     <div class="scrb-sub">Screen capture is strictly prohibited during this exam.<br>Stop all recording software, then close this alert to continue.</div>
     <button class="scrb-btn" onclick="dismissRecBlocker()">I have stopped recording — Resume</button>
@@ -155,7 +28,7 @@ SYSTEM CHECK OVERLAY — combined calibration, mic test, checks
     <div class="sc-cam-panel">
 
       <div class="sc-cam-section-title">
-        <i class="bi bi-shield-lock-fill"></i> Netra<span style="color:var(--exam-primary)">-I</span>
+        <i class="bi bi-shield-check" aria-hidden="true"></i> Netra-I
         <span class="sc-cam-subtitle">Pre-Exam Verification</span>
       </div>
 
@@ -179,7 +52,7 @@ SYSTEM CHECK OVERLAY — combined calibration, mic test, checks
       </div>
 
       <!-- Calibration progress (used by initCam() JS) -->
-      <div class="calib-prog" style="margin:8px 0 4px">
+      <div class="calib-prog">
         <div class="calib-fill" id="calibFill"></div>
       </div>
       <div class="calib-steps">
@@ -187,7 +60,7 @@ SYSTEM CHECK OVERLAY — combined calibration, mic test, checks
         <div class="cs" id="cs2"><i class="bi bi-person-bounding-box"></i> Face Lock</div>
         <div class="cs" id="cs3"><i class="bi bi-check2-circle"></i> Ready</div>
       </div>
-      <div id="calib-msg" style="text-align:center;"></div>
+      <div id="calib-msg" role="status"></div>
 
       <!-- Microphone meter -->
       <div class="sc-audio-wrap">
@@ -342,12 +215,10 @@ CALIBRATION OVERLAY — stub only, no longer displayed
 INSTRUCTIONS MODAL
 ══════════════════════════════════════ #}
 <div id="modal-instr">
-  <div class="instr-modal">
+  <div class="instr-modal" role="dialog" aria-modal="true" aria-label="Exam instructions">
     <div class="instr-hd">
       <h2><i class="bi bi-clipboard-check"></i> Exam Instructions</h2>
-      <span
-        style="font-size:10px; color:var(--exam-muted2); font-family:monospace; font-weight:700; border:1px solid var(--exam-border); padding:3px 7px; border-radius:5px;">READ
-        CAREFULLY</span>
+      <span class="instr-tag">Read carefully</span>
     </div>
     <div class="instr-body">
       <div class="instr-rules">
@@ -395,9 +266,9 @@ INSTRUCTIONS MODAL
         </div>
       </div>
       <div class="warn-strip">
-        <i class="bi bi-lightning-fill" style="flex-shrink:0;"></i>
+        <i class="bi bi-info-circle-fill" aria-hidden="true"></i><span>
         Unanswered questions score <strong>0 points</strong>. Questions &amp; options are randomized per student. All
-        violations are reviewed by instructors.
+        violations are reviewed by instructors.</span>
       </div>
     </div>
     <div class="instr-foot">
@@ -416,15 +287,15 @@ MAIN EXAM UI (2-col: left nav + main)
   {# ── STICKY TOP BAR ── #}
   <div id="exam-topbar">
     <div class="bar-title">
-      <i class="bi bi-shield-lock-fill" style="color:var(--exam-primary); flex-shrink:0;"></i>
+      <i class="bi bi-shield-check" aria-hidden="true"></i>
       <span class="bar-exam-name">{{ exam.title }}</span>
     </div>
 
     <div class="topbar-center">
-      <div class="exam-prog-track" style="width:220px;">
+      <div class="exam-prog-track">
         <div class="exam-prog-fill" id="progFill" style="width:0%"></div>
       </div>
-      <span id="progLabel" style="font-size:11px; color:var(--exam-muted); white-space:nowrap;">Q 1 / {{
+      <span id="progLabel">Q 1 / {{
         questions|length }}</span>
     </div>
 
@@ -433,9 +304,10 @@ MAIN EXAM UI (2-col: left nav + main)
         <i class="bi bi-arrow-left-right"></i>
         <span id="tabNum">0</span>/{{ exam.max_tab_switches or 3 }}
       </div>
-      <div id="timer-box">--:--:--</div>
+      <div id="timer-box" role="timer" aria-label="Time remaining">--:--:--</div>
+      {% include 'partials/theme_menu.html' %}
       <button id="btn-submit-top" onclick="openSubmit()">
-        <i class="bi bi-send-check"></i> Submit
+        <i class="bi bi-send-check" aria-hidden="true"></i> <span>Submit</span>
       </button>
     </div>
   </div>
@@ -473,7 +345,7 @@ MAIN EXAM UI (2-col: left nav + main)
           </div>
         </div>
 
-        <div class="panel-label">Questions</div>
+        <div class="panel-label panel-label--q">Questions</div>
         <div class="q-nav-grid" id="qNavGrid">
           {% for q in questions %}
           <div
@@ -506,7 +378,7 @@ MAIN EXAM UI (2-col: left nav + main)
           data-opts='{{ q.option_a|tojson }},{{ q.option_b|tojson }},{{ (q.option_c or "")|tojson }},{{ (q.option_d or "")|tojson }}'>
 
           <div class="qh-row">
-            <div style="display:flex; align-items:center; gap:10px;">
+            <div class="cam-bar-group">
               <span class="q-label-tag">Question</span>
               <span class="q-pos-txt">{{ loop.index }} of {{ questions|length }}</span>
             </div>
@@ -563,13 +435,13 @@ DRAGGABLE FLOATING CAMERA WIDGET
 ══════════════════════════════════════ #}
 <div id="cam-widget" style="display:none;">
   <div id="cam-widget-bar">
-    <div style="display:flex; align-items:center; gap:6px;">
+    <div class="cam-bar-group">
       <div class="live-dot-anim"></div>
-      <span style="font-size:11px; font-weight:600; color:var(--exam-muted);">Camera</span>
+      <span>Camera</span>
     </div>
-    <div style="display:flex; align-items:center; gap:6px;">
+    <div class="cam-bar-group">
       <div class="cam-badge-pill cbp-ok" id="camBadge">
-        <i class="bi bi-circle-fill" style="font-size:6px;"></i> Active
+        <i class="bi bi-circle-fill" aria-hidden="true"></i> Active
       </div>
       <button id="cam-widget-toggle" title="Minimize/Restore camera" onclick="toggleCamWidget()">
         <i class="bi bi-dash-lg" id="cam-widget-ico"></i>
@@ -585,16 +457,16 @@ DRAGGABLE FLOATING CAMERA WIDGET
       </div>
     </div>
     <div class="face-row">
-      <i id="faceIco" class="bi bi-person-check-fill" style="font-size:14px; color:var(--exam-success);"></i>
+      <i id="faceIco" class="bi bi-person-check-fill" aria-hidden="true"></i>
       <div>
         <span class="face-main" id="faceMain">Face Detected</span>
         <span class="face-sub" id="faceSub">Centered &amp; clear</span>
       </div>
     </div>
     <!-- ── Active Monitoring Features (shows what faculty enabled) ── -->
-    <div id="activeFeatures" style="margin:8px 0; padding:6px 10px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid rgba(255,255,255,0.08);">
-      <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.4); margin-bottom:5px; font-weight:600;">Active Monitoring</div>
-      <div id="featureBadges" style="display:flex; flex-wrap:wrap; gap:4px;"></div>
+    <div id="activeFeatures" class="cam-features">
+      <div class="cam-features__label">Active monitoring</div>
+      <div id="featureBadges"></div>
     </div>
 
     <div class="viol-row">
@@ -605,9 +477,8 @@ DRAGGABLE FLOATING CAMERA WIDGET
       </div>
       <span class="viol-num" id="violNum">0/{{ mv }}</span>
     </div>
-    <div class="exam-log-card" style="margin-top:8px;">
-      <div class="exam-log-hd">Log <span id="logBadge"
-          style="font-family:monospace; color:var(--exam-primary);">0</span></div>
+    <div class="exam-log-card">
+      <div class="exam-log-hd">Log <span id="logBadge">0</span></div>
       <div class="exam-log-scroll" id="logScroll"></div>
     </div>
   </div>
@@ -626,10 +497,10 @@ DRAGGABLE FLOATING CAMERA WIDGET
 
 {# ── SUBMIT MODAL ── #}
 <div id="modal-submit">
-  <div class="submit-modal">
+  <div class="submit-modal" role="dialog" aria-modal="true" aria-labelledby="smTitle">
     <div class="sm-head">
       <div class="sm-icon"><i class="bi bi-send-check-fill"></i></div>
-      <div class="sm-title">Submit Examination?</div>
+      <div class="sm-title" id="smTitle">Submit Examination?</div>
       <div class="sm-sub">This cannot be undone. Answers are graded immediately.</div>
     </div>
     <div class="sm-stats">
@@ -649,10 +520,10 @@ DRAGGABLE FLOATING CAMERA WIDGET
 
 {# ── FULLSCREEN BLOCKER ── #}
 <div id="fs-overlay">
-  <div class="fso-icon"><i class="bi bi-fullscreen-exit" style="color:var(--exam-warning);"></i></div>
+  <div class="fso-icon"><i class="bi bi-fullscreen-exit" aria-hidden="true"></i></div>
   <div class="fso-title">Fullscreen Required</div>
   <div class="fso-sub">Re-enter fullscreen to continue your examination.</div>
-  <button class="btn-begin" style="margin-top:10px;" onclick="enterFS()">
+  <button class="btn-begin" onclick="enterFS()">
     <i class="bi bi-fullscreen"></i> Enter Fullscreen
   </button>
 </div>
@@ -997,12 +868,11 @@ DRAGGABLE FLOATING CAMERA WIDGET
     if (document.getElementById('force-end-banner')) return;
     const el = document.createElement('div');
     el.id = 'force-end-banner';
-    el.innerHTML =
-      '<div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;padding:40px;">' +
-      '<div style="font-size:52px;">🛑</div>' +
-      '<div style="font-size:22px;font-weight:700;color:#fff;">' + msg + '</div>' +
-      '<div style="font-size:15px;color:rgba(255,255,255,0.7);">Your answers are being saved and submitted automatically.</div>' +
-      '</div>';
+    el.className = 'nx-force-end';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<i class="bi bi-stop-circle" aria-hidden="true"></i><b></b>' +
+      '<span>Your answers are being saved and submitted automatically.</span>';
+    el.querySelector('b').textContent = msg;
     document.body.appendChild(el);
   }
 
@@ -1134,15 +1004,15 @@ DRAGGABLE FLOATING CAMERA WIDGET
       /* Show specific error messages */
       let errMsg = '';
       if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-        errMsg = '⚠️ Camera permission denied. Click the 🔒 icon in your address bar → Site Settings → Camera → Allow, then reload the page.';
+        errMsg = 'Camera permission denied. Open the site settings from the address bar, allow the camera, then reload the page.';
       } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
-        errMsg = '⚠️ No camera found. Please connect a camera and reload.';
+        errMsg = 'No camera found. Please connect a camera and reload.';
       } else if (e.name === 'NotReadableError' || e.name === 'TrackStartError') {
-        errMsg = '⚠️ Camera is in use by another app. Close other apps using your camera and reload.';
+        errMsg = 'Camera is in use by another app. Close other apps using your camera and reload.';
       } else if (e.message.includes('Camera API not available')) {
-        errMsg = '⚠️ Camera requires a secure connection (HTTPS). Please contact your instructor.';
+        errMsg = 'Camera requires a secure connection (HTTPS). Please contact your instructor.';
       } else {
-        errMsg = '⚠️ Camera unavailable: ' + e.message;
+        errMsg = 'Camera unavailable: ' + e.message;
       }
 
       setCalibMsg(errMsg, false);
@@ -1629,7 +1499,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
         if ((widthDiff || heightDiff) && !devToolsOpen && !S.done) {
           devToolsOpen = true;
           logAct('devtools_detected', 'Developer tools opened', 'high');
-          addLog('⚠️ Developer tools detected!', 'le');
+          addLog('Developer tools detected', 'le');
           toast('Security Alert', 'Developer tools detected. This has been logged.', 'td');
           handleTabSwitch('Developer tools detected');
         } else if (!widthDiff && !heightDiff) {
@@ -1818,7 +1688,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
     g('pwFace').className = ok ? 'pv pv-ok' : 'pv pv-bad';
     const b = g('camBadge');
     b.className = `cam-badge-pill ${ok ? 'cbp-ok' : 'cbp-warn'}`;
-    b.innerHTML = `<i class="bi bi-circle-fill" style="font-size:6px;"></i> ${ok ? 'Active' : 'Warning'}`;
+    b.innerHTML = `<i class="bi bi-circle-fill" aria-hidden="true"></i> ${ok ? 'Active' : 'Warning'}`;
   }
 
   function updateViolUI() {
@@ -1849,21 +1719,17 @@ DRAGGABLE FLOATING CAMERA WIDGET
       { key: 'tab_switch',       label: 'Tab Switch',      icon: 'bi-window-stack',         on: P.tab_switch !== false },
     ];
 
-    container.innerHTML = features.map(f => {
-      const color = f.on ? 'rgba(99,220,150,0.9)' : 'rgba(255,255,255,0.25)';
-      const bg    = f.on ? 'rgba(99,220,150,0.12)' : 'rgba(255,255,255,0.04)';
-      const border = f.on ? 'rgba(99,220,150,0.25)' : 'rgba(255,255,255,0.08)';
-      return `<span style="display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:500; color:${color}; background:${bg}; border:1px solid ${border};">`
-        + `<i class="bi ${f.icon}" style="font-size:9px;"></i>${f.label}`
-        + (f.on ? '' : ' <span style="opacity:0.5">OFF</span>')
-        + `</span>`;
-    }).join('');
+    container.innerHTML = features.map(f =>
+      `<span class="feat-badge${f.on ? ' is-on' : ''}"><i class="bi ${f.icon}" aria-hidden="true"></i>${f.label}`
+        + (f.on ? '' : ' <span class="feat-badge__off">off</span>')
+        + `</span>`
+    ).join('');
 
     /* Show sensitivity level */
     const sens = P.sensitivity || 'medium';
-    const sensColors = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444' };
+    const sensTones = { low: 'success', medium: 'warning', high: 'danger' };
     const sensLabels = { low: 'Relaxed', medium: 'Balanced', high: 'Strict' };
-    container.innerHTML += `<span style="display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:600; color:${sensColors[sens]}; background:${sensColors[sens]}15; border:1px solid ${sensColors[sens]}30;"><i class="bi bi-speedometer2" style="font-size:9px;"></i>${sensLabels[sens]}</span>`;
+    container.innerHTML += `<span class="feat-badge tone-${sensTones[sens] || 'warning'}"><i class="bi bi-speedometer2" aria-hidden="true"></i>${sensLabels[sens] || sensLabels.medium}</span>`;
   }
 
   /* ── Show active features in the instructions modal ── */
@@ -1872,24 +1738,43 @@ DRAGGABLE FLOATING CAMERA WIDGET
     if (!el) return;
     const P = CFG.proctor;
     const active = [];
-    if (P.camera_enabled !== false) active.push('📹 Camera');
-    if (P.head_pose === true) active.push('🔄 Head Tracking');
-    if (P.object_detection === true) active.push('📱 Object Detection');
-    if (P.voice_detection === true) active.push('🎤 Audio Monitoring');
-    if (P.tab_switch !== false) active.push('🪟 Tab Switch Detection');
+    if (P.camera_enabled !== false) active.push('camera');
+    if (P.head_pose === true) active.push('head tracking');
+    if (P.object_detection === true) active.push('object detection');
+    if (P.voice_detection === true) active.push('audio');
+    if (P.tab_switch !== false) active.push('tab switches');
     if (active.length === 0) {
       el.textContent = 'No active monitoring for this exam.';
     } else {
-      el.innerHTML = '<strong>Active:</strong> ' + active.join(' &nbsp;·&nbsp; ')
-        + '<br><span style="opacity:0.7; font-size:0.85em;">Max ' + CFG.maxViol + ' reminders before auto-submit</span>';
+      const list = active.join(', ');
+      el.textContent = list.charAt(0).toUpperCase() + list.slice(1) + '. Up to ' + CFG.maxViol + ' reminders, then the exam submits itself.';
     }
+  }
+
+  /* One face with landmarks and descriptor, or null. A descriptor needs
+     landmarks first, and face-api tasks are thenables without .catch(). */
+  async function detectFace(source, opts) {
+    try {
+      return (await faceapi.detectSingleFace(source, opts).withFaceLandmarks(true).withFaceDescriptor()) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /* Read a design-system colour token, for drawing on canvas */
+  function examColour(token) {
+    return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || 'currentColor';
   }
 
   function toast(title, msg, cls = 'ti') {
     const iconMap = { tw: 'bi-exclamation-triangle-fill', td: 'bi-x-octagon-fill', ti: 'bi-info-circle-fill', to: 'bi-check-circle-fill' };
     const el = document.createElement('div');
     el.className = `toast-item ${cls}`;
-    el.innerHTML = `<i class="bi ${iconMap[cls] || 'bi-info-circle-fill'}" style="font-size:15px; flex-shrink:0;"></i><div><div class="ti-title">${title}</div><div class="ti-msg">${msg}</div></div><button class="ti-close" onclick="this.closest('.toast-item').remove()"><i class="bi bi-x"></i></button>`;
+    el.setAttribute('role', cls === 'td' ? 'alert' : 'status');
+    el.innerHTML = `<i class="bi ${iconMap[cls] || 'bi-info-circle-fill'}" aria-hidden="true"></i><div><div class="ti-title"></div><div class="ti-msg"></div></div><button type="button" class="ti-close" aria-label="Dismiss"><i class="bi bi-x" aria-hidden="true"></i></button>`;
+    el.querySelector('.ti-title').textContent = title;
+    el.querySelector('.ti-msg').textContent = msg;
+    el.querySelector('.ti-close').addEventListener('click', () => el.remove());
     g('toast-wrap').appendChild(el);
     setTimeout(() => el.parentElement && el.remove(), 5500);
   }
@@ -1899,7 +1784,9 @@ DRAGGABLE FLOATING CAMERA WIDGET
     const t = new Date().toLocaleTimeString([], { hour12: false });
     const el = document.createElement('div');
     el.className = `log-item ${cls}`;
-    el.innerHTML = `<span class="lt">${t}</span><span class="lm">${msg}</span>`;
+    el.innerHTML = '<span class="lt"></span><span class="lm"></span>';
+    el.firstChild.textContent = t;
+    el.lastChild.textContent = msg;
     const scroll = g('logScroll');
     scroll.insertBefore(el, scroll.firstChild);
     g('logBadge').textContent = S.logs;
@@ -1995,7 +1882,10 @@ DRAGGABLE FLOATING CAMERA WIDGET
       if (el) el.innerHTML = html;
     }
     function tag(label, cls) {
-      return `<span class="sc-tag ${cls || ''}">${label}</span>`;
+      const span = document.createElement('span');
+      span.className = `sc-tag ${cls || ''}`;
+      span.textContent = label;   /* device names come from the OS: never markup */
+      return span.outerHTML;
     }
 
     /* ─────────────────────────────────────────────────────
@@ -2108,7 +1998,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
         const label = c.label || `Camera ${i + 1}`;
         /* Try to guess if it's built-in vs external */
         const isExternal = /usb|external|virtual|obs|snap|droidcam|iriun|epoc/i.test(label);
-        return tag((isExternal ? '⚠ ' : '') + label, isExternal ? 'st-warn' : 'st-ok');
+        return tag((isExternal ? 'External: ' : '') + label, isExternal ? 'st-warn' : 'st-ok');
       }).join('');
       const state = count === 0 ? 'warn' : count === 1 ? 'ok' : 'warn';
       const msg = count === 0 ? 'No camera found — connect a camera'
@@ -2134,7 +2024,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
       let micTags = mics.map((m, i) => {
         const label = m.label || `Microphone ${i + 1}`;
         const isExternal = /usb|external|headset|headphone|bluetooth|bt|airpod|jabra|plantronics|logitech/i.test(label);
-        return tag((isExternal ? '⚠ ' : '') + label, isExternal ? 'st-warn' : 'st-ok');
+        return tag((isExternal ? 'External: ' : '') + label, isExternal ? 'st-warn' : 'st-ok');
       }).join('');
       const state = count === 0 ? 'warn' : 'ok';
       const msg = count === 0 ? 'No microphone found' : `${count} microphone${count > 1 ? 's' : ''} detected`;
@@ -2365,10 +2255,8 @@ DRAGGABLE FLOATING CAMERA WIDGET
       canvas.height = video.videoHeight;
 
       const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.45 });
-      const det = await faceapi.detectSingleFace(video, opts)
-        .withFaceLandmarks(true)
-        .withFaceDescriptor()
-        .catch(() => null);
+      /* face-api tasks are thenables, not Promises: no .catch() on them */
+      const det = await detectFace(video, opts);
 
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -2388,16 +2276,14 @@ DRAGGABLE FLOATING CAMERA WIDGET
       const good = centered && sized;
 
       /* Draw bounding box */
-      ctx.strokeStyle = good ? '#30d49e' : '#f7b731';
+      const boxColour = examColour(good ? '--success' : '--warning');
+      ctx.strokeStyle = boxColour;
       ctx.lineWidth = 2.5;
-      ctx.shadowColor = good ? 'rgba(48,212,158,.5)' : 'rgba(247,183,49,.5)';
-      ctx.shadowBlur = 8;
       ctx.strokeRect(x, y, width, height);
-      ctx.shadowBlur = 0;
 
       /* Face score badge */
       const score = (det.detection.score * 100).toFixed(0);
-      ctx.fillStyle = good ? '#30d49e' : '#f7b731';
+      ctx.fillStyle = boxColour;
       ctx.font = 'bold 10px monospace';
       ctx.fillText(`${score}%`, x + 4, y + 13);
 
@@ -2410,7 +2296,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
 
       S._faceStable++;
       const needed = 4; /* ~2 seconds at 500ms intervals */
-      updateFaceBar(true, S._faceReady ? '✅ Face locked in' : `Hold still… (${S._faceStable}/${needed})`);
+      updateFaceBar(true, S._faceReady ? 'Face locked in' : `Hold still… (${S._faceStable}/${needed})`);
 
       if (S._faceStable >= needed && !S._faceReady) {
         /* Capture reference descriptor */
@@ -2420,7 +2306,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
         setFill(66);
         setChip('cr', 'Face Locked');
         setCalibMsg('Face reference captured!', true);
-        updateFaceBar(true, '✅ Identity reference saved — face locked in');
+        updateFaceBar(true, 'Identity reference saved — face locked in');
         /* Update identity check item */
         scSetDesc('identity',
           'Face reference captured — AI comparison active' +
@@ -2447,7 +2333,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
       if (!v || v.readyState < 2 || !v.videoWidth) return;
 
       const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.4 });
-      const det = await faceapi.detectSingleFace(v, opts).withFaceDescriptor().catch(() => null);
+      const det = await detectFace(v, opts);
       if (!det || !det.descriptor) return;
 
       const res = await fetch("{{ url_for('auth.face_exam_check') }}", {
@@ -2475,12 +2361,12 @@ DRAGGABLE FLOATING CAMERA WIDGET
       const v = g('monitor-video');
       if (!v || v.readyState < 2 || !v.videoWidth) return;
       const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.4 });
-      const det = await faceapi.detectSingleFace(v, opts).withFaceDescriptor().catch(() => null);
+      const det = await detectFace(v, opts);
       if (!det) return;
       const dist = faceapi.euclideanDistance(S.refDescriptor, Array.from(det.descriptor));
       console.log(`🔍 Face identity distance: ${dist.toFixed(3)}`);
       if (dist > 0.55) {
-        addLog('⚠ Face mismatch — different person detected', 'le');
+        addLog('Face mismatch — different person detected', 'le');
         safeToast('Identity Alert',
           `Face mismatch detected (score: ${dist.toFixed(2)}). The person in frame may not match the registered student.`,
           'td', 'face_mismatch');
@@ -2548,15 +2434,13 @@ DRAGGABLE FLOATING CAMERA WIDGET
         const fill = g('scAudioFill');
         if (fill) {
           fill.style.width = pct + '%';
-          fill.style.background = pct > 60 ? 'linear-gradient(90deg,#f7b731,#f05454)'
-                                : pct > 25 ? 'linear-gradient(90deg,#30d49e,#f7b731)'
-                                :            'linear-gradient(90deg,#5299ff,#30d49e)';
+          fill.style.background = pct > 60 ? 'var(--warning)' : pct > 25 ? 'var(--success)' : 'var(--accent)';
         }
         if (pct > 22 && !_peakHit) {
           _peakHit = true;
           S._micReady = true;
           const st = g('scAudioStatus');
-          if (st) st.textContent = '✅ Voice detected — microphone working';
+          if (st) st.textContent = 'Voice detected — microphone working';
           scSetStatus('mic', 'ok', 'Voice detected — microphone verified');
           checkAllReady();
         } else if (!_peakHit) {
@@ -2588,7 +2472,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
       navigator.mediaDevices.getDisplayMedia = async function(...args) {
         const el = g('sc-rec-blocker');
         if (el) el.style.display = 'flex';
-        scBlock('screen_recording', '⚠ Stop screen recording to proceed');
+        scBlock('screen_recording', 'Stop screen recording to proceed');
         return Promise.reject(new DOMException('Screen capture blocked during exam', 'NotAllowedError'));
       };
     }
@@ -2618,23 +2502,23 @@ DRAGGABLE FLOATING CAMERA WIDGET
       const isBadResolution = window.screen.width > 2560;
 
       if (isExtended || isBadResolution) {
-        scBlock('ext_monitor', '⚠ Disconnect external monitor to proceed');
+        scBlock('ext_monitor', 'Disconnect external monitor to proceed');
         scSetStatus('devices', 'warn', null);
-        scSetDesc('devices', `⚠ External monitor detected — please disconnect it<div class="sc-tag-row"><span class="sc-tag st-warn">🖥 External Monitor</span><span class="sc-tag st-info">${window.screen.width}×${window.screen.height}</span></div>`);
+        scSetDesc('devices', `External monitor detected — please disconnect it<div class="sc-tag-row"><span class="sc-tag st-warn">External monitor</span><span class="sc-tag st-info">${window.screen.width}×${window.screen.height}</span></div>`);
         return false;
       } else {
         scUnblock('ext_monitor');
       }
       if (extCams.length > 0) {
-        scBlock('ext_camera', '⚠ Disconnect external camera to proceed');
-        scSetDesc('devices', `⚠ External camera detected — please disconnect<div class="sc-tag-row">${extCams.map(c=>`<span class="sc-tag st-warn">📷 ${c.label.slice(0,20)}</span>`).join('')}</div>`);
+        scBlock('ext_camera', 'Disconnect external camera to proceed');
+        scSetDesc('devices', `External camera detected — please disconnect<div class="sc-tag-row">${extCams.map(c=>tag(c.label.slice(0,20), 'st-warn')).join('')}</div>`);
         return false;
       } else {
         scUnblock('ext_camera');
       }
       if (extMics.length > 0) {
-        scBlock('ext_mic', '⚠ Disconnect external mic/headset to proceed');
-        scSetDesc('devices', `⚠ External audio device — headsets not allowed<div class="sc-tag-row">${extMics.map(m=>`<span class="sc-tag st-warn">🎙 ${m.label.slice(0,20)}</span>`).join('')}</div>`);
+        scBlock('ext_mic', 'Disconnect external mic/headset to proceed');
+        scSetDesc('devices', `External audio device — headsets not allowed<div class="sc-tag-row">${extMics.map(m=>tag(m.label.slice(0,20), 'st-warn')).join('')}</div>`);
         return false;
       } else {
         scUnblock('ext_mic');
@@ -2819,10 +2703,8 @@ DRAGGABLE FLOATING CAMERA WIDGET
 </script>
 
 <!-- Exam screen-recording cover (black overlay) -->
-<div id="exam-rec-cover" style="display:none;position:fixed;inset:0;z-index:99999;
-  background:#000;align-items:center;justify-content:center;flex-direction:column;
-  color:rgba(255,255,255,.2);font-size:16px;letter-spacing:2px;text-transform:uppercase;">
-  🔒 Recording Prohibited
+<div id="exam-rec-cover" class="nx-rec-cover" style="display:none;">
+  <i class="bi bi-lock" aria-hidden="true"></i> Recording prohibited
 </div>
 
 {% endblock %}

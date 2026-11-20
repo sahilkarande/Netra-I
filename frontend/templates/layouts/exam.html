@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+{#
+  Netra-I exam shell (design system).
+  Distraction-free: no sidebar, no account menu, so nothing on screen leads
+  away from the paper mid-exam. Used by the access-key gate and the exam itself.
+
+  Blocks: title, head_extra, content, extra_js
+  Variables: body_class (string), uses_face (bool) to load the face-liveness client.
+#}
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Exam{% endblock %} · Netra-I</title>
+  <link rel="icon" href="{{ url_for('static', filename='images/applogo.png') }}" type="image/png">
+
+  {% include 'partials/theme_init.html' %}
+  {% include 'partials/csrf.html' %}
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/fonts.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/exam.css') }}">
+
+  {% if uses_face %}
+  <script>
+    /* Local face-api.js + models (offline) for identity and liveness checks */
+    window.NETRA_FACEAPI_SRC = "{{ url_for('static', filename='vendor/face-api/face-api.min.js') }}";
+    window.NETRA_FACE_MODEL_URL = "{{ url_for('static', filename='vendor/face-api/models') }}";
+  </script>
+  <script src="{{ url_for('static', filename='js/face_liveness.js') }}"></script>
+  {% endif %}
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="nx-exam {{ body_class or '' }}">
+  {% block content %}{% endblock %}
+
+  {% include 'partials/toasts.html' %}
+
+  <script src="{{ url_for('static', filename='js/ds/app.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

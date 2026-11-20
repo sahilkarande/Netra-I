@@ -43,6 +43,12 @@ REDESIGNED = [
     'frontend/static/js/pages/auth_forms.js',
     'frontend/static/js/pages/verify_otp.js',
     'frontend/static/js/pages/change_password.js',
+    'frontend/templates/layouts/exam.html',
+    'frontend/templates/partials/theme_menu.html',
+    'frontend/templates/student/exam_key.html',
+    'frontend/templates/student/take_exam.html',
+    'frontend/static/css/ds/exam.css',
+    'frontend/static/js/pages/exam_key.js',
 ]
 
 
@@ -350,3 +356,60 @@ def test_staff_change_password_page(app, seed):
         'old_password': PASSWORD, 'new_password': 'Fresh#2026',
         'confirm_password': 'Fresh#2026', 'password_hint': ''})
     assert resp.status_code == 302 and 'step=face' not in resp.headers['Location']
+
+
+# ── Taking an exam ──────────────────────────────────────────────────────────
+
+def _exam_page(app, seed, as_user, key=None):
+    if key:
+        with app.app_context():
+            Exam.query.get(seed['exam']).access_key = key
+            db.session.commit()
+    client = as_user('stud2')
+    client.post(f"/start-exam/{seed['exam']}")
+    return client, client.get(f"/exam/{seed['exam']}/take").data.decode()
+
+
+def _assert_exam_shell(html):
+    assert 'css/ds/tokens.css' in html and 'css/ds/exam.css' in html
+    assert 'css/style.css' not in html and 'bootstrap.min.css' not in html
+    assert '<meta name="csrf-token"' in html
+    assert 'nx-sidebar' not in html                              # no navigation away mid-exam
+    assert '/logout' not in html                                 # no sign-out during the exam
+    assert 'data-nx-theme="dark"' in html                        # theme can still be changed
+
+
+def test_exam_page_uses_the_exam_shell(app, seed, as_user):
+    _, html = _exam_page(app, seed, as_user)
+    _assert_exam_shell(html)
+    assert 'nx-exam exam-mode' in html
+    assert 'js/face_liveness.js' in html and 'NETRA_FACE_MODEL_URL' in html
+    assert 'vendor/socket.io/socket.io.min.js' in html
+
+
+def test_exam_page_keeps_the_runtime_hooks(app, seed, as_user):
+    """IDs the proctoring, timer and autosave script depend on."""
+    _, html = _exam_page(app, seed, as_user)
+    for el in ('syscheck-overlay', 'scProceedBtn', 'modal-instr', 'exam-ui', 'exam-topbar',
+               'timer-box', 'tab-counter', 'qNavGrid', 'qs0', 'opts0', 'cam-widget',
+               'monitor-video', 'calib-video', 'featureBadges', 'modal-submit', 'fs-overlay',
+               'sc-rec-blocker', 'exam-rec-cover', 'toast-wrap', 'as-pill'):
+        assert f'id="{el}"' in html, el
+    assert 'id="key-overlay"' not in html                         # dead in-page key overlay removed
+
+
+def test_exam_runtime_renders_untrusted_text_as_text(app, seed, as_user):
+    _, html = _exam_page(app, seed, as_user)
+    assert "el.querySelector('.ti-msg').textContent = msg" in html      # toasts
+    assert 'el.lastChild.textContent = msg' in html                      # activity log
+    assert 'span.textContent = label' in html                            # device names
+    assert "el.querySelector('b').textContent = msg" in html             # force-end banner
+
+
+def test_exam_key_page(app, seed, as_user):
+    _, html = _exam_page(app, seed, as_user, key='ABCD2345')
+    _assert_exam_shell(html)
+    assert 'id="keyForm"' in html and 'name="access_key"' in html
+    assert f'data-verify-url="/exam/{seed["exam"]}/verify-key"' in html
+    assert 'js/pages/exam_key.js' in html
+    assert 'id="qs0"' not in html
