@@ -419,6 +419,7 @@ def import_students():
 
                 existing = User.query.filter_by(email=email).first()
                 if existing:
+                    errors.append(f"Row {index + 2}: {email} is already registered")
                     skipped += 1
                     continue
 
@@ -441,6 +442,10 @@ def import_students():
                     # collide with the next student who also has none.
                     prn_number=prn_clean or None,
                     roll_id=clean_string(row.get('roll_id')) or None,
+                    batch=clean_string(row.get('batch')) or None,
+                    department=clean_string(row.get('department')) or None,
+                    course=clean_string(row.get('course')) or None,
+                    phone=clean_string(row.get('phone')) or None,
                     password_hash=hashed_pw,
                     role='student',
                     is_verified=True,
@@ -470,7 +475,12 @@ def import_students():
                 db.session.rollback()
 
         db.session.commit()
-        flash(f"✅ {added} added | ⚠️ {skipped} skipped", 'success')
+        flash(f"{added} student{'s' if added != 1 else ''} added"
+              + (f", {skipped} skipped" if skipped else '') + '.', 'success' if added else 'warning')
+        if errors:
+            shown = errors[:6]
+            more = f' (+{len(errors) - len(shown)} more)' if len(errors) > len(shown) else ''
+            flash('Skipped: ' + '; '.join(shown) + more, 'warning')
         if credentials:
             _stash_credentials(credentials)
             flash(f"{len(credentials)} student(s) were given a random temporary password. "
@@ -809,16 +819,18 @@ def faculty_students():
     students = query.all()
     
     # Get unique batches and departments for filters
-    batches = db.session.query(User.batch).filter(User.role == 'student', User.batch != None, User.batch != '').distinct().all()
-    batches = [b[0] for b in batches]
-    
-    departments = db.session.query(User.department).filter(User.role == 'student', User.department != None, User.department != '').distinct().all()
-    departments = [d[0] for d in departments]
+    # Filter options from the students this staff member manages only
+    scoped = account_service.scoped_students_query(current_user)
+    batches = sorted({b for (b,) in scoped.with_entities(User.batch).distinct() if b})
+    departments = sorted({d for (d,) in scoped.with_entities(User.department).distinct() if d})
+    total_managed = scoped.count()
 
     return render_template('faculty/manage_students.html', 
                          students=students, 
                          batches=batches, 
                          departments=departments,
+                         total_managed=total_managed,
+                         filtered=bool(q or batch or dept or verified),
                          credentials_token=session.get('credentials_token'))
 
 def _empty_summary():
@@ -857,6 +869,9 @@ def _build_batch_report(selected_batch, selected_exam_ids, exams):
     by_id = {e.id: e for e in exams}
     selected_exams = [by_id[eid] for eid in selected_exam_ids if eid in by_id]
     exam_titles = [e.title for e in selected_exams]
+    pass_mark = report_pass_mark(selected_exams)
+    # What a full score is on each exam, for students who did not sit it
+    paper_max = {e.id: float(sum((q.points or 1) for q in e.questions) or 100.0) for e in selected_exams}
 
     students = account_service.scoped_students_query(current_user).filter(
         User.batch == selected_batch).all()
@@ -870,32 +885,46 @@ def _build_batch_report(selected_batch, selected_exam_ids, exams):
             'max_possible': 0.0,
             'percentage': 0.0,
             'status': 'absent',
+            'pass_mark': pass_mark,
+            'exam_max': [],
         }
         for exam in selected_exams:
             se = StudentExam.query.filter_by(student_id=student.id, exam_id=exam.id).first()
             if se and se.status in ('submitted', 'completed'):
                 score = se.score or 0.0
                 row['exam_marks'].append(round(score, 2))
+                row['exam_max'].append(float(se.total_points or paper_max[exam.id]))
                 row['total_marks'] += score
-                row['max_possible'] += (se.total_points or 100.0)
             else:
                 row['exam_marks'].append('Absent')
+                row['exam_max'].append(paper_max[exam.id])
         _finish_row(row)
         report_data.append(row)
 
     return exam_titles, report_data, _summarise_rows(report_data)
 
 
+def report_pass_mark(exams):
+    """Overall pass line for a multi-exam report: the selected exams' own
+    pass marks, averaged (it used to be a fixed 50%, so a student who passed
+    every 40%-pass exam could show as failed)."""
+    marks = [e.passing_score for e in exams if e.passing_score is not None]
+    return round(sum(marks) / len(marks), 2) if marks else 50.0
+
+
 def _finish_row(row):
     """Percentage and pass/fail from a row's marks."""
     marks = [m for m in row['exam_marks'] if m != 'Absent']
+    if row.get('exam_max'):
+        # Out of the exams actually sat (also right after a hand edit)
+        row['max_possible'] = sum(mx for m, mx in zip(row['exam_marks'], row['exam_max']) if m != 'Absent')
     if not marks:
         row['status'] = 'absent'
         row['percentage'] = 0.0
         return
     if row['max_possible'] > 0:
         row['percentage'] = row['total_marks'] / row['max_possible'] * 100
-    row['status'] = 'pass' if row['percentage'] >= 50 else 'fail'
+    row['status'] = 'pass' if row['percentage'] >= row.get('pass_mark', 50.0) else 'fail'
 
 
 @faculty_bp.route('/faculty/student_report', methods=['GET'])
@@ -905,9 +934,9 @@ def faculty_student_report():
     if current_user.role not in ('faculty', 'admin'):
         return redirect(url_for('auth.index'))
         
-    # Get all distinct batches
-    batches_query = db.session.query(User.batch).filter(User.role == 'student', User.batch != None, User.batch != '').distinct().all()
-    batches = sorted([b[0] for b in batches_query])
+    # Batches of the students this staff member manages
+    scoped = account_service.scoped_students_query(current_user)
+    batches = sorted({b for (b,) in scoped.with_entities(User.batch).distinct() if b})
     
     # Get exams for the current faculty (or all if admin)
     if current_user.role == 'admin':
@@ -922,7 +951,10 @@ def faculty_student_report():
     exam_titles, report_data, summary = _build_batch_report(
         selected_batch, selected_exam_ids, exams)
 
+    by_id = {e.id: e for e in exams}
+    pass_mark = report_pass_mark([by_id[i] for i in selected_exam_ids if i in by_id])
     return render_template('faculty/student_report.html',
+                         pass_mark=pass_mark,
                          batches=batches,
                          exams=exams,
                          selected_batch=selected_batch,
@@ -977,9 +1009,21 @@ def faculty_student_report_pdf():
         _finish_row(row)
         row['full_name'] = f"{row['full_name']} (edited)"
 
-    # Visible order / filtering from the page, by PRN
+    # Visible order / filtering from the page: row positions in database
+    # order. (Ordering by PRN dropped every student without a PRN.)
+    row_order = payload.get('row_order')
     prn_order = [str(p) for p in (payload.get('prn_order') or []) if str(p)]
-    if prn_order:
+    if isinstance(row_order, list):
+        picked = []
+        for i in row_order:
+            try:
+                i = int(i)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= i < len(report_data):
+                picked.append(report_data[i])
+        report_data = picked
+    elif prn_order:
         by_prn = {}
         for row in report_data:
             by_prn.setdefault(str(row['prn_number'] or ''), []).append(row)
@@ -1033,22 +1077,47 @@ def faculty_edit_student(student_id):
         abort(404)
 
     if request.method == 'POST':
-        full_name = (request.form.get('full_name') or '').strip()
-        email = (request.form.get('email') or '').strip().lower()
-        if not email:
-            flash('Email is required.', 'error')
-            return render_template('faculty/edit_student.html', student=student)
-        clash = User.query.filter(User.email == email, User.id != student.id).first()
-        if clash:
-            flash('That email is already used by another account.', 'error')
-            return render_template('faculty/edit_student.html', student=student)
+        form = request.form
 
-        student.full_name = full_name or None
+        def text(name, limit):
+            return (form.get(name) or '').strip()[:limit] or None
+
+        email = (form.get('email') or '').strip().lower()
+        prn = (form.get('prn_number') or '').replace(' ', '').strip() or None
+        gender = text('gender', 20)
+        errors = {}
+        if not email or '@' not in email:
+            errors['email'] = 'Enter a valid email.'
+        elif User.query.filter(User.email == email, User.id != student.id).first():
+            errors['email'] = 'Another account already uses this email.'
+        if prn and not (prn.isdigit() and len(prn) == 12):
+            errors['prn_number'] = 'A PRN is 12 digits.'
+        elif prn and User.query.filter(User.prn_number == prn, User.id != student.id).first():
+            errors['prn_number'] = 'Another student already has this PRN.'
+        if gender and gender not in ('Male', 'Female', 'Other'):
+            errors['gender'] = 'Choose from the list.'
+
+        if errors:
+            return render_template('faculty/edit_student.html', student=student,
+                                   form=form, errors=errors), 400
+
+        # Every field the form shows is saved (only name and email used to be)
+        student.full_name = text('full_name', 100)
         student.email = email
+        student.prn_number = prn
+        student.roll_id = text('roll_id', 20)
+        student.batch = text('batch', 20)
+        student.department = text('department', 100)
+        student.course = text('course', 100)
+        student.phone = text('phone', 20)
+        student.gender = gender
+        if 'is_verified' in form:
+            student.is_verified = form.get('is_verified') == 'true'
         db.session.commit()
-        flash('Student updated successfully', 'success')
-        return redirect(url_for('faculty.faculty_students'))
-    return render_template('faculty/edit_student.html', student=student)
+        current_app.logger.info('user %s edited student %s', current_user.id, student.id)
+        flash('Changes saved.', 'success')
+        return redirect(url_for('faculty.faculty_student_profile', student_id=student.id))
+    return render_template('faculty/edit_student.html', student=student, form={}, errors={})
 
 @faculty_bp.route('/faculty/download_template')
 @login_required
@@ -1059,8 +1128,8 @@ def download_template():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['full_name', 'username', 'email', 'prn_number', 'roll_id', 'password'])
-    writer.writerow(['Asha Patil', 'asha.patil', 'asha.patil@example.com', '250840125001', '01', ''])
+    writer.writerow(['full_name', 'username', 'email', 'prn_number', 'roll_id', 'batch', 'department', 'phone', 'password'])
+    writer.writerow(['Asha Patil', 'asha.patil', 'asha.patil@example.com', '250840125001', '01', 'DBDA Aug-25', 'DBDA', '', ''])
     return send_file(
         io.BytesIO(output.getvalue().encode('utf-8')),
         mimetype='text/csv',

@@ -210,17 +210,23 @@ def global_leaderboard():
             Exam.show_leaderboard == True,
             Exam.results_published == True
         )
-    
-    # Apply date filters if provided
+    elif current_user.role == 'faculty':
+        # Faculty see the exams they can access, not every department's marks
+        from backend.routes.faculty import _get_faculty_exams
+        query = query.filter(Exam.id.in_([e.id for e in _get_faculty_exams()] or [0]))
+
+    # Date filters are whole days in the hall's local time; the end day counts
+    from datetime import timedelta
+    from backend.services.time_service import local_to_utc
     if start_date_str:
         try:
             start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-            query = query.filter(StudentExam.submitted_at >= start_date)
+            query = query.filter(StudentExam.submitted_at >= local_to_utc(start_date))
         except ValueError: pass
     if end_date_str:
         try:
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
-            query = query.filter(StudentExam.submitted_at <= end_date)
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(StudentExam.submitted_at < local_to_utc(end_date))
         except ValueError: pass
         
     all_submitted = query.all()
@@ -239,7 +245,8 @@ def global_leaderboard():
             student_data[s_id] = {
                 'student_id': s_id,
                 'name': se.student.full_name or se.student.username,
-                'prn': se.student.prn_number,
+                # Students see names, not each other's PRNs
+                'prn': se.student.prn_number if is_staff or s_id == current_user.id else None,
                 'exams_attempted': 0,
                 'total_questions': 0,
                 'marks_obtained': 0,
@@ -260,18 +267,23 @@ def global_leaderboard():
         data['percentage'] = round((data['marks_obtained'] / data['possible_marks'] * 100), 1) if data['possible_marks'] > 0 else 0
         leaderboard_list.append(data)
         
-    # Sort by marks (desc)
-    leaderboard_list.sort(key=lambda x: x['marks_obtained'], reverse=True)
-    
-    # Calculate behind_marks
+    # Rank by total marks (default) or by percentage; equal scores share a rank
+    rank_by = 'pct' if request.args.get('rank') == 'pct' else 'marks'
+    key = 'percentage' if rank_by == 'pct' else 'marks_obtained'
+    leaderboard_list.sort(key=lambda x: (x[key], x['marks_obtained']), reverse=True)
+    prev, rank = None, 0
+    for i, item in enumerate(leaderboard_list, start=1):
+        if item[key] != prev:
+            rank, prev = i, item[key]
+        item['rank'] = rank
+
     if leaderboard_list:
-        max_marks = leaderboard_list[0]['marks_obtained']
+        top = leaderboard_list[0][key]
         for item in leaderboard_list:
-            item['behind_marks'] = round(max_marks - item['marks_obtained'], 1)
-    
-    # 5. Get all unique batches for filter
-    batches = db.session.query(User.batch).filter(User.role == 'student', User.batch != None).distinct().all()
-    batches = [b[0] for b in batches]
+            item['behind'] = round(top - item[key], 1)
+
+    # 5. Batches on this board (not every batch in the system)
+    batches = sorted({se.student.batch for se in all_submitted if se.student and se.student.batch})
     
     # Nothing at all to show a student => the board is closed rather than empty
     locked = (not is_staff) and not leaderboard_list
@@ -283,4 +295,5 @@ def global_leaderboard():
                          is_staff=is_staff,
                          current_student_id=current_user.id if current_user.role == 'student' else None,
                          start_date=start_date_str,
-                         end_date=end_date_str)
+                         end_date=end_date_str,
+                         rank_by=rank_by)

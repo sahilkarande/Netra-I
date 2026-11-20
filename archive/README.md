@@ -16,6 +16,8 @@ real database.
 | `frontend/css/auth.css` | Styles for the old sign-in pages | Login, register, OTP and change-password now use the design system (`css/ds/`). |
 | `frontend/css/create_exam.css` | Styles for the old New exam page | The page now uses the design system (`css/ds/`). |
 | `frontend/css/upload_questions.css` | Styles for the old Add questions page | The page now uses the design system (`css/ds/`). |
+| `frontend/css/edit_student.css`, `frontend/css/student_management.css`, `frontend/css/student_report.css` | Styles for the old Students, Edit student and Report pages | Those pages now use the design system (`css/ds/`). |
+| `frontend/js/student_management.js` | Script for the old Students page | Replaced by `static/js/pages/manage_students.js`. |
 | `frontend/css/student_dashboard.css` | Styles for the old student dashboard | The student dashboard now uses the design system (`css/ds/`). |
 | `frontend/templates/import_students.html` | Stand-alone import page | No route renders it; import lives on the Manage Students page. |
 

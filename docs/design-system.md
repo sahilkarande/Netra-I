@@ -4,7 +4,7 @@ The rules and building blocks for every redesigned page. Pages move onto the
 system one at a time; until a page is redesigned it keeps `base.html` and the
 legacy stylesheets, untouched.
 
-**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views); exam management (exam page, analytics, new exam, add questions, question splitter).
+**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views); exam management (exam page, analytics, new exam, add questions, question splitter); students and reports (students, edit student, batch report, leaderboard).
 
 ---
 
@@ -185,6 +185,12 @@ second press. Report results with `nx.toast()`.
 | `.nx-disclosure` | A panel that opens with `<details>` |
 | `.nx-picker-grid` / `.nx-pick` | Selectable people in a dialog |
 | `.nx-input-unit` | Number input with a unit (`min`, `%`) inside it |
+
+| `.nx-filterbar` | Search and selects on one row (GET form; selects submit on change) |
+| `.nx-bulkbar` | Actions for ticked rows; shown while anything is selected |
+| `.nx-sort` in a `<th>` | Sortable column; set `aria-sort` on the `<th>` |
+| `.nx-cell-input` | Inline-editable table cell (read-only until an edit switch is on) |
+| `.nx-podium`, `.nx-rank` | Leaderboard top three and rank chips; equal scores share a rank |
 
 Server-read checkboxes: an unticked box sends nothing, which the server
 treats as its default. Follow each with `<input type="hidden" name="…"

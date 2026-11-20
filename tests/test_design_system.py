@@ -65,6 +65,14 @@ REDESIGNED = [
     'frontend/static/js/pages/upload_questions.js',
     'frontend/templates/faculty/split_questions.html',
     'frontend/static/js/pages/split_questions.js',
+    'frontend/templates/faculty/manage_students.html',
+    'frontend/static/js/pages/manage_students.js',
+    'frontend/templates/faculty/edit_student.html',
+    'frontend/static/js/pages/edit_student.js',
+    'frontend/templates/faculty/student_report.html',
+    'frontend/static/js/pages/student_report.js',
+    'frontend/templates/leaderboard.html',
+    'frontend/static/js/pages/leaderboard.js',
 ]
 
 
@@ -787,3 +795,112 @@ def test_splitter_page_on_design_system(app, seed, as_user):
     assert 'data-preview-url="/faculty/split-questions/preview"' in html
     assert 'data-download-url="/faculty/split-questions/download"' in html
     assert re.search(r'href="/faculty/split-questions"\s+aria-current="page"', html)
+
+
+# ── Students, edit, report, leaderboard ─────────────────────────────────────
+
+def test_students_page_on_design_system(app, seed, as_user):
+    html = as_user('faca').get('/faculty/students').data.decode()
+    assert 'css/ds/tokens.css' in html and 'student_management' not in html
+    assert 'confirm(' not in html and 'onclick=' not in html
+    assert '<dialog class="nx-dialog" id="importDialog"' in html
+
+
+def test_import_keeps_batch_and_reports_skips(app, seed, as_user):
+    csv_data = (b'email,full_name,prn_number,batch,department\n'
+                b'new1@x.in,New One,250840125099,DBDA Aug-25,DBDA\n'
+                b'stud1@example.com,Dup,,,\n')
+    resp = as_user('faca').post('/faculty/import_students', data={'file': (io.BytesIO(csv_data), 's.csv')},
+                                content_type='multipart/form-data', follow_redirects=True)
+    html = resp.data.decode()
+    assert '1 student added, 1 skipped' in html
+    assert 'stud1@example.com is already registered' in html
+    with app.app_context():
+        u = User.query.filter_by(email='new1@x.in').one()
+        assert u.batch == 'DBDA Aug-25' and u.department == 'DBDA'
+
+
+def test_edit_student_saves_every_field(app, seed, as_user):
+    resp = as_user('faca').post(f"/faculty/student/{seed['s2']}/edit", data={
+        'full_name': 'Stud Two', 'email': 'two@x.in', 'prn_number': '250840125777', 'roll_id': '7',
+        'batch': 'DAC Aug-25', 'department': 'DAC', 'course': 'PG-DAC', 'phone': '98765', 'gender': 'Female',
+        'is_verified': 'false'})
+    assert resp.status_code == 302
+    with app.app_context():
+        u = User.query.get(seed['s2'])
+        assert (u.prn_number, u.roll_id, u.batch, u.department, u.course, u.phone, u.gender) == \
+               ('250840125777', '7', 'DAC Aug-25', 'DAC', 'PG-DAC', '98765', 'Female')
+        assert u.is_verified is False
+
+
+def test_edit_student_rejects_bad_prn_and_keeps_input(app, seed, as_user):
+    resp = as_user('faca').post(f"/faculty/student/{seed['s2']}/edit", data={
+        'email': 'two@x.in', 'prn_number': '123', 'batch': 'Kept batch'})
+    assert resp.status_code == 400
+    html = resp.data.decode()
+    assert 'A PRN is 12 digits.' in html and 'value="Kept batch"' in html
+    resp = as_user('faca').post(f"/faculty/student/{seed['s2']}/edit", data={
+        'email': 'two@x.in', 'prn_number': '250840125001'})          # stud1's PRN
+    assert 'Another student already has this PRN.' in resp.data.decode()
+
+
+def _batch(app, seed, batch='B1'):
+    with app.app_context():
+        for sid in (seed['s1'], seed['s2']):
+            User.query.get(sid).batch = batch
+        db.session.commit()
+
+
+def test_report_pass_mark_follows_the_exams(app, seed, as_user):
+    _batch(app, seed)
+    with app.app_context():
+        Exam.query.get(seed['exam']).passing_score = 40       # stud1 scored 1/2 = 50%
+        db.session.commit()
+    html = as_user('faca').get(f"/faculty/student_report?batch=B1&exam_ids={seed['exam']}").data.decode()
+    assert 'Pass mark 40%' in html
+    assert 'data-status="pass"' in html
+
+
+def test_report_pdf_keeps_students_without_prn(app, seed, as_user):
+    _batch(app, seed)
+    with app.app_context():
+        User.query.get(seed['s1']).prn_number = None
+        db.session.commit()
+    data = as_user('faca').post('/faculty/student_report/pdf', json={
+        'batch_name': 'B1', 'exam_ids': [seed['exam']], 'row_order': [1, 0]}).get_json()
+    assert data['success'] and data['pdf_b64']
+
+
+def test_report_edit_absent_to_mark_uses_the_paper_max(app, seed, as_user):
+    from backend.routes.faculty import _finish_row
+    row = {'exam_marks': [2.0, 'Absent'], 'exam_max': [2.0, 4.0], 'total_marks': 2.0,
+           'max_possible': 2.0, 'pass_mark': 50.0}
+    row['exam_marks'][1] = 1.0
+    row['total_marks'] = 3.0
+    _finish_row(row)
+    assert row['max_possible'] == 6.0 and round(row['percentage']) == 50
+
+
+def test_leaderboard_scoped_and_private(app, seed, as_user):
+    with app.app_context():
+        other = Exam(title='Other dept', duration_minutes=30, creator_id=seed['fac_b'], is_active=True,
+                     results_published=True, show_leaderboard=True)
+        db.session.add(other); db.session.commit()
+        db.session.add(StudentExam(student_id=seed['s2'], exam_id=other.id, status='submitted', completed=True,
+                                   score=5, total_points=5, percentage=100, submitted_at=datetime.utcnow()))
+        Exam.query.get(seed['exam']).results_published = True
+        db.session.commit()
+    faca = as_user('faca').get('/global_leaderboard').data.decode()
+    assert 'Stud1' in faca and 'Stud2' not in faca            # stud2 only sat facb's exam
+    student = as_user('stud1').get('/global_leaderboard').data.decode()
+    assert '250840125002' not in student                      # another student's PRN
+    assert '250840125001' in student                          # their own
+
+
+def test_leaderboard_end_date_includes_that_day(app, seed, as_user):
+    with app.app_context():
+        se = StudentExam.query.get(seed['attempt'])
+        se.submitted_at = datetime(2026, 3, 10, 6, 0)          # 11:30 IST on the 10th
+        db.session.commit()
+    html = as_user('faca').get('/global_leaderboard?start=2026-03-10&end=2026-03-10').data.decode()
+    assert 'Stud1' in html
