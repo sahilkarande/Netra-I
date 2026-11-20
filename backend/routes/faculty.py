@@ -559,35 +559,48 @@ def view_exam(exam_id):
         return redirect(url_for('faculty.faculty_dashboard'))
     finalize_overdue_attempts(exam_ids=[exam.id])
 
-    # Get all students for the selection modal
+    from backend.services.dashboard_service import exam_status, STATUS_LABELS
+
+    # Students this staff member manages, for the "who can sit it" picker
     all_students = account_service.scoped_students_query(current_user).order_by(User.full_name).all()
-    
-    # Get unique batches
-    all_batches = db.session.query(User.batch).filter(User.role == 'student', User.batch != None).distinct().all()
-    all_batches = sorted([b[0] for b in all_batches if b[0]])
-    
-    # Map which exams students are already in for this specific exam
+    all_batches = sorted({s.batch for s in all_students if s.batch})
+    student_ids = {s.id for s in all_students}
+
     student_exam_map = {se.student_id: se for se in exam.student_exams}
-    
-    # Find other active exams for these students
-    other_active_enrollments = db.session.query(StudentExam, Exam.title).join(Exam).filter(
-        StudentExam.exam_id != exam_id,
-        Exam.status == 'active',
-        Exam.force_ended == False
-    ).all()
-    
+
+    # Which of this staff member's other open exams each student is already
+    # picked for (helps split a hall into sets). Other departments' exam titles
+    # are not shown.
+    accessible_ids = [e.id for e in _get_faculty_exams() if e.id != exam_id]
     other_exam_map = {}
-    for se, title in other_active_enrollments:
-        if se.student_id not in other_exam_map:
-            other_exam_map[se.student_id] = []
-        other_exam_map[se.student_id].append(title)
-    
-    return render_template('faculty/view_exam.html', 
-                         exam=exam, 
-                         all_students=all_students, 
-                         all_batches=all_batches,
-                         student_exam_map=student_exam_map,
-                         other_exam_map=other_exam_map)
+    if accessible_ids:
+        rows = db.session.query(StudentExam.student_id, Exam.title).join(Exam).filter(
+            StudentExam.exam_id.in_(accessible_ids),
+            Exam.status == 'active',
+            Exam.force_ended == False  # noqa: E712
+        ).all()
+        for sid, title in rows:
+            if sid in student_ids:
+                other_exam_map.setdefault(sid, []).append(title)
+
+    attempts = sorted(exam.student_exams,
+                      key=lambda se: (se.status != 'started', -(se.started_at or datetime.min).timestamp()
+                                      if se.started_at else 0))
+    in_progress = sum(1 for se in attempts if se.status == 'started')
+    status = exam_status(exam, in_progress)
+    allowed_ids = {sid for sid in (exam.allowed_students or '').split(',') if sid.strip()}
+
+    return render_template('faculty/view_exam.html',
+                           exam=exam,
+                           attempts=attempts,
+                           in_progress=in_progress,
+                           status=status,
+                           status_label=STATUS_LABELS[status],
+                           allowed_ids=allowed_ids,
+                           all_students=all_students,
+                           all_batches=all_batches,
+                           student_exam_map=student_exam_map,
+                           other_exam_map=other_exam_map)
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/analytics')
 @login_required

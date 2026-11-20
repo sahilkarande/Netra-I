@@ -55,6 +55,8 @@ REDESIGNED = [
     'frontend/templates/student/student_profile.html',
     'frontend/static/js/pages/result.js',
     'frontend/static/js/pages/student_profile.js',
+    'frontend/templates/faculty/view_exam.html',
+    'frontend/static/js/pages/view_exam.js',
 ]
 
 
@@ -594,3 +596,54 @@ def test_staff_profile_shows_scores_and_reset(app, seed, as_user):
     assert '50%' in html and 'not released' in html
     assert f'data-reset-url="/faculty/change-student-password/{seed["s1"]}"' in html
     assert 'student_profile.js' in html and 'confirm(' not in html
+
+
+# ── Exam page (faculty) ─────────────────────────────────────────────────────
+
+def _exam_html(as_user, seed, who='faca'):
+    resp = as_user(who).get(f"/faculty/exam/{seed['exam']}")
+    assert resp.status_code == 200
+    return resp.data.decode()
+
+
+def test_exam_page_on_design_system(app, seed, as_user):
+    html = _exam_html(as_user, seed)
+    assert 'css/ds/tokens.css' in html and 'css/style.css' not in html
+    assert 'js/pages/view_exam.js' in html
+    assert 'confirm(' not in html and 'alert(' not in html and 'onclick=' not in html
+    for path in (f"/faculty/exam/{seed['exam']}/update_access", f"/faculty/exam/{seed['exam']}/extend_time",
+                 f"/faculty/exam/{seed['exam']}/force_end", f"/faculty/exam/{seed['exam']}/generate_key",
+                 f"/api/faculty/publish-results/{seed['exam']}"):
+        assert path in html, path
+    assert '<dialog class="nx-dialog' in html and 'name="allowed_students"' in html
+
+
+def test_exam_page_lists_attempts_with_actions(app, seed, as_user):
+    client = as_user('stud2')
+    client.post(f"/start-exam/{seed['exam']}")
+    html = _exam_html(as_user, seed)
+    assert 'In progress' in html and 'Submitted' in html
+    assert 'data-nx-confirm="End now?"' in html                 # two-step end for the live attempt
+    assert f'/student/exam/{seed["attempt"]}/result' in html     # finished attempt links to its result
+
+
+def test_exam_page_warns_when_there_are_no_questions(app, seed, as_user):
+    with app.app_context():
+        Question.query.filter_by(exam_id=seed['exam']).delete()
+        db.session.commit()
+    assert 'This exam has no questions yet' in _exam_html(as_user, seed)
+
+
+def test_picker_hides_other_departments_exam_titles(app, seed, as_user):
+    """facb (another department) has an open exam with stud2 on it; faca must not see its title."""
+    with app.app_context():
+        other = Exam(title='Secret DAC Exam', duration_minutes=30, creator_id=seed['fac_b'], is_active=True, status='active')
+        db.session.add(other); db.session.commit()
+        db.session.add(StudentExam(student_id=seed['s2'], exam_id=other.id, status='started'))
+        db.session.commit()
+    assert 'Secret DAC Exam' not in _exam_html(as_user, seed)
+
+
+def test_confirm_helper_replaces_window_confirm():
+    js = open(os.path.join(ROOT, 'frontend/static/js/ds/app.js')).read()
+    assert 'nx.confirmPress' in js and 'window.confirm' not in js.replace('instead of window.confirm', '')

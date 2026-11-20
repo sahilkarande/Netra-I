@@ -148,4 +148,37 @@
   document.querySelectorAll('.nx-toasts .nx-toast').forEach(function (t) {
     arm(t, t.getAttribute('data-tone'));
   });
+
+  /* ── Two-step confirmation (instead of window.confirm) ───────
+     nx.confirmPress(button): the first press arms the button (it turns red
+     and its label becomes data-nx-confirm), the second press within 4 s
+     returns true. Forms with a data-nx-confirm submit button are wired
+     automatically. */
+  nx.confirmPress = function (btn) {
+    if (btn.hasAttribute('data-armed')) { disarm(btn); return true; }
+    var label = btn.querySelector('span') || btn;
+    btn.setAttribute('data-armed', '');
+    btn.setAttribute('data-label', label.textContent);
+    btn.setAttribute('data-variant', btn.className);
+    label.textContent = btn.getAttribute('data-nx-confirm') || 'Press again to confirm';
+    btn.classList.remove('nx-btn--ghost', 'nx-btn--secondary', 'nx-btn--primary');
+    btn.classList.add('nx-btn--danger');
+    btn._nxTimer = setTimeout(function () { disarm(btn); }, 4000);
+    return false;
+  };
+  function disarm(btn) {
+    if (!btn.hasAttribute('data-armed')) return;
+    clearTimeout(btn._nxTimer);
+    (btn.querySelector('span') || btn).textContent = btn.getAttribute('data-label');
+    btn.className = btn.getAttribute('data-variant');
+    btn.removeAttribute('data-armed');
+  }
+  document.querySelectorAll('form').forEach(function (form) {
+    var btn = form.querySelector('button[type="submit"][data-nx-confirm]');
+    if (!btn) return;
+    form.addEventListener('submit', function (e) {
+      if (!nx.confirmPress(btn)) e.preventDefault();
+    });
+    btn.addEventListener('blur', function () { setTimeout(function () { if (document.activeElement !== btn) disarm(btn); }, 150); });
+  });
 })();

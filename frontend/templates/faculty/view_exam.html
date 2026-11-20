@@ -1,1686 +1,433 @@
-{% extends "base.html" %}
-{% block title %}View Exam - {{ exam.title }}{% endblock %}
+{% extends "layouts/app.html" %}
+{% import 'components/ui.html' as ui %}
 
-{% block extra_css %}
-{% endblock %}
+{% block title %}{{ exam.title }}{% endblock %}
+{% block topbar_title %}<b>Exams</b> · {{ exam.title }}{% endblock %}
+
+{% set status_tone = {'live': 'danger', 'open': 'success', 'scheduled': 'accent', 'closed': 'neutral', 'inactive': 'neutral'} %}
+{% set finished_states = ('submitted', 'completed', 'force_ended') %}
+{% set submitted = attempts|selectattr('status', 'in', finished_states)|list %}
+{% set flags = attempts|map(attribute='total_violations')|map('default', 0, true)|sum %}
+{% set questions = exam.questions %}
+
+{% macro attempt_status(se) -%}
+  {%- if se.is_invalidated -%}{{ ui.badge('Invalidated', 'danger') }}
+  {%- elif se.status == 'started' -%}{{ ui.badge('In progress', 'danger', live=True) }}
+  {%- elif se.status in ('submitted', 'completed') -%}{{ ui.badge('Submitted', 'success') }}
+  {%- elif se.status == 'force_ended' -%}{{ ui.badge('Ended by staff', 'warning') }}
+  {%- else -%}{{ ui.badge('Not started', 'neutral') }}{%- endif -%}
+{%- endmacro %}
 
 {% block content %}
-<style>
-    .vx-visibility { display: flex; flex-direction: column; gap: 10px; }
-    .vx-visibility-title {
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--vx-text-muted, #94a3b8);
-        margin-bottom: 2px;
-    }
-    .vx-toggle-btn {
-        display: flex !important;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        width: 100%;
-    }
-    .vx-pill {
-        padding: 2px 10px;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.03em;
-        background: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
-        border: 1px solid currentColor;
-    }
-    .vx-pill.on { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-    .vx-visibility-note {
-        margin: 2px 0 6px;
-        font-size: 0.78rem;
-        line-height: 1.55;
-        color: var(--vx-text-muted, #94a3b8);
-    }
-</style>
-<div class="vx-dashboard">
-    
-    <!-- --- Dashboard Header --- -->
-    <header class="vx-header">
-        <div class="vx-title-group">
-            <h1 class="vx-title">{{ exam.title }}</h1>
-            <div class="vx-live-indicator">
-                {% if exam.status == 'active' and not exam.force_ended %}
-                <span class="vx-live-dot"></span>
-                Live Proctoring Active
-                {% else %}
-                <span class="bi bi-pause-circle"></span>
-                Exam {{ exam.status|title }}
-                {% endif %}
-            </div>
-        </div>
-        <div class="vx-header-actions">
-            <a href="{{ url_for('faculty.exam_analytics', exam_id=exam.id) }}" class="vx-btn-primary vx-control-btn" style="margin:0; padding: 10px 20px; text-decoration:none;">
-                <i class="bi bi-graph-up"></i> View Full Analytics
-            </a>
-        </div>
-    </header>
+{% set window -%}
+  {%- if exam.start_time or exam.end_time -%}
+    {{ ' · ' }}{% if exam.start_time %}opens {{ exam.start_time|localtime('%d %b, %H:%M') }}{% endif %}
+    {%- if exam.start_time and exam.end_time %}, {% endif -%}
+    {%- if exam.end_time %}closes {{ exam.end_time|localtime('%d %b, %H:%M') }}{% endif -%}
+  {%- endif -%}
+{%- endset %}
 
-    <!-- --- Stats Bar --- -->
-    <div class="vx-stats-bar">
-        <div class="vx-stat-card">
-            <div class="vx-stat-icon" style="background: rgba(99, 102, 241, 0.1); color: var(--vx-primary);">
-                <i class="bi bi-people"></i>
-            </div>
-            <div class="vx-stat-info">
-                <div class="vx-stat-value">{{ exam.student_exams|length }}</div>
-                <div class="vx-stat-label">Total Attempts</div>
-            </div>
-        </div>
-        <div class="vx-stat-card">
-            <div class="vx-stat-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--vx-success);">
-                <i class="bi bi-play-circle"></i>
-            </div>
-            <div class="vx-stat-info">
-                <div class="vx-stat-value">{{ exam.student_exams|selectattr('status', 'equalto', 'started')|list|length }}</div>
-                <div class="vx-stat-label">Currently Active</div>
-            </div>
-        </div>
-        <div class="vx-stat-card">
-            <div class="vx-stat-icon" style="background: rgba(245, 158, 11, 0.1); color: var(--vx-warning);">
-                <i class="bi bi-exclamation-triangle"></i>
-            </div>
-            <div class="vx-stat-info">
-                <div class="vx-stat-value">
-                    {{ exam.student_exams|sum(attribute='total_violations') }}
-                </div>
-                <div class="vx-stat-label">Total Violations</div>
-            </div>
-        </div>
-        <div class="vx-stat-card">
-            <div class="vx-stat-icon" style="background: rgba(59, 130, 246, 0.1); color: var(--vx-info);">
-                <i class="bi bi-check2-circle"></i>
-            </div>
-            <div class="vx-stat-info">
-                <div class="vx-stat-value">{{ '%.1f'|format(exam.get_pass_rate() if exam.get_pass_rate else 0) }}%</div>
-                <div class="vx-stat-label">Pass Rate</div>
-            </div>
-        </div>
+<header class="nx-page-header nx-enter">
+  <div>
+    <div class="nx-title-row">
+      <h1 class="nx-page-header__title">{{ exam.title }}</h1>
+      {{ ui.badge(status_label, status_tone[status], live=(status == 'live')) }}
     </div>
+    <p class="nx-page-header__meta">
+      {{ questions|length }} question{{ 's' if questions|length != 1 }} · {{ exam.duration_minutes }} min · pass {{ exam.passing_score|int }}% · {{ 'Classroom' if exam.exam_mode == 'classroom' else 'Home' }} proctoring{{ window }}
+    </p>
+  </div>
+  <div class="nx-page-header__actions">
+    {{ ui.button('Add questions', href=url_for('faculty.upload_questions', exam_id=exam.id), icon='plus-lg') }}
+    {{ ui.button('Analytics', href=url_for('faculty.exam_analytics', exam_id=exam.id), variant='primary', icon='graph-up') }}
+  </div>
+</header>
 
-    <!-- --- Main Content (Left) --- -->
-    <div class="vx-main">
-        <div class="vx-card">
-            <div class="vx-card-header">
-                <h3 class="vx-card-title"><i class="bi bi-table"></i> Student Attempts</h3>
-                <div class="vx-table-actions">
-                    <input type="text" id="attemptSearch" placeholder="Search by name or PRN..." 
-                           style="background:rgba(0,0,0,0.2); border:1px solid var(--vx-border); color:#fff; padding:6px 12px; border-radius:6px; font-size:13px; width:240px;">
-                </div>
-            </div>
-            <div class="vx-card-body">
-                <div class="vx-table-wrap">
-                    <table class="vx-table" id="attemptsTable">
-                        <thead>
-                            <tr>
-                                <th>Student Name</th>
-                                <th>PRN / Roll</th>
-                                <th>Status</th>
-                                <th>Score</th>
-                                <th>Violations</th>
-                                <th>Time</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for se in exam.student_exams %}
-                            <tr class="attempt-row" data-search="{{ (se.student.full_name or '').lower() }} {{ se.student.prn_number or '' }}">
-                                <td>
-                                    <div style="font-weight:600;">{{ se.student.full_name }}</div>
-                                    <div style="font-size:11px; color:var(--vx-text-dim);">{{ se.student.email }}</div>
-                                </td>
-                                <td>
-                                    <code style="color:var(--vx-info);">{{ se.student.prn_number or 'N/A' }}</code>
-                                    <div style="font-size:11px; color:var(--vx-text-dim);">Roll: {{ se.student.roll_id or '-' }}</div>
-                                </td>
-                                <td>
-                                    {% if se.status == 'started' %}
-                                        <span class="vx-badge vx-badge-info">In Progress</span>
-                                    {% elif se.status == 'submitted' %}
-                                        <span class="vx-badge vx-badge-success">Completed</span>
-                                    {% elif se.status == 'force_ended' %}
-                                        <span class="vx-badge vx-badge-danger">Terminated</span>
-                                    {% else %}
-                                        <span class="vx-badge vx-badge-warning">{{ se.status|title }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if se.status == 'submitted' or se.status == 'force_ended' %}
-                                        <div style="font-weight:700; color:{{ 'var(--vx-success)' if se.passed else 'var(--vx-danger)' }}">
-                                            {{ '%.1f'|format(se.percentage or 0) }}%
-                                        </div>
-                                        <div style="font-size:10px; color:var(--vx-text-dim);">{{ se.score or 0 }}/{{ se.total_points or 0 }}</div>
-                                    {% else %}
-                                        <span style="color:var(--vx-text-dim); font-style:italic;">Pending</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="vx-badge {{ 'vx-badge-danger' if (se.total_violations or 0) > (exam.max_violations / 2) else 'vx-badge-warning' if (se.total_violations or 0) > 0 else '' }}">
-                                        <i class="bi bi-shield-exclamation"></i> {{ se.total_violations or 0 }}
-                                    </div>
-                                </td>
-                                <td class="vx-text-dim" style="font-size:12px;">
-                                    {% if se.submitted_at %}
-                                        {{ se.time_taken_minutes }}m taken
-                                    {% else %}
-                                        Started {{ se.started_at|localtime('%H:%M') if se.started_at else '-' }}
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div style="display:flex; gap:6px;">
-                                        {% if se.status == 'started' %}
-                                        <form method="POST" action="{{ url_for('faculty.faculty_force_end_student', exam_id=exam.id, student_exam_id=se.id) }}" style="display:inline;">
-                                            <button type="submit" class="vx-btn-danger" style="padding:4px 8px; border-radius:4px; font-size:11px; border:none; cursor:pointer;" onclick="return confirm('Force end this students exam?')">
-                                                End
-                                            </button>
-                                        </form>
-                                        {% endif %}
-                                        <a href="{{ url_for('faculty.faculty_student_profile', student_id=se.student_id) }}" class="vx-btn-outline" style="padding:4px 8px; border-radius:4px; font-size:11px; text-decoration:none;">
-                                            Profile
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="7" style="text-align:center; padding:60px; color:var(--vx-text-dim);">
-                                    <i class="bi bi-inbox" style="font-size:3rem; display:block; margin-bottom:15px; opacity:0.2;"></i>
-                                    No student attempts recorded for this exam yet.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+{% if not questions %}
+<a class="nx-attention__item nx-tone-warning nx-enter" href="{{ url_for('faculty.upload_questions', exam_id=exam.id) }}">
+  <span class="nx-attention__icon"><i class="bi bi-journal-plus" aria-hidden="true"></i></span>
+  <span class="nx-attention__text">
+    <span class="nx-attention__title">This exam has no questions yet</span>
+    <span class="nx-attention__detail">Students who start it would get an empty paper. Upload a CSV, Excel or JSON file.</span>
+  </span>
+  <span class="nx-attention__go">Upload<i class="bi bi-arrow-right" aria-hidden="true"></i></span>
+</a>
+{% endif %}
+
+<section class="nx-grid-stats" aria-label="Summary" id="examStats">
+  {{ ui.stat('Attempts', attempts|length, icon='people', note=submitted|length ~ ' submitted', i=1) }}
+  {{ ui.stat('In progress', in_progress, icon='broadcast', note='Live now' if in_progress else 'Nobody sitting it now', i=2) }}
+  {{ ui.stat('Proctoring flags', flags, icon='flag', note='Across all attempts', i=3) }}
+  {{ ui.stat('Pass rate', '%.0f'|format(exam.get_pass_rate()), unit='%', icon='check2-circle',
+             meter=exam.get_pass_rate() if submitted else None, meter_tone='success', note='Of submitted attempts', i=4) }}
+</section>
+
+<div class="nx-grid-main">
+  <div class="nx-stack">
+
+    {# ── Attempts ──────────────────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 5" aria-labelledby="attempts-title" id="view-exam"
+             data-exam-id="{{ exam.id }}"
+             data-results-url="{{ url_for('faculty.faculty_set_results_visibility') }}"
+             data-leaderboard-url="{{ url_for('faculty.faculty_set_leaderboard') }}"
+             data-publish-url="{{ url_for('faculty.faculty_publish_results', exam_id=exam.id) }}"
+             data-key-url="{{ url_for('faculty.generate_exam_key', exam_id=exam.id) }}"
+             data-clear-key-url="{{ url_for('faculty.clear_exam_key', exam_id=exam.id) }}">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="attempts-title">Attempts</h2>
+          <span class="nx-panel__sub" id="attemptsSub">{{ in_progress }} in progress · {{ submitted|length }} submitted · refreshes every few seconds</span>
         </div>
-    </div>
-
-    <!-- --- Sidebar (Right) --- -->
-    <aside class="vx-sidebar">
-        
-        <!-- Control Center -->
-        <div class="vx-card">
-            <div class="vx-card-header">
-                <h3 class="vx-card-title"><i class="bi bi-cpu"></i> Control Center</h3>
-            </div>
-            <div class="vx-card-body">
-                {% if not exam.is_active %}
-                <form method="POST" action="{{ url_for('faculty.update_exam_access', exam_id=exam.id) }}">
-                    <input type="hidden" name="is_active" value="true">
-                    <button type="submit" class="vx-control-btn vx-btn-primary">
-                        <i class="bi bi-play-fill"></i> Activate Exam
+        {% if attempts %}
+        <div class="nx-panel__actions">
+          <label class="nx-search">
+            <span class="nx-visually-hidden">Search attempts</span>
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" id="attemptSearch" class="nx-input" placeholder="Name or PRN" autocomplete="off">
+          </label>
+        </div>
+        {% endif %}
+      </div>
+      {% if attempts %}
+      <div class="nx-table-wrap">
+        <table class="nx-table nx-table--stack">
+          <thead>
+            <tr>
+              <th scope="col">Student</th>
+              <th scope="col">Status</th>
+              <th scope="col">Score</th>
+              <th scope="col" class="is-num">Flags</th>
+              <th scope="col" class="is-num">Time</th>
+              <th scope="col" class="is-actions"><span class="nx-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="attemptsBody">
+            {% for se in attempts %}
+            {% set st = se.student %}
+            {% set name = (st.full_name or st.username) if st else 'Removed student' %}
+            <tr data-attempt-row data-search="{{ (name ~ ' ' ~ (st.prn_number if st else '') ~ ' ' ~ (st.roll_id if st else ''))|lower }}">
+              <td>
+                <span class="nx-table__primary">{{ name }}</span>
+                <span class="nx-table__secondary nx-num">{{ (st.prn_number if st else None) or '—' }}{% if st and st.roll_id %} · roll {{ st.roll_id }}{% endif %}</span>
+              </td>
+              <td data-label="Status">{{ attempt_status(se) }}</td>
+              <td data-label="Score">
+                {% if se.status in finished_states and se.percentage is not none %}
+                <span class="nx-score nx-score--{{ 'pass' if se.passed else 'fail' }}">{{ '%.0f'|format(se.percentage) }}%</span>
+                <span class="nx-table__secondary nx-num">{{ '%g'|format(se.score or 0) }} / {{ '%g'|format(se.total_points or 0) }}</span>
+                {% else %}<span class="nx-table__muted">—</span>{% endif %}
+              </td>
+              <td class="is-num" data-label="Flags">
+                {%- set v = se.total_violations or 0 -%}
+                {%- if v >= ((exam.max_violations or 6) / 2) %}<span class="nx-text-danger">{{ v }}</span>
+                {%- elif v %}<span class="nx-text-warning">{{ v }}</span>
+                {%- else %}<span class="nx-table__muted">0</span>{% endif -%}
+              </td>
+              <td class="is-num" data-label="Time">
+                {%- if se.status in finished_states %}{{ (se.time_taken_minutes ~ ' min') if se.time_taken_minutes is not none else '—' }}
+                {%- elif se.started_at %}<span class="nx-table__muted">since {{ se.started_at|localtime('%H:%M') }}</span>
+                {%- else %}<span class="nx-table__muted">—</span>{% endif -%}
+              </td>
+              <td class="is-actions">
+                <div class="nx-row-actions">
+                  {% if se.status == 'started' %}
+                  <form method="POST" action="{{ url_for('faculty.faculty_force_end_student', exam_id=exam.id, student_exam_id=se.id) }}" class="nx-inline-form">
+                    <button type="submit" class="nx-btn nx-btn--ghost nx-btn--sm" data-nx-confirm="End now?" aria-label="End {{ name }}'s attempt">
+                      <i class="bi bi-stop-circle" aria-hidden="true"></i><span>End</span>
                     </button>
-                </form>
-                {% else %}
-                <div style="display:flex; gap:10px; margin-bottom:12px;">
-                    <button onclick="showExtendTimeModal()" class="vx-control-btn vx-btn-outline" style="flex:1;">
-                        <i class="bi bi-plus-circle"></i> +15m
-                    </button>
-                    <form method="POST" action="{{ url_for('faculty.update_exam_access', exam_id=exam.id) }}" style="flex:1;">
-                        <input type="hidden" name="is_active" value="false">
-                        <button type="submit" class="vx-control-btn vx-btn-danger">
-                            <i class="bi bi-pause-fill"></i> Deactivate
-                        </button>
-                    </form>
+                  </form>
+                  {% endif %}
+                  {% if se.status in finished_states %}
+                  {{ ui.button('Result for ' ~ name, href=url_for('student.student_exam_result', student_exam_id=se.id), variant='ghost', size='sm', icon='file-earmark-text', icon_only=True) }}
+                  {% endif %}
+                  {% if st %}
+                  {{ ui.button('Profile of ' ~ name, href=url_for('faculty.faculty_student_profile', student_id=st.id), variant='ghost', size='sm', icon='person', icon_only=True) }}
+                  {% endif %}
                 </div>
-                <form method="POST" action="{{ url_for('faculty.faculty_force_end_exam', exam_id=exam.id) }}">
-                    <button type="submit" class="vx-control-btn vx-btn-danger" style="background:var(--vx-danger); color:#fff;" onclick="return confirm('CRITICAL: This will end the exam for ALL students. Continue?')">
-                        <i class="bi bi-stop-fill"></i> Stop All Attempts
-                    </button>
-                </form>
-                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div id="attemptNoMatch" hidden>
+        {% call ui.empty_state('No attempts match', 'Try another name or PRN.', icon='search') %}{% endcall %}
+      </div>
+      {% else %}
+      <div id="attemptsBody">
+      {% call ui.empty_state('No attempts yet', 'Students appear here as soon as they start. This list refreshes on its own.', icon='hourglass') %}{% endcall %}
+      </div>
+      {% endif %}
+    </section>
 
-                <hr style="border:0; border-top:1px solid var(--vx-border); margin:20px 0;">
-
-                <button class="vx-control-btn vx-btn-outline" onclick="location.href='{{ url_for('faculty.upload_questions', exam_id=exam.id) }}'">
-                    <i class="bi bi-plus-lg"></i> Add Questions
-                </button>
-                
-                <hr style="border:0; border-top:1px solid var(--vx-border); margin:20px 0;">
-
-                <div class="vx-visibility" id="examVisibility"
-                     data-results="{{ '1' if exam.results_published else '0' }}"
-                     data-leaderboard="{{ '1' if exam.show_leaderboard else '0' }}">
-                    <div class="vx-visibility-title">
-                        <i class="bi bi-eye"></i> What students can see
-                    </div>
-
-                    <button type="button" class="vx-control-btn vx-toggle-btn" id="btnResultsToggle"
-                            onclick="toggleExamVisibility('results')">
-                        <span><i class="bi bi-megaphone"></i> Results</span>
-                        <span class="vx-pill" id="pillResults"></span>
-                    </button>
-
-                    <button type="button" class="vx-control-btn vx-toggle-btn" id="btnLeaderboardToggle"
-                            onclick="toggleExamVisibility('leaderboard')">
-                        <span><i class="bi bi-award"></i> Leaderboard</span>
-                        <span class="vx-pill" id="pillLeaderboard"></span>
-                    </button>
-
-                    <p class="vx-visibility-note" id="visibilityNote"></p>
-
-                    <button type="button" class="vx-control-btn vx-btn-outline" onclick="publishAndClearEvidence()">
-                        <i class="bi bi-shield-check"></i> Publish &amp; clear proctoring evidence
-                    </button>
-                </div>
+    {# ── Questions ─────────────────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 6" aria-labelledby="questions-title">
+      <details class="nx-disclosure">
+        <summary class="nx-panel__head">
+          <div>
+            <h2 class="nx-panel__title" id="questions-title">Questions</h2>
+            <span class="nx-panel__sub">{{ questions|length }} on the paper · {{ '%g'|format(questions|map(attribute='points')|map('default', 1, true)|sum) }} points</span>
+          </div>
+          <i class="bi bi-chevron-down nx-disclosure__icon" aria-hidden="true"></i>
+        </summary>
+        {% if questions %}
+        <ol class="nx-qlist">
+          {% for q in questions %}
+          <li class="nx-qlist__item">
+            <span class="nx-review__num nx-num">Q{{ '%02d'|format(loop.index) }}</span>
+            <div class="nx-qlist__body">
+              <div class="nx-prose nx-qlist__text">{{ q.question_text|qtext }}</div>
+              <ol class="nx-qlist__opts" type="A">
+                {% for letter, text in (('A', q.option_a), ('B', q.option_b), ('C', q.option_c), ('D', q.option_d)) if text %}
+                <li class="{{ 'is-correct' if letter == (q.correct_answer or '')|upper }}"><span class="nx-review__letter">{{ letter }}</span><span class="nx-prose">{{ text|qtext }}</span></li>
+                {% endfor %}
+              </ol>
             </div>
+            <span class="nx-qlist__pts nx-num">{{ q.points or 1 }} pt{{ 's' if (q.points or 1) != 1 }}</span>
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        {% call ui.empty_state('No questions yet', 'Upload a question file to build the paper.', icon='journal-plus') %}
+          {{ ui.button('Upload questions', href=url_for('faculty.upload_questions', exam_id=exam.id), variant='primary', icon='upload') }}
+        {% endcall %}
+        {% endif %}
+      </details>
+    </section>
+  </div>
+
+  <div class="nx-stack">
+
+    {# ── Running the exam ──────────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 7" aria-labelledby="controls-title">
+      <div class="nx-panel__head">
+        <h2 class="nx-panel__title" id="controls-title">Running the exam</h2>
+      </div>
+      <div class="nx-panel__body nx-stack nx-stack--tight">
+        {% if not exam.is_active %}
+        <p class="nx-help">Students cannot start this exam while it is inactive.</p>
+        <form method="POST" action="{{ url_for('faculty.update_exam_access', exam_id=exam.id) }}">
+          <input type="hidden" name="is_active" value="true">
+          <button type="submit" class="nx-btn nx-btn--primary nx-btn--block"><i class="bi bi-play-fill" aria-hidden="true"></i><span>Activate exam</span></button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('faculty.faculty_extend_exam_time', exam_id=exam.id) }}" class="nx-extend">
+          <label class="nx-label" for="extendMinutes">Give everyone more time</label>
+          <div class="nx-extend__row">
+            <div class="nx-input-unit">
+              <input type="number" class="nx-input" id="extendMinutes" name="minutes" value="15" min="1" max="600" required>
+              <span>min</span>
+            </div>
+            <button type="submit" class="nx-btn nx-btn--secondary" data-nx-confirm="Add to everyone?"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add time</span></button>
+          </div>
+          <p class="nx-help">Adds to the exam's duration; open exam pages update their timers.</p>
+        </form>
+        <div class="nx-divider-line" role="separator"></div>
+        <div class="nx-btn-row">
+          <form method="POST" action="{{ url_for('faculty.update_exam_access', exam_id=exam.id) }}" class="nx-inline-form">
+            <input type="hidden" name="is_active" value="false">
+            <button type="submit" class="nx-btn nx-btn--secondary nx-btn--sm" data-nx-confirm="Deactivate?"><i class="bi bi-pause-fill" aria-hidden="true"></i><span>Deactivate</span></button>
+          </form>
+          <form method="POST" action="{{ url_for('faculty.faculty_force_end_exam', exam_id=exam.id) }}" class="nx-inline-form">
+            <button type="submit" class="nx-btn nx-btn--secondary nx-btn--sm" data-nx-confirm="End for all students?"><i class="bi bi-stop-fill" aria-hidden="true"></i><span>End for everyone</span></button>
+          </form>
         </div>
+        <p class="nx-help">Deactivate stops new starts. End for everyone submits every attempt in progress.</p>
+        {% endif %}
+      </div>
+    </section>
 
-        <!-- Access Token -->
-        <div class="vx-card">
-            <div class="vx-card-header">
-                <h3 class="vx-card-title"><i class="bi bi-key"></i> Access Token</h3>
-            </div>
-            <div class="vx-card-body" style="padding-top:10px;">
-                {% if exam.access_key %}
-                <div class="vx-key-token" id="keyDisplay">{{ exam.access_key }}</div>
-                <div style="display:flex; gap:10px;">
-                    <button onclick="copyKey('{{ exam.access_key }}')" class="vx-btn-outline" style="flex:1; padding:8px; border-radius:8px;">
-                        <i class="bi bi-clipboard"></i> Copy
-                    </button>
-                    <button onclick="generateKey()" class="vx-btn-outline" style="flex:1; padding:8px; border-radius:8px;">
-                        <i class="bi bi-shuffle"></i> Reset
-                    </button>
-                </div>
-                {% else %}
-                <div style="text-align:center; padding:10px 0;">
-                    <p style="font-size:12px; color:var(--vx-text-dim); margin-bottom:15px;">No key set. Students can join freely.</p>
-                    <button onclick="generateKey()" class="vx-btn-primary vx-control-btn">
-                        <i class="bi bi-shield-plus"></i> Generate Key
-                    </button>
-                </div>
-                {% endif %}
-            </div>
+    {# ── Access key ────────────────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 8" aria-labelledby="key-title">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="key-title">Access key</h2>
+          <span class="nx-panel__sub">{{ 'Announce it in the hall when the exam starts' if exam.access_key else 'Anyone eligible can start without a key' }}</span>
         </div>
-
-        <!-- Quick Resources -->
-        <div class="vx-card">
-            <div class="vx-card-header">
-                <h3 class="vx-card-title"><i class="bi bi-layers"></i> Resources</h3>
-            </div>
-            <div class="vx-card-body" style="padding: 12px;">
-                <button class="vx-control-btn vx-btn-outline open-details-modal" style="text-align:left; justify-content:flex-start;">
-                    <i class="bi bi-info-circle"></i> Exam Configuration
-                </button>
-                <button class="vx-control-btn vx-btn-outline open-access-modal" style="text-align:left; justify-content:flex-start;">
-                    <i class="bi bi-shield-lock"></i> Student Eligibility
-                </button>
-                <button class="vx-control-btn vx-btn-outline open-questions-modal" style="text-align:left; justify-content:flex-start;">
-                    <i class="bi bi-question-circle"></i> Question Bank ({{ exam.questions|length }})
-                </button>
-            </div>
+      </div>
+      <div class="nx-panel__body nx-stack nx-stack--tight">
+        {% if exam.access_key %}
+        <div class="nx-key" id="keyDisplay">{{ exam.access_key }}</div>
+        <div class="nx-btn-row">
+          <button type="button" class="nx-btn nx-btn--secondary nx-btn--sm" data-copy-key="{{ exam.access_key }}"><i class="bi bi-copy" aria-hidden="true"></i><span>Copy</span></button>
+          <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-new-key data-nx-confirm="Replace the key?"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>New key</span></button>
+          <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-clear-key data-nx-confirm="Remove the key?"><i class="bi bi-unlock" aria-hidden="true"></i><span>Remove</span></button>
         </div>
+        {% else %}
+        <button type="button" class="nx-btn nx-btn--secondary nx-btn--block" data-new-key><i class="bi bi-key" aria-hidden="true"></i><span>Generate a key</span></button>
+        {% endif %}
+      </div>
+    </section>
 
-    </aside>
-
-    <!-- ======================================================= -->
-    <!-- MODALS SECTION                                          -->
-    <!-- ======================================================= -->
-
-    <!-- 1. Exam Details Modal -->
-    <div id="exam-details-modal" class="custom-modal">
-        <div class="modal-content modal-md">
-            <div class="modal-header">
-                <h3><i class="bi bi-info-circle"></i> Exam Details</h3>
-                <button class="modal-close close-details-modal"><i class="bi bi-x"></i></button>
-            </div>
-            <div class="modal-body">
-                <table class="vx-table" style="width:100%;">
-                    <tr><td class="vx-text-dim">Duration</td><td>{{ exam.duration_minutes }} minutes</td></tr>
-                    <tr><td class="vx-text-dim">Passing Score</td><td>{{ exam.passing_score }}%</td></tr>
-                    <tr><td class="vx-text-dim">Proctoring</td><td>{{ 'Enabled' if exam.enable_proctoring else 'Disabled' }}</td></tr>
-                    <tr><td class="vx-text-dim">Max Violations</td><td>{{ exam.max_violations }}</td></tr>
-                    <tr><td class="vx-text-dim">Created At</td><td>{{ exam.created_at|localtime('%Y-%m-%d %H:%M') if exam.created_at else 'N/A' }}</td></tr>
-                </table>
-            </div>
+    {# ── What students can see ─────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 9" aria-labelledby="visibility-title">
+      <div class="nx-panel__head">
+        <h2 class="nx-panel__title" id="visibility-title">What students can see</h2>
+      </div>
+      <div class="nx-panel__body">
+        <div class="nx-setting">
+          <div class="nx-setting__text">
+            <span class="nx-setting__label" id="results-label">Results</span>
+            <span class="nx-setting__desc">Score, answer review and PDF</span>
+          </div>
+          <label class="nx-switch">
+            <input type="checkbox" role="switch" data-visibility="results" aria-labelledby="results-label"{% if exam.results_published %} checked{% endif %}>
+            <span class="nx-switch__track"></span>
+          </label>
         </div>
-    </div>
-
-    <!-- 2. Exam Access Modal -->
-    <div id="exam-access-modal" class="custom-modal">
-        <div class="modal-content modal-md">
-            <div class="modal-header">
-                <h3><i class="bi bi-shield-lock"></i> Student Eligibility</h3>
-                <button class="modal-close close-access-modal"><i class="bi bi-x"></i></button>
-            </div>
-            <div class="modal-body">
-                <form method="POST" action="{{ url_for('faculty.update_exam_access', exam_id=exam.id) }}">
-                    <div class="access-mode-options">
-                        <div class="access-mode-card {{ 'selected' if exam.allow_all_students }}" onclick="document.getElementById('allow_all').click()">
-                            <input type="radio" name="access_mode" value="all" id="allow_all" class="access-radio" {{ 'checked' if exam.allow_all_students }}>
-                            <i class="bi bi-people-fill"></i>
-                            <span>Allow All Students</span>
-                        </div>
-                        <div class="access-mode-card {{ 'selected' if not exam.allow_all_students }}" onclick="document.getElementById('allow_specific').click()">
-                            <input type="radio" name="access_mode" value="specific" id="allow_specific" class="access-radio" {{ 'checked' if not exam.allow_all_students }}>
-                            <i class="bi bi-person-check-fill"></i>
-                            <span>Specific Students Only</span>
-                        </div>
-                    </div>
-
-                    <div id="specific-student-selector" style="{{ 'display:none;' if exam.allow_all_students }}">
-                        <div class="selection-status">
-                            <i class="bi bi-info-circle"></i>
-                            <span id="eligibility-count-text">{{ (exam.allowed_students or '').split(',')|length if exam.allowed_students else 0 }} students currently selected</span>
-                        </div>
-                        <button type="button" class="vx-btn-primary vx-control-btn open-student-selection" style="width:100%;">
-                            <i class="bi bi-pencil-square"></i> Modify Selection
-                        </button>
-                    </div>
-
-                    <input type="hidden" name="allowed_students" id="allowed-students-input" value="{{ exam.allowed_students or '' }}">
-
-                    <div style="margin-top:25px; display:flex; gap:10px;">
-                        <button type="button" class="vx-btn-outline close-access-modal" style="flex:1;">Cancel</button>
-                        <button type="submit" class="vx-btn-primary" style="flex:1; border:none; border-radius:8px; font-weight:600;">Save Settings</button>
-                    </div>
-                </form>
-            </div>
+        <div class="nx-setting">
+          <div class="nx-setting__text">
+            <span class="nx-setting__label" id="leaderboard-label">Leaderboard</span>
+            <span class="nx-setting__desc">Shown to students only while results are on</span>
+          </div>
+          <label class="nx-switch">
+            <input type="checkbox" role="switch" data-visibility="leaderboard" aria-labelledby="leaderboard-label"{% if exam.show_leaderboard %} checked{% endif %}>
+            <span class="nx-switch__track"></span>
+          </label>
         </div>
-    </div>
+        <div class="nx-divider-line" role="separator"></div>
+        <button type="button" class="nx-btn nx-btn--secondary nx-btn--sm nx-btn--block" data-publish data-nx-confirm="Publish and delete evidence?">
+          <i class="bi bi-shield-check" aria-hidden="true"></i><span>Publish results and clear evidence</span>
+        </button>
+        <p class="nx-help nx-mt-2">Turns results on and permanently deletes this exam's stored proctoring images. Review flagged attempts first.</p>
+      </div>
+    </section>
 
-    <!-- 3. Student Selection Modal (Enhanced with Generator) -->
-     <div id="student-selection-modal" class="custom-modal">
-        <div class="modal-content modal-xl">
-            <div class="modal-header">
-                <h3><i class="bi bi-people"></i> Select Students for Exam Access</h3>
-                <button class="modal-close" id="modal-close-btn"><i class="bi bi-x"></i></button>
-            </div>
-
-            <div class="modal-tabs">
-                <div class="modal-tab active" data-tab="manual"><i class="bi bi-hand-index-thumb"></i> Manual Selection</div>
-                <div class="modal-tab" data-tab="generator"><i class="bi bi-dice-5"></i> Random Group Generator</div>
-            </div>
-
-            <div class="modal-body" style="padding:0;">
-                
-                <!-- Manual Selection Panel -->
-                <div id="manual-panel" class="p-3">
-                    <div class="row">
-                        <!-- Column 1: Filters -->
-                        <div class="col-md-2">
-                            <div class="card p-3 shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
-                                <h6 class="mb-3 text-white uppercase small"><i class="bi bi-funnel"></i> Filters</h6>
-                                
-                                <div class="mb-3">
-                                    <label class="form-label text-dim small fw-bold">Batch:</label>
-                                    <select id="batch-filter" class="form-select bg-dark text-white border-secondary" style="font-size: 13px;">
-                                        <option value="">Select Batch</option>
-                                        {% for batch in all_batches %}
-                                        <option value="{{ batch }}">{{ batch }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label text-dim small fw-bold">Search:</label>
-                                    <input type="text" id="student-search" class="form-control bg-dark text-white border-secondary" placeholder="Search name/PRN/roll" style="font-size: 13px;">
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label text-dim small fw-bold"><i class="bi bi-list-ol"></i> Roll Range</label>
-                                    <input type="text" id="roll-range-input" class="form-control bg-dark text-white border-secondary" placeholder="e.g. 1-20, 25-40" style="font-size: 13px;">
-                                </div>
-
-                                <div class="d-flex gap-2">
-                                    <button id="apply-filters-btn" class="btn btn-primary btn-sm flex-grow-1" style="border-radius: 8px;">Apply</button>
-                                    <button id="clear-filters-btn" class="btn btn-outline-secondary btn-sm" style="border-radius: 8px;">Clear</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Column 2: Student Grid -->
-                        <div class="col-md-8">
-                            <div class="card shadow-sm border-0" style="background: rgba(255,255,255,0.05); height: 500px; overflow-y: auto; padding: 15px;">
-                                <h6 class="mb-3 text-white uppercase small"><i class="bi bi-people"></i> Students</h6>
-                                <div class="student-card-grid" id="student-list-container">
-                                    {% for s in all_students %}
-                                    <label class="student-card {{ 'selected-card' if s.id|string in (exam.allowed_students or '').split(',') }}" 
-                                           data-batch="{{ s.batch or '' }}" 
-                                           data-roll-id="{{ s.roll_id or '' }}"
-                                           data-search="{{ (s.full_name or '').lower() }} {{ s.prn_number or '' }} {{ s.roll_id or '' }}">
-                                        
-                                        <input type="checkbox" class="student-checkbox" 
-                                               value="{{ s.id }}" 
-                                               {% if s.id|string in (exam.allowed_students or '').split(',') %}checked{% endif %}>
-                                        
-                                        <div class="student-card-content">
-                                            <div class="student-card-name">{{ s.full_name }}</div>
-                                            <div class="student-card-meta">
-                                                <div>Roll: {{ s.roll_id or 'N/A' }} | Batch: {{ s.batch or 'N/A' }}</div>
-                                                <div class="mt-1">{{ s.course or 'DAC' }} | PRN: {{ s.prn_number or 'N/A' }}</div>
-                                                {% if student_exam_map.get(s.id) %}
-                                                <div class="mt-2">
-                                                    <span class="badge bg-info" style="font-size: 9px;">{{ student_exam_map[s.id].status|title }}</span>
-                                                </div>
-                                                {% endif %}
-                                                
-                                                {% if other_exam_map.get(s.id) %}
-                                                <div class="mt-2">
-                                                    {% for other_title in other_exam_map[s.id] %}
-                                                    <span class="badge" style="font-size: 9px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.5); color: #60a5fa;">
-                                                        Selected in: {{ other_title }}
-                                                    </span>
-                                                    {% endfor %}
-                                                </div>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </label>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Column 3: Quick Actions -->
-                        <div class="col-md-2">
-                            <div class="card p-3 shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
-                                <h6 class="mb-3 text-white uppercase small"><i class="bi bi-lightning-charge"></i> Quick Actions</h6>
-                                <div class="d-grid gap-2">
-                                    <button id="select-all-btn" class="btn btn-success btn-sm" style="background: #10b981; border: none; font-weight: 600;">Select All</button>
-                                    <button id="deselect-all-btn" class="btn btn-danger btn-sm" style="background: #ef4444; border: none; font-weight: 600;">Deselect All</button>
-                                    <button id="select-evens-btn" class="btn btn-info btn-sm" style="background: #14b8a6; border: none; font-weight: 600; color: #fff;">Select Evens</button>
-                                    <button id="select-odds-btn" class="btn btn-info btn-sm" style="background: #14b8a6; border: none; font-weight: 600; color: #fff;">Select Odds</button>
-                                </div>
-                                <div class="mt-4">
-                                    <div class="text-white small fw-bold">Selected: <span id="modal-selected-count">0</span></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Group Generator Panel -->
-                <div id="generator-panel" class="generator-panel" style="display:none;">
-                    <div class="modal-column gen-input-box">
-                        <h4 class="column-title"><i class="bi bi-gear-fill"></i> Parameters</h4>
-                        <div style="margin-bottom: 15px;">
-                            <label class="vx-stat-label">Total Students:</label>
-                            <input type="number" id="gen-total" class="form-input" value="90" min="1" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--vx-border); color:#fff; padding:8px; border-radius:6px;">
-                        </div>
-                        <div style="margin-bottom: 15px;">
-                            <label class="vx-stat-label">Number of Sets:</label>
-                            <input type="number" id="gen-sets" class="form-input" value="5" min="1" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--vx-border); color:#fff; padding:8px; border-radius:6px;">
-                        </div>
-                        <div style="margin-bottom: 15px;">
-                            <label class="vx-stat-label">Max per Set (Optional):</label>
-                            <input type="number" id="gen-max" class="form-input" placeholder="No limit" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--vx-border); color:#fff; padding:8px; border-radius:6px;">
-                        </div>
-                        <button id="btn-generate-groups" class="vx-btn-primary vx-control-btn" style="width:100%;">
-                            <i class="bi bi-play-fill"></i> Generate Groups
-                        </button>
-                        <button id="btn-apply-groups" class="vx-btn-success vx-control-btn" style="display:none; width:100%; background:var(--vx-success);">
-                            <i class="bi bi-check-all"></i> Apply to Selection
-                        </button>
-                        <div id="gen-error" class="vx-badge vx-badge-danger" style="margin-top:15px; display:none; width:100%; text-align:center;"></div>
-                    </div>
-
-                    <div class="modal-column gen-results-area">
-                        <div id="gen-results-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; visibility:hidden;">
-                            <h4 class="column-title" style="margin:0;"><i class="bi bi-table"></i> Generated Result</h4>
-                            <div style="display:flex; gap:10px;">
-                                <button id="btn-copy-groups" class="vx-btn-outline" style="padding:4px 12px; font-size:12px;"><i class="bi bi-clipboard"></i> Copy All</button>
-                                <button id="btn-regenerate-groups" class="vx-btn-outline" style="padding:4px 12px; font-size:12px;"><i class="bi bi-arrow-clockwise"></i> Reshuffle</button>
-                            </div>
-                        </div>
-                        <div id="gen-results-list">
-                            <div style="text-align:center; padding:50px; color:var(--vx-text-dim);">
-                                <i class="bi bi-dice-5" style="font-size:3rem; opacity:0.3; display:block; margin-bottom:10px;"></i>
-                                Configure parameters and click Generate
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <button id="modal-cancel-btn" class="vx-btn-outline" style="padding:10px 20px;">Cancel</button>
-                <button type="button" id="modal-confirm-btn" class="vx-btn-primary" style="padding:10px 25px; border:none; border-radius:8px;">
-                    <i class="bi bi-check-lg"></i> Confirm Selection
-                </button>
-            </div>
+    {# ── Who can sit it ────────────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 10" aria-labelledby="eligibility-title">
+      <div class="nx-panel__head">
+        <h2 class="nx-panel__title" id="eligibility-title">Who can sit it</h2>
+      </div>
+      <form method="POST" action="{{ url_for('faculty.update_exam_access', exam_id=exam.id) }}" class="nx-panel__body nx-stack nx-stack--tight" id="eligibilityForm">
+        <div class="nx-choice" role="radiogroup" aria-label="Who can sit this exam">
+          <label class="nx-choice__item">
+            <input type="radio" name="access_mode" value="all" {{ 'checked' if exam.allow_all_students }}>
+            <span><b>Everyone</b><small>All students you manage</small></span>
+          </label>
+          <label class="nx-choice__item">
+            <input type="radio" name="access_mode" value="specific" {{ 'checked' if not exam.allow_all_students }}>
+            <span><b>Selected students</b><small id="eligibilityCount">{{ allowed_ids|length }} selected</small></span>
+          </label>
         </div>
-    </div>
-
-    <!-- 4. Questions Modal -->
-    <div id="questions-modal" class="custom-modal">
-        <div class="modal-content modal-xl">
-            <div class="modal-header">
-                <h3><i class="bi bi-question-circle"></i> Question Bank ({{ exam.questions|length }})</h3>
-                <button class="modal-close close-questions-modal"><i class="bi bi-x"></i></button>
-            </div>
-            <div class="modal-body">
-                <div class="vx-table-wrap">
-                    <table class="vx-table">
-                        <thead>
-                            <tr><th>#</th><th>Question Text</th><th>Marks</th><th>Correct</th></tr>
-                        </thead>
-                        <tbody>
-                            {% for q in exam.questions %}
-                            <tr>
-                                <td class="vx-text-dim">{{ loop.index }}</td>
-                                <td style="font-weight:500;">{{ q.question_text }}</td>
-                                <td class="vx-badge vx-badge-info">{{ q.points }} pts</td>
-                                <td class="vx-badge vx-badge-success">{{ q.correct_answer }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        <input type="hidden" name="allowed_students" id="allowedStudents" value="{{ exam.allowed_students or '' }}">
+        <div class="nx-btn-row">
+          <button type="button" class="nx-btn nx-btn--secondary nx-btn--sm" id="openPicker"{% if exam.allow_all_students %} hidden{% endif %}>
+            <i class="bi bi-people" aria-hidden="true"></i><span>Choose students</span>
+          </button>
+          <button type="submit" class="nx-btn nx-btn--primary nx-btn--sm"><span>Save</span></button>
         </div>
-    </div>
+      </form>
+    </section>
 
-    <!-- 5. Extend Time Modal -->
-    <div id="extend-time-modal" class="custom-modal">
-        <div class="modal-content modal-sm">
-            <div class="modal-header">
-                <h3><i class="bi bi-clock-history"></i> Extend Exam Time</h3>
-                <button class="modal-close" onclick="document.getElementById('extend-time-modal').style.display='none'"><i class="bi bi-x"></i></button>
-            </div>
-            <div class="modal-body">
-                <form method="POST" action="{{ url_for('faculty.faculty_extend_exam_time', exam_id=exam.id) }}">
-                    <div class="form-group">
-                        <label class="vx-stat-label">Minutes to add:</label>
-                        <input type="number" name="minutes" value="15" min="1" class="form-input" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--vx-border); color:#fff; padding:10px; border-radius:8px; margin-top:8px;">
-                    </div>
-                    <div style="margin-top:20px; display:flex; gap:10px;">
-                        <button type="button" class="vx-btn-outline" style="flex:1;" onclick="document.getElementById('extend-time-modal').style.display='none'">Cancel</button>
-                        <button type="submit" class="vx-btn-primary" style="flex:1; border:none; border-radius:8px;">Apply</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
+    {# ── Settings ──────────────────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 11" aria-labelledby="settings-title">
+      <div class="nx-panel__head">
+        <h2 class="nx-panel__title" id="settings-title">Settings</h2>
+      </div>
+      <dl class="nx-dl">
+        <div><dt>Duration</dt><dd>{{ exam.duration_minutes }} min</dd></div>
+        <div><dt>Pass mark</dt><dd>{{ exam.passing_score|int }}%</dd></div>
+        <div><dt>Opens</dt><dd>{{ exam.start_time|localtime('%d %b %Y, %H:%M') if exam.start_time else 'When activated' }}</dd></div>
+        <div><dt>Closes</dt><dd>{{ exam.end_time|localtime('%d %b %Y, %H:%M') if exam.end_time else 'No end time' }}</dd></div>
+        <div><dt>Proctoring</dt><dd>{{ ('On · ' ~ ('classroom' if exam.exam_mode == 'classroom' else 'home')) if exam.enable_proctoring else 'Off' }}</dd></div>
+        <div><dt>Auto-submit after</dt><dd>{{ exam.max_violations or 6 }} flags · {{ exam.max_tab_switches or 3 }} tab switches</dd></div>
+        <div><dt>Shuffle</dt><dd>{{ 'Questions and options' if exam.randomize_questions else 'Off' }}</dd></div>
+        <div><dt>Created</dt><dd>{{ exam.created_at|localtime('%d %b %Y') if exam.created_at else '—' }}</dd></div>
+      </dl>
+    </section>
+  </div>
 </div>
 
+{# ── Student picker ─────────────────────────────────────────── #}
+<dialog class="nx-dialog nx-dialog--wide" id="studentPicker" aria-labelledby="pickerTitle">
+  <div class="nx-dialog__head">
+    <div>
+      <h2 class="nx-dialog__title" id="pickerTitle">Choose students</h2>
+      <span class="nx-panel__sub"><span id="pickerCount">0</span> of {{ all_students|length }} selected</span>
+    </div>
+    <div class="nx-segmented" role="group" aria-label="Picker mode">
+      <button type="button" data-picker-tab="manual" aria-pressed="true"><i class="bi bi-ui-checks" aria-hidden="true"></i>Pick</button>
+      <button type="button" data-picker-tab="generator" aria-pressed="false"><i class="bi bi-shuffle" aria-hidden="true"></i>Split into sets</button>
+    </div>
+    <button type="button" class="nx-btn nx-btn--ghost nx-btn--icon" data-picker-close aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+  </div>
 
+  <div class="nx-dialog__body" data-picker-panel="manual">
+    <div class="nx-picker-tools">
+      <label class="nx-search">
+        <span class="nx-visually-hidden">Search students</span>
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" class="nx-input" id="pickerSearch" placeholder="Name, PRN or roll" autocomplete="off">
+      </label>
+      <label class="nx-select">
+        <span class="nx-visually-hidden">Batch</span>
+        <select class="nx-input" id="pickerBatch">
+          <option value="">All batches</option>
+          {% for batch in all_batches %}<option value="{{ batch }}">{{ batch }}</option>{% endfor %}
+        </select>
+      </label>
+      <input type="text" class="nx-input nx-picker-tools__roll" id="pickerRolls" placeholder="Rolls, e.g. 1-20, 25" aria-label="Roll numbers" autocomplete="off">
+      <div class="nx-btn-row">
+        <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-pick="all">All shown</button>
+        <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-pick="none">None</button>
+        <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-pick="even">Even rolls</button>
+        <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-pick="odd">Odd rolls</button>
+      </div>
+    </div>
+    {% if all_students %}
+    <div class="nx-picker-grid" id="pickerList">
+      {% for s in all_students %}
+      <label class="nx-pick" data-batch="{{ s.batch or '' }}" data-roll="{{ s.roll_id or '' }}"
+             data-search="{{ ((s.full_name or s.username) ~ ' ' ~ (s.prn_number or '') ~ ' ' ~ (s.roll_id or ''))|lower }}">
+        <input type="checkbox" class="nx-pick__box" value="{{ s.id }}"{% if s.id|string in allowed_ids %} checked{% endif %}>
+        <span class="nx-pick__text">
+          <span class="nx-pick__name">{{ s.full_name or s.username }}</span>
+          <span class="nx-pick__meta nx-num">{% if s.roll_id %}Roll {{ s.roll_id }} · {% endif %}{{ s.batch or 'No batch' }}{% if s.prn_number %} · {{ s.prn_number }}{% endif %}</span>
+          {% if student_exam_map.get(s.id) or other_exam_map.get(s.id) %}
+          <span class="nx-pick__tags">
+            {% if student_exam_map.get(s.id) %}<span class="nx-pick__tag">{{ student_exam_map[s.id].status|replace('_', ' ')|capitalize }} here</span>{% endif %}
+            {% for t in other_exam_map.get(s.id, []) %}<span class="nx-pick__tag">Also in {{ t }}</span>{% endfor %}
+          </span>
+          {% endif %}
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+    <div id="pickerNoMatch" hidden>
+      {% call ui.empty_state('No students match', 'Clear the filters to see everyone.', icon='funnel') %}{% endcall %}
+    </div>
+    {% else %}
+    {% call ui.empty_state('No students yet', 'Import students from the Students page first.', icon='people') %}{% endcall %}
+    {% endif %}
+  </div>
+
+  <div class="nx-dialog__body" data-picker-panel="generator" hidden>
+    <div class="nx-generator">
+      <div class="nx-form">
+        <p class="nx-help">Split a hall's roll numbers into sets so that neighbours (within two rolls) land in different sets. Apply one set, or all, to this exam.</p>
+        <div class="nx-stack nx-stack--tight">
+          <div class="nx-field"><label class="nx-label" for="genTotal">Students in the hall</label><input type="number" class="nx-input" id="genTotal" value="{{ all_students|length or 60 }}" min="1"></div>
+          <div class="nx-field"><label class="nx-label" for="genSets">Sets</label><input type="number" class="nx-input" id="genSets" value="4" min="1"></div>
+          <div class="nx-field"><label class="nx-label" for="genMax">Max per set <span class="nx-label__aside">optional</span></label><input type="number" class="nx-input" id="genMax" min="1" placeholder="No limit"></div>
+        </div>
+        <p class="nx-help nx-text-danger" id="genError" role="alert" hidden></p>
+        <div class="nx-btn-row">
+          <button type="button" class="nx-btn nx-btn--primary nx-btn--sm" id="genRun"><i class="bi bi-shuffle" aria-hidden="true"></i><span>Generate</span></button>
+          <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" id="genCopy" hidden><i class="bi bi-copy" aria-hidden="true"></i><span>Copy all</span></button>
+        </div>
+      </div>
+      <div id="genResults" class="nx-sets" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="nx-dialog__foot">
+    <span class="nx-help">Saved when you press Save in “Who can sit it”.</span>
+    <button type="button" class="nx-btn nx-btn--ghost" data-picker-close>Cancel</button>
+    <button type="button" class="nx-btn nx-btn--primary" id="pickerDone"><span>Use selection</span></button>
+  </div>
+</dialog>
 {% endblock %}
 
 {% block extra_js %}
-
-<style>
-    :root {
-        --vx-primary: #6366f1;
-        --vx-primary-hover: #4f46e5;
-        --vx-secondary: #64748b;
-        --vx-success: #10b981;
-        --vx-danger: #ef4444;
-        --vx-warning: #f59e0b;
-        --vx-info: #3b82f6;
-        --vx-bg: #0f172a;
-        --vx-card-bg: rgba(30, 41, 59, 0.7);
-        --vx-border: rgba(255, 255, 255, 0.1);
-        --vx-text-main: #f1f5f9;
-        --vx-text-dim: #94a3b8;
-    }
-
-    body {
-        background-color: var(--vx-bg);
-        color: var(--vx-text-main);
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    }
-
-    /* --- Layout Structure --- */
-    .vx-dashboard {
-        display: grid;
-        grid-template-columns: 1fr 340px;
-        gap: 24px;
-        max-width: 1600px;
-        margin: 0 auto;
-        padding: 20px;
-    }
-
-    @media (max-width: 1200px) {
-        .vx-dashboard {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    /* --- Header & Stats --- */
-    .vx-header {
-        grid-column: 1 / -1;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24px;
-    }
-
-    .vx-title-group h1 {
-        font-size: 1.875rem;
-        font-weight: 800;
-        margin: 0;
-        background: linear-gradient(to right, #fff, #94a3b8);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    .vx-stats-bar {
-        grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 20px;
-        margin-bottom: 24px;
-    }
-
-    .vx-stat-card {
-        background: var(--vx-card-bg);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--vx-border);
-        border-radius: 16px;
-        padding: 20px;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        transition: transform 0.2s ease;
-    }
-
-    .vx-stat-card:hover {
-        transform: translateY(-2px);
-        border-color: rgba(99, 102, 241, 0.3);
-    }
-
-    .vx-stat-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-    }
-
-    .vx-stat-info .vx-stat-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        line-height: 1;
-        margin-bottom: 4px;
-    }
-
-    .vx-stat-info .vx-stat-label {
-        font-size: 0.875rem;
-        color: var(--vx-text-dim);
-    }
-
-    /* --- Main Content Cards --- */
-    .vx-card {
-        background: var(--vx-card-bg);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--vx-border);
-        border-radius: 16px;
-        overflow: hidden;
-    }
-
-    .vx-card-header {
-        padding: 20px 24px;
-        border-bottom: 1px solid var(--vx-border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .vx-card-title {
-        font-size: 1.125rem;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0;
-    }
-
-    .vx-card-body {
-        padding: 24px;
-    }
-
-    /* --- Sidebar Widgets --- */
-    .vx-sidebar {
-        display: flex;
-        flex-direction: column;
-        gap: 24px;
-    }
-
-    .vx-control-btn {
-        width: 100%;
-        padding: 12px;
-        border-radius: 10px;
-        border: 1px solid transparent;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        transition: all 0.2s ease;
-        cursor: pointer;
-        margin-bottom: 12px;
-    }
-
-    .vx-btn-primary { background: var(--vx-primary); color: #fff; }
-    .vx-btn-primary:hover { background: var(--vx-primary-hover); transform: translateY(-1px); }
-    
-    .vx-btn-outline { 
-        background: transparent; 
-        border-color: var(--vx-border); 
-        color: var(--vx-text-main); 
-    }
-    .vx-btn-outline:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--vx-text-dim); }
-
-    .vx-btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--vx-danger); border-color: rgba(239, 68, 68, 0.2); }
-    .vx-btn-danger:hover { background: var(--vx-danger); color: #fff; }
-
-    /* --- Modern Table --- */
-    .vx-table-wrap {
-        margin: -24px; /* Flush with card body */
-        overflow-x: auto;
-    }
-
-    .vx-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .vx-table th {
-        background: rgba(255, 255, 255, 0.02);
-        padding: 16px 24px;
-        text-align: left;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        color: var(--vx-text-dim);
-        border-bottom: 1px solid var(--vx-border);
-    }
-
-    .vx-table td {
-        padding: 16px 24px;
-        border-bottom: 1px solid var(--vx-border);
-        font-size: 0.875rem;
-    }
-
-    .vx-table tr:hover td {
-        background: rgba(255, 255, 255, 0.02);
-    }
-
-    /* --- Tokens & Badges --- */
-    .vx-badge {
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-
-    .vx-badge-success { background: rgba(16, 185, 129, 0.1); color: #10b981; }
-    .vx-badge-warning { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
-    .vx-badge-info { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
-    .vx-badge-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
-
-    .vx-key-token {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 1.5rem;
-        color: var(--vx-warning);
-        background: rgba(245, 158, 11, 0.05);
-        padding: 12px;
-        border-radius: 12px;
-        border: 2px dashed rgba(245, 158, 11, 0.2);
-        text-align: center;
-        margin: 16px 0;
-        letter-spacing: 2px;
-    }
-
-    /* --- Animations --- */
-    @keyframes pulse {
-        0% { transform: scale(0.95); opacity: 0.5; }
-        50% { transform: scale(1.05); opacity: 1; }
-        100% { transform: scale(0.95); opacity: 0.5; }
-    }
-
-    .vx-live-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--vx-danger);
-        font-weight: 700;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-    }
-
-    .vx-live-dot {
-        width: 8px;
-        height: 8px;
-        background: var(--vx-danger);
-        border-radius: 50%;
-        animation: pulse 2s infinite;
-    }
-    /* --- Tabbed Interface --- */
-    .modal-tabs {
-        display: flex;
-        gap: 10px;
-        padding: 0 25px;
-        margin-bottom: -1px;
-        position: relative;
-        z-index: 2;
-    }
-
-    .modal-tab {
-        padding: 12px 24px;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--border-color, #334155);
-        border-bottom: none;
-        border-radius: 8px 8px 0 0;
-        color: var(--text-secondary, #94a3b8);
-        cursor: pointer;
-        font-weight: 600;
-        transition: all 0.2s ease;
-    }
-
-    .modal-tab:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: #fff;
-    }
-
-    .modal-tab.active {
-        background: var(--card-bg, #1e293b);
-        color: #6366f1;
-        border-top: 2px solid #6366f1;
-        padding-top: 11px; /* Account for border */
-    }
-
-    /* --- Generator Panel --- */
-    .generator-panel {
-        display: grid;
-        grid-template-columns: 320px 1fr;
-        gap: 25px;
-        padding: 25px;
-        height: 100%;
-        overflow: hidden;
-    }
-
-    .gen-input-box {
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 12px;
-        padding: 20px;
-        border: 1px solid var(--border-color, #334155);
-    }
-
-    .gen-results-area {
-        overflow-y: auto;
-        padding-right: 10px;
-    }
-
-    .gen-set-card {
-        background: linear-gradient(135deg, #2a3045 0%, #323750 100%);
-        border: 1px solid #3d4358;
-        border-radius: 10px;
-        margin-bottom: 15px;
-        padding: 15px;
-    }
-
-    .gen-set-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding-bottom: 8px;
-    }
-
-    .gen-set-title {
-        font-weight: 700;
-        color: #68a2ff;
-        margin: 0;
-    }
-
-    .gen-set-meta {
-        font-size: 12px;
-        color: #8899aa;
-    }
-
-    .gen-roll-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        font-family: 'Courier New', monospace;
-    }
-
-    .gen-roll-tag {
-        background: rgba(104, 162, 255, 0.1);
-        color: #d4dae8;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid rgba(104, 162, 255, 0.2);
-        font-size: 13px;
-    }
-
-    .gen-btn-row {
-        display: flex;
-        gap: 10px;
-        margin-top: 15px;
-    }
-
-    .access-btn-row {
-        display: flex;
-        gap: 10px;
-        margin-top: 15px;
-    }
-
-    /* Original Modal & Access Card Styles */
-    .custom-modal {
-        display: none;
-        position: fixed;
-        z-index: 2000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.7);
-        backdrop-filter: blur(8px);
-        align-items: center;
-        justify-content: center;
-    }
-
-    .modal-content {
-        background: #1e293b;
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 16px;
-        width: 90%;
-        max-height: 90vh;
-        overflow-y: auto;
-        position: relative;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    }
-
-    .access-mode-options {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 15px;
-        margin: 20px 0;
-    }
-
-    .access-mode-card {
-        background: rgba(255,255,255,0.05);
-        border: 2px solid transparent;
-        border-radius: 12px;
-        padding: 24px 16px;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-        position: relative;
-    }
-
-    .access-mode-card:hover { background: rgba(255,255,255,0.08); }
-
-    .access-mode-card.selected {
-        border-color: var(--vx-primary);
-        background: rgba(99, 102, 241, 0.15);
-    }
-
-    .access-mode-card i {
-        font-size: 2rem;
-        color: var(--vx-text-dim);
-    }
-
-    .access-mode-card.selected i {
-        color: var(--vx-primary);
-    }
-
-    .access-mode-card span {
-        font-weight: 600;
-        color: var(--vx-text-main);
-    }
-
-    .access-radio { display: none; }
-
-    /* --- Student Card Grid Styles --- */
-    .student-card-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: 15px;
-    }
-
-    .student-card {
-        background: rgba(30, 41, 59, 0.5);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 20px;
-        position: relative;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        text-align: center;
-        min-height: 140px;
-    }
-
-    .student-card:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: var(--vx-primary);
-        transform: translateY(-2px);
-    }
-
-    .student-card.selected-card {
-        background: rgba(99, 102, 241, 0.15);
-        border-color: var(--vx-primary);
-        box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
-    }
-
-    .student-card input[type="checkbox"] {
-        position: absolute;
-        top: 15px;
-        left: 15px;
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-    }
-
-    .student-card-name {
-        font-weight: 700;
-        font-size: 1.1rem;
-        margin-bottom: 10px;
-        text-transform: uppercase;
-        color: #fff;
-    }
-
-    .student-card-meta {
-        font-size: 0.8rem;
-        color: #94a3b8;
-        line-height: 1.4;
-    }
-
-    .text-dim { color: #94a3b8; }
-    .uppercase { text-transform: uppercase; }
-    .small { font-size: 0.75rem; }
-</style>
-
-<script>
-    /* ── Exam Access Key Management ── */
-    async function generateKey() {
-        const resp = await fetch('{{ url_for("faculty.generate_exam_key", exam_id=exam.id) }}', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Could not generate key'));
-        }
-    }
-
-    async function clearKey() {
-        if (!confirm('Remove the access key? Students will be able to start this exam without a key.')) return;
-        const resp = await fetch('{{ url_for("faculty.clear_exam_key", exam_id=exam.id) }}', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Could not clear key'));
-        }
-    }
-
-    function copyKey(key) {
-        navigator.clipboard.writeText(key).then(() => {
-            const ico = document.getElementById('copyIco');
-            if (ico) { ico.className = 'bi bi-clipboard-check'; setTimeout(() => ico.className = 'bi bi-clipboard', 2000); }
-        }).catch(() => {
-            prompt('Copy this key:', key);
-        });
-    }
-
-    /* ── Post-Exam Settings ── */
-    /* ── Per-exam result / leaderboard visibility ── */
-    const VX_EXAM_ID = {{ exam.id }};
-    const VX_URLS = {
-        results: '{{ url_for("faculty.faculty_set_results_visibility") }}',
-        leaderboard: '{{ url_for("faculty.faculty_set_leaderboard") }}',
-        publish: '{{ url_for("faculty.faculty_publish_results", exam_id=exam.id) }}'
-    };
-
-    function paintExamVisibility() {
-        const box = document.getElementById('examVisibility');
-        if (!box) return;
-
-        const resultsOn = box.dataset.results === '1';
-        const lbOn = box.dataset.leaderboard === '1';
-
-        const pillR = document.getElementById('pillResults');
-        const pillL = document.getElementById('pillLeaderboard');
-        pillR.textContent = resultsOn ? 'PUBLISHED' : 'HIDDEN';
-        pillR.classList.toggle('on', resultsOn);
-        pillL.textContent = lbOn ? 'OPEN' : 'CLOSED';
-        pillL.classList.toggle('on', lbOn);
-
-        const note = document.getElementById('visibilityNote');
-        if (!resultsOn) {
-            note.textContent = 'Students cannot see their score, result page or PDF for this exam.';
-        } else if (!lbOn) {
-            note.textContent = 'Students can see their own result, but this exam stays off the leaderboard.';
-        } else {
-            note.textContent = 'Students can see their own result and this exam appears on the leaderboard.';
-        }
-    }
-
-    async function toggleExamVisibility(kind) {
-        const box = document.getElementById('examVisibility');
-        const key = kind === 'results' ? 'results' : 'leaderboard';
-        const next = box.dataset[key] !== '1';
-        const body = kind === 'results'
-            ? { exam_id: VX_EXAM_ID, show_results: next, visible: next, enabled: next }
-            : { exam_id: VX_EXAM_ID, show_leaderboard: next, enabled: next };
-
-        try {
-            const resp = await fetch(VX_URLS[kind], {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                body: JSON.stringify(body)
-            });
-            const data = await resp.json();
-            if (!resp.ok || !data.success) throw new Error(data.message || 'Could not save');
-
-            box.dataset[key] = next ? '1' : '0';
-            paintExamVisibility();
-        } catch (err) {
-            alert('Error: ' + err.message);
-        }
-    }
-
-    async function publishAndClearEvidence() {
-        if (!confirm('Publish results for this exam and permanently delete the stored proctoring evidence images?\n\nThis cannot be undone.')) {
-            return;
-        }
-        try {
-            const resp = await fetch(VX_URLS.publish, {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            const data = await resp.json();
-            if (!resp.ok || !data.success) throw new Error(data.error || data.message || 'Failed');
-
-            document.getElementById('examVisibility').dataset.results = '1';
-            paintExamVisibility();
-            alert(data.message || 'Results published.');
-        } catch (err) {
-            alert('Error: ' + err.message);
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', paintExamVisibility);
-
-    /* ── UI Enhancements ── */
-    document.addEventListener("DOMContentLoaded", () => {
-        // Access Modal UI syncing
-        document.querySelectorAll('.access-radio').forEach(radio => {
-            radio.addEventListener('change', function() {
-                document.querySelectorAll('.access-mode-card').forEach(card => card.classList.remove('selected'));
-                if(this.checked) this.closest('.access-mode-card').classList.add('selected');
-                
-                const selector = document.getElementById('specific-student-selector');
-                if (this.value === 'specific') {
-                    selector.style.display = 'block';
-                } else {
-                    selector.style.display = 'none';
-                }
-            });
-        });
-
-        // Student selection UI syncing
-        function updateSelectedCount() {
-            const count = document.querySelectorAll('.student-checkbox:checked').length;
-            const countEl = document.getElementById('modal-selected-count');
-            if(countEl) countEl.textContent = count;
-        }
-
-        document.querySelectorAll('.student-checkbox').forEach(cb => {
-            cb.addEventListener('change', function() {
-                if(this.checked) this.closest('.student-card').classList.add('selected-card');
-                else this.closest('.student-card').classList.remove('selected-card');
-                updateSelectedCount();
-            });
-        });
-
-        function syncStudentCards() {
-            document.querySelectorAll('.student-checkbox').forEach(cb => {
-                if(cb.checked) cb.closest('.student-card').classList.add('selected-card');
-                else cb.closest('.student-card').classList.remove('selected-card');
-            });
-            updateSelectedCount();
-        }
-
-        // Filtering Logic
-        const searchInput = document.getElementById('student-search');
-        const batchFilter = document.getElementById('batch-filter');
-        const rollRangeInput = document.getElementById('roll-range-input');
-        const applyBtn = document.getElementById('apply-filters-btn');
-        const clearBtn = document.getElementById('clear-filters-btn');
-
-        function applyFilters() {
-            const query = searchInput.value.toLowerCase();
-            const batch = batchFilter.value;
-            const rollRangeRaw = rollRangeInput.value.trim();
-            
-            let allowedRolls = null;
-            if (rollRangeRaw) {
-                allowedRolls = new Set();
-                const parts = rollRangeRaw.split(',');
-                parts.forEach(part => {
-                    if (part.includes('-')) {
-                        const [start, end] = part.split('-').map(n => parseInt(n.trim()));
-                        if (!isNaN(start) && !isNaN(end)) {
-                            for (let i = start; i <= end; i++) allowedRolls.add(i);
-                        }
-                    } else {
-                        const val = parseInt(part.trim());
-                        if (!isNaN(val)) allowedRolls.add(val);
-                    }
-                });
-            }
-
-            document.querySelectorAll('.student-card').forEach(card => {
-                const searchData = card.dataset.search || "";
-                const cardBatch = card.dataset.batch || "";
-                const cardRoll = parseInt(card.dataset.rollId);
-                
-                let visible = true;
-                if (query && !searchData.includes(query)) visible = false;
-                if (batch && cardBatch !== batch) visible = false;
-                if (allowedRolls && !allowedRolls.has(cardRoll)) visible = false;
-                
-                card.style.display = visible ? 'flex' : 'none';
-            });
-        }
-
-        if(applyBtn) applyBtn.addEventListener('click', applyFilters);
-        if(clearBtn) clearBtn.addEventListener('click', () => {
-            searchInput.value = "";
-            batchFilter.value = "";
-            rollRangeInput.value = "";
-            document.querySelectorAll('.student-card').forEach(card => card.style.display = 'flex');
-        });
-
-        // Search as you type
-        if(searchInput) searchInput.addEventListener('input', applyFilters);
-        if(batchFilter) batchFilter.addEventListener('change', applyFilters);
-
-        // Quick Actions
-        const actionButtons = {
-            'select-all-btn': (cb) => cb.checked = true,
-            'deselect-all-btn': (cb) => cb.checked = false,
-            'select-evens-btn': (cb, roll) => cb.checked = (roll % 2 === 0),
-            'select-odds-btn': (cb, roll) => cb.checked = (roll % 2 !== 0)
-        };
-
-        Object.keys(actionButtons).forEach(id => {
-            const btn = document.getElementById(id);
-            if(btn) {
-                btn.addEventListener('click', () => {
-                    const visibleCards = document.querySelectorAll('.student-card');
-                    visibleCards.forEach(card => {
-                        if (card.style.display === 'none') return;
-                        const cb = card.querySelector('.student-checkbox');
-                        const roll = parseInt(card.dataset.rollId);
-                        if (cb) actionButtons[id](cb, roll);
-                    });
-                    syncStudentCards();
-                });
-            }
-        });
-
-        updateSelectedCount();
-
-        /* --- Tab Switching --- */
-        const tabs = document.querySelectorAll('.modal-tab');
-        const manualPanel = document.getElementById('manual-panel');
-        const generatorPanel = document.getElementById('generator-panel');
-
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-
-                if (tab.dataset.tab === 'manual') {
-                    manualPanel.style.display = 'grid';
-                    generatorPanel.style.display = 'none';
-                } else {
-                    manualPanel.style.display = 'none';
-                    generatorPanel.style.display = 'grid';
-                }
-            });
-        });
-
-        /* --- Random Group Generator Logic --- */
-        const btnGenerate = document.getElementById('btn-generate-groups');
-        const btnRegenerate = document.getElementById('btn-regenerate-groups');
-        const btnCopy = document.getElementById('btn-copy-groups');
-        const btnApply = document.getElementById('btn-apply-groups');
-        const resultsList = document.getElementById('gen-results-list');
-        const resultsHeader = document.getElementById('gen-results-header');
-        const genError = document.getElementById('gen-error');
-
-        let lastGeneratedSets = [];
-
-        function generateGroups() {
-            const total = parseInt(document.getElementById('gen-total').value);
-            const setsCount = parseInt(document.getElementById('gen-sets').value);
-            const maxPerSet = parseInt(document.getElementById('gen-max').value) || Infinity;
-
-            genError.textContent = "";
-
-            if (isNaN(total) || total < 1) { genError.textContent = "Invalid total students"; return; }
-            if (isNaN(setsCount) || setsCount < 1) { genError.textContent = "Invalid number of sets"; return; }
-            if (setsCount > total) { genError.textContent = "Sets cannot exceed total students"; return; }
-            if (maxPerSet < Math.ceil(total / setsCount)) {
-                genError.textContent = `Max per set must be at least ${Math.ceil(total / setsCount)}`;
-                return;
-            }
-
-            // Create list of roll numbers 1..N
-            let students = Array.from({ length: total }, (_, i) => i + 1);
-            
-            // Shuffle students
-            for (let i = students.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [students[i], students[j]] = [students[j], students[i]];
-            }
-
-            // Distribute students into sets with constraint checking
-            const sets = Array.from({ length: setsCount }, () => []);
-            
-            students.forEach(student => {
-                // Find set with fewest students that doesn't have neighbors
-                // Neighbors defined as ±1, ±2
-                let bestSetIdx = -1;
-                let minSize = Infinity;
-                
-                // First pass: look for sets without neighbors
-                for (let i = 0; i < setsCount; i++) {
-                    if (sets[i].length >= maxPerSet) continue;
-                    
-                    const hasNeighbor = sets[i].some(s => Math.abs(s - student) <= 2);
-                    if (!hasNeighbor) {
-                        if (sets[i].length < minSize) {
-                            minSize = sets[i].length;
-                            bestSetIdx = i;
-                        }
-                    }
-                }
-
-                // Second pass: if no set is neighbor-free, pick the smallest set
-                if (bestSetIdx === -1) {
-                    minSize = Infinity;
-                    for (let i = 0; i < setsCount; i++) {
-                        if (sets[i].length >= maxPerSet) continue;
-                        if (sets[i].length < minSize) {
-                            minSize = sets[i].length;
-                            bestSetIdx = i;
-                        }
-                    }
-                }
-
-                if (bestSetIdx !== -1) {
-                    sets[bestSetIdx].push(student);
-                }
-            });
-
-            // Sort each set for readability
-            sets.forEach(s => s.sort((a, b) => a - b));
-            lastGeneratedSets = sets;
-
-            renderResults(sets);
-        }
-
-        function renderResults(sets) {
-            resultsList.innerHTML = "";
-            resultsHeader.style.visibility = "visible";
-            btnApply.style.display = "block";
-
-            sets.forEach((set, idx) => {
-                const card = document.createElement('div');
-                card.className = 'gen-set-card';
-                card.innerHTML = `
-                    <div class="gen-set-header">
-                        <h5 class="gen-set-title">Set ${idx + 1}</h5>
-                        <div class="gen-btn-row" style="margin:0;">
-                             <button onclick="copySet(${idx})" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:11px;"><i class="bi bi-clipboard"></i> Copy Set</button>
-                             <span class="gen-set-meta">${set.length} students</span>
-                        </div>
-                    </div>
-                    <div class="gen-roll-list">
-                        ${set.map(r => `<span class="gen-roll-tag">${String(r).padStart(2, '0')}</span>`).join('')}
-                    </div>
-                `;
-                resultsList.appendChild(card);
-            });
-        }
-
-        window.copySet = function(idx) {
-            const set = lastGeneratedSets[idx];
-            const text = set.map(r => String(r).padStart(2, '0')).join(', ');
-            navigator.clipboard.writeText(text).then(() => {
-                alert(`Copied Set ${idx + 1} to clipboard!`);
-            });
-        };
-
-        btnGenerate.addEventListener('click', generateGroups);
-        btnRegenerate.addEventListener('click', generateGroups);
-
-        btnCopy.addEventListener('click', () => {
-            let text = "";
-            lastGeneratedSets.forEach((set, idx) => {
-                text += `Set ${idx + 1}: ${set.map(r => String(r).padStart(2, '0')).join(', ')}\n`;
-            });
-            navigator.clipboard.writeText(text).then(() => {
-                const originalText = btnCopy.innerHTML;
-                btnCopy.innerHTML = "<i class='bi bi-check-lg'></i> Copied!";
-                setTimeout(() => btnCopy.innerHTML = originalText, 2000);
-            });
-        });
-
-        btnApply.addEventListener('click', () => {
-            // Find students by roll_id (last 2 digits of PRN in this app's logic)
-            // Or just use the index if roll numbers match the list order
-            const allCheckboxes = document.querySelectorAll('.student-checkbox');
-            const rollToCheckbox = {};
-            
-            document.querySelectorAll('.student-card').forEach(card => {
-                const roll = card.dataset.rollId;
-                const cb = card.querySelector('.student-checkbox');
-                if (roll && cb) rollToCheckbox[parseInt(roll)] = cb;
-            });
-
-            // Flatten all sets into one list of selected students
-            const selectedRolls = lastGeneratedSets.flat();
-            
-            // Clear current selection first
-            allCheckboxes.forEach(cb => cb.checked = false);
-
-            let matchCount = 0;
-            selectedRolls.forEach(roll => {
-                if (rollToCheckbox[roll]) {
-                    rollToCheckbox[roll].checked = true;
-                    matchCount++;
-                }
-            });
-
-            syncStudentCards();
-            
-            // Switch back to manual tab to see selection
-            tabs[0].click();
-
-            if (matchCount < selectedRolls.length) {
-                alert(`Applied selection. Note: Only ${matchCount} of ${selectedRolls.length} roll numbers matched existing students.`);
-            }
-        });
-        /* --- Modal Opening/Closing Logic --- */
-        const modalMap = {
-            'open-details-modal': 'exam-details-modal',
-            'open-access-modal': 'exam-access-modal',
-            'open-student-selection': 'student-selection-modal',
-            'open-questions-modal': 'questions-modal'
-        };
-
-        Object.keys(modalMap).forEach(triggerClass => {
-            document.querySelectorAll('.' + triggerClass).forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.getElementById(modalMap[triggerClass]).style.display = 'flex';
-                });
-            });
-        });
-
-        // Function to sync checkboxes from the hidden input field value
-        function syncCheckboxesFromHidden() {
-            const allowedInput = document.getElementById('allowed-students-input');
-            const allowedIds = allowedInput && allowedInput.value 
-                ? allowedInput.value.split(',').map(id => id.trim()) 
-                : [];
-            document.querySelectorAll('.student-checkbox').forEach(cb => {
-                cb.checked = allowedIds.includes(cb.value);
-            });
-            syncStudentCards();
-        }
-
-        // Specific trigger for the selection modal within the access modal
-        const selectionBtn = document.querySelector('.open-student-selection');
-        if (selectionBtn) {
-            selectionBtn.addEventListener('click', () => {
-                syncCheckboxesFromHidden();
-                document.getElementById('exam-access-modal').style.display = 'none';
-                document.getElementById('student-selection-modal').style.display = 'flex';
-            });
-        }
-
-        // Confirm Selection button inside selection modal
-        const confirmBtn = document.getElementById('modal-confirm-btn');
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', () => {
-                const selected = [...document.querySelectorAll(".student-checkbox:checked")]
-                    .map(cb => cb.value);
-                
-                const allowedInput = document.getElementById('allowed-students-input');
-                if (allowedInput) {
-                    allowedInput.value = selected.join(",");
-                }
-                
-                const countText = document.getElementById('eligibility-count-text');
-                if (countText) {
-                    countText.textContent = `${selected.length} students currently selected`;
-                }
-                
-                document.getElementById('student-selection-modal').style.display = 'none';
-                document.getElementById('exam-access-modal').style.display = 'flex';
-            });
-        }
-
-        // Reopen access modal when selection modal is closed/cancelled
-        const selectionModal = document.getElementById('student-selection-modal');
-        const accessModal = document.getElementById('exam-access-modal');
-        if (selectionModal && accessModal) {
-            const selCancel = selectionModal.querySelector('#modal-cancel-btn');
-            const selClose = selectionModal.querySelector('#modal-close-btn');
-            [selCancel, selClose].forEach(btn => {
-                if (btn) {
-                    btn.addEventListener('click', () => {
-                        accessModal.style.display = 'flex';
-                    });
-                }
-            });
-        }
-
-        // Close buttons
-        document.querySelectorAll('.modal-close, .close-details-modal, .close-access-modal, .close-questions-modal, #modal-cancel-btn, #modal-close-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const modal = btn.closest('.custom-modal');
-                if (modal) modal.style.display = 'none';
-            });
-        });
-
-        // Close on outside click
-        window.addEventListener('click', (e) => {
-            if (e.target.classList.contains('custom-modal')) {
-                e.target.style.display = 'none';
-            }
-        });
-
-        window.showExtendTimeModal = function() {
-            document.getElementById('extend-time-modal').style.display = 'flex';
-        };
-
-        /* --- Dashboard Specific JS --- */
-        const attemptSearch = document.getElementById('attemptSearch');
-        if (attemptSearch) {
-            attemptSearch.addEventListener('input', function(e) {
-                const query = e.target.value.toLowerCase();
-                document.querySelectorAll('.attempt-row').forEach(row => {
-                    const searchText = row.dataset.search || "";
-                    row.style.display = searchText.includes(query) ? "" : "none";
-                });
-            });
-        }
-
-        window.copyKey = function(key) {
-            navigator.clipboard.writeText(key).then(() => {
-                const display = document.getElementById('keyDisplay');
-                const original = display.innerText;
-                display.innerText = "COPIED!";
-                setTimeout(() => display.innerText = original, 1000);
-            });
-        };
-
-        window.generateKey = async function() {
-            try {
-                const resp = await fetch('{{ url_for("faculty.generate_exam_key", exam_id=exam.id) }}', { method: 'POST' });
-                if (resp.ok) location.reload();
-            } catch (e) { console.error(e); }
-        };
-
-        window.clearKey = async function() {
-            try {
-                const resp = await fetch('{{ url_for("faculty.clear_exam_key", exam_id=exam.id) }}', { method: 'POST' });
-                if (resp.ok) location.reload();
-            } catch (e) { console.error(e); }
-        };
-
-        // Safe auto-refresh for attempts table and stats bar
-        setInterval(async () => {
-            // Do not auto-refresh if any modal is currently visible to prevent focus loss/flickering
-            const visibleModals = [...document.querySelectorAll('.custom-modal')].filter(
-                m => m.style.display === 'flex' || m.classList.contains('active')
-            );
-            if (visibleModals.length > 0) return;
-
-            try {
-                const r = await fetch(window.location.href);
-                if (!r.ok) return;
-                const html = await r.text();
-                const newDoc = new DOMParser().parseFromString(html, "text/html");
-                
-                // Update table body
-                const newTbody = newDoc.querySelector("#attemptsTable tbody");
-                const oldTbody = document.querySelector("#attemptsTable tbody");
-                if (newTbody && oldTbody) {
-                    oldTbody.innerHTML = newTbody.innerHTML;
-                }
-                
-                // Update stats bar
-                const newStats = newDoc.querySelector(".vx-stats-bar");
-                const oldStats = document.querySelector(".vx-stats-bar");
-                if (newStats && oldStats) {
-                    oldStats.innerHTML = newStats.innerHTML;
-                }
-            } catch (e) {
-                console.error("Auto-refresh failed:", e);
-            }
-        }, 3000);
-    });
-</script>
-
-
-
+<script src="{{ url_for('static', filename='js/pages/view_exam.js') }}"></script>
 {% endblock %}
