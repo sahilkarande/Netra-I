@@ -1,199 +1,88 @@
-{% extends "base.html" %}
+{% extends "layouts/app.html" %}
+{% import 'components/ui.html' as ui %}
 
-{% block title %}Upload Questions - {{ exam.title }}{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/upload_questions.css') }}">
-{% endblock %}
+{% block title %}Add questions · {{ exam.title }}{% endblock %}
+{% block topbar_title %}<b>Add questions</b> · {{ exam.title }}{% endblock %}
 
 {% block content %}
-<div class="uq-container">
-    
-    <!-- Header -->
-    <div class="uq-header">
-        <div class="uq-header-left">
-            <div class="uq-header-icon">
-                <i class="bi bi-cloud-arrow-up-fill"></i>
-            </div>
-            <div>
-                <h1 class="uq-title">Upload Questions</h1>
-                <p class="uq-subtitle">For: <strong>{{ exam.title }}</strong></p>
-            </div>
-        </div>
-    </div>
+{% set existing = exam.questions|length %}
+{% call ui.page_header('Add questions', exam.title ~ ' · ' ~ existing ~ ' question' ~ ('s' if existing != 1 else '') ~ ' on the paper now') %}
+  {{ ui.button('Exam page', href=url_for('faculty.view_exam', exam_id=exam.id), icon='arrow-left') }}
+{% endcall %}
 
-    <!-- Access Key Banner -->
+<div class="nx-grid-main">
+  <div class="nx-stack">
+    <section class="nx-panel nx-enter" style="--i: 1" aria-labelledby="file-title">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="file-title">Question file</h2>
+          <span class="nx-panel__sub">New questions are added after the existing ones. If any row has a problem, nothing is added.</span>
+        </div>
+      </div>
+      <form id="uploadForm" method="POST" enctype="multipart/form-data" class="nx-panel__body nx-form"
+            action="{{ url_for('faculty.upload_questions', exam_id=exam.id) }}"
+            data-preview-url="{{ url_for('faculty.preview_questions', exam_id=exam.id) }}">
+        <label class="nx-drop" id="fileDrop" for="fileInput">
+          <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+          <span class="nx-drop__main" id="fileMain">Choose a question file</span>
+          <span class="nx-drop__sub" id="fileSub">CSV, Excel or JSON · click or drop it here</span>
+        </label>
+        <input id="fileInput" type="file" name="file" class="nx-visually-hidden" accept=".csv,.xlsx,.xls,.json" required>
+
+        <div id="checkResult" hidden>
+          <div class="nx-alert" id="checkSummary" role="status"></div>
+          <ul class="nx-errors" id="checkErrors" hidden></ul>
+          <div class="nx-table-wrap nx-mt-2" id="checkTableWrap" hidden>
+            <table class="nx-table">
+              <thead><tr><th scope="col">#</th><th scope="col">Question</th><th scope="col">Options</th><th scope="col">Answer</th><th scope="col" class="is-num">Points</th></tr></thead>
+              <tbody id="checkRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="nx-btn-row nx-form-actions">
+          {{ ui.button('Cancel', href=url_for('faculty.view_exam', exam_id=exam.id), variant='ghost') }}
+          <button type="submit" id="submitBtn" class="nx-btn nx-btn--primary" disabled>
+            <i class="bi bi-upload" aria-hidden="true"></i><span>Add questions</span>
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="nx-stack">
+    <section class="nx-panel nx-enter" style="--i: 2" aria-labelledby="format-title">
+      <div class="nx-panel__head"><h2 class="nx-panel__title" id="format-title">File format</h2></div>
+      <div class="nx-panel__body nx-stack nx-stack--tight nx-prose-block">
+        <p>One question per row (CSV, Excel) or per object (JSON).</p>
+        <dl class="nx-dl nx-dl--flush">
+          <div><dt><code>question</code></dt><dd>Required</dd></div>
+          <div><dt><code>option_a</code>, <code>option_b</code></dt><dd>Required</dd></div>
+          <div><dt><code>option_c</code>, <code>option_d</code></dt><dd>Optional</dd></div>
+          <div><dt><code>correct_answer</code></dt><dd>A, B, C or D</dd></div>
+          <div><dt><code>points</code></dt><dd>Optional, default 1</dd></div>
+        </dl>
+        <p class="nx-help">Code goes between three backticks <code>```</code>; a line break inside a cell can be written as <code>\n</code>.</p>
+        <a class="nx-btn nx-btn--secondary nx-btn--sm" href="{{ url_for('static', filename='samples/questions_sample.csv') }}" download>
+          <i class="bi bi-download" aria-hidden="true"></i><span>Sample CSV</span>
+        </a>
+      </div>
+    </section>
     {% if exam.access_key %}
-    <div class="uq-access-banner">
-        <div class="uq-access-icon">
-            <i class="bi bi-key-fill"></i>
+    <section class="nx-panel nx-enter" style="--i: 3" aria-labelledby="key-title">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="key-title">Access key</h2>
+          <span class="nx-panel__sub">Announce it in the hall when the exam starts</span>
         </div>
-        <div class="uq-access-content">
-            <div class="uq-access-label">Exam Access Key — share this with students</div>
-            <div class="uq-access-value" id="accessKeyVal">{{ exam.access_key }}</div>
-        </div>
-        <button class="uq-btn uq-btn-outline-amber" 
-            onclick="navigator.clipboard.writeText('{{ exam.access_key }}').then(()=>this.innerHTML='<i class=\'bi bi-check-lg\'></i> Copied!').catch(()=>prompt('Copy Key:','{{ exam.access_key }}'))">
-            <i class="bi bi-clipboard"></i> Copy Key
-        </button>
-    </div>
+      </div>
+      <div class="nx-panel__body"><div class="nx-key">{{ exam.access_key }}</div></div>
+    </section>
     {% endif %}
-
-    <!-- Upload Card -->
-    <div class="uq-card">
-        <h2 class="uq-card-title"><i class="bi bi-file-earmark-arrow-up"></i> Upload Question File</h2>
-        
-        <div class="uq-info-alert">
-            <div class="uq-info-title"><i class="bi bi-info-circle-fill"></i> Format Requirements</div>
-            <ul class="uq-info-list">
-                <li>Supported formats: <strong>CSV, Excel (.xlsx/.xls), JSON</strong></li>
-                <li>Required columns: <code>question</code>, <code>option_a</code>, <code>option_b</code>, <code>correct_answer</code></li>
-                <li>Optional columns: <code>option_c</code>, <code>option_d</code>, <code>points</code></li>
-                <li><code>correct_answer</code> must be one of: <strong>A, B, C, D</strong></li>
-            </ul>
-        </div>
-
-        <form id="uploadForm" method="POST" enctype="multipart/form-data" action="{{ url_for('faculty.upload_questions', exam_id=exam.id) }}">
-            
-            <div class="uq-form-group">
-                <label class="uq-form-label">Select File <span style="color:var(--uq-red)">*</span></label>
-                <input id="fileInput" type="file" name="file" class="uq-file-input" accept=".csv,.xlsx,.xls,.json" required>
-                <span class="uq-hint">Max recommended rows: 10,000. Use server preview for very large files.</span>
-            </div>
-
-            <div class="uq-preview-actions">
-                <button type="button" id="previewClientBtn" class="uq-btn uq-btn-outline uq-btn-sm"><i class="bi bi-eye"></i> Quick Preview</button>
-                <button type="button" id="previewServerBtn" class="uq-btn uq-btn-outline uq-btn-sm"><i class="bi bi-search"></i> Full Server Preview</button>
-                <button type="button" id="clearBtn" class="uq-btn uq-btn-outline uq-btn-sm"><i class="bi bi-trash"></i> Clear</button>
-            </div>
-
-            <div id="previewContainer" class="uq-preview-container" style="display:none;">
-                <div class="uq-preview-header">
-                    <h4 class="uq-preview-title"><i class="bi bi-table"></i> Data Preview</h4>
-                    <span id="previewNote" style="font-size:0.85rem; color:var(--uq-text-secondary);"></span>
-                </div>
-                <div class="uq-preview-table-wrap" id="previewTable">
-                    <!-- Table rendered via JS -->
-                </div>
-            </div>
-
-            <div class="uq-main-actions">
-                <a href="{{ url_for('faculty.faculty_dashboard') }}" class="uq-btn uq-btn-outline"><i class="bi bi-arrow-left"></i> Cancel</a>
-                <button type="submit" id="submitBtn" class="uq-btn uq-btn-primary"><i class="bi bi-upload"></i> Process & Upload Questions</button>
-            </div>
-        </form>
-    </div>
+  </div>
 </div>
+{% endblock %}
 
-<!-- External libs for client parsing -->
-<script src="{{ url_for('static', filename='vendor/papaparse/papaparse.min.js') }}" integrity crossorigin="anonymous"></script>
-<script src="{{ url_for('static', filename='vendor/xlsx/xlsx.full.min.js') }}" integrity crossorigin="anonymous"></script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const fileInput = document.getElementById("fileInput");
-        const previewClientBtn = document.getElementById("previewClientBtn");
-        const previewServerBtn = document.getElementById("previewServerBtn");
-        const clearBtn = document.getElementById("clearBtn");
-        const previewContainer = document.getElementById("previewContainer");
-        const previewTable = document.getElementById("previewTable");
-        const previewNote = document.getElementById("previewNote");
-        const uploadForm = document.getElementById("uploadForm");
-        const submitBtn = document.getElementById("submitBtn");
-
-        function renderPreview(data) {
-            if (!Array.isArray(data) || data.length === 0) {
-                previewTable.innerHTML = "<div style='padding:1.5rem; text-align:center; color:var(--uq-text-secondary)'>No valid data found in the file.</div>";
-                previewNote.textContent = "";
-                previewContainer.style.display = "block";
-                return;
-            }
-            
-            const headers = Object.keys(data[0]);
-            let html = "<table class='uq-table'>";
-            html += "<thead><tr>";
-            headers.forEach(h => html += `<th>${h}</th>`);
-            html += "</tr></thead><tbody>";
-            
-            data.slice(0, 10).forEach(row => {
-                html += "<tr>";
-                headers.forEach(h => html += `<td>${(row[h] ?? "").toString().replace(/</g, '&lt;')}</td>`);
-                html += "</tr>";
-            });
-            
-            html += "</tbody></table>";
-            previewTable.innerHTML = html;
-            previewNote.textContent = data.length > 10 ? `Showing 10 of ${data.length} rows` : `${data.length} rows`;
-            previewContainer.style.display = "block";
-        }
-
-        previewClientBtn.addEventListener("click", async () => {
-            const file = fileInput.files[0];
-            if (!file) { alert("Please select a file first."); return; }
-            const ext = file.name.split('.').pop().toLowerCase();
-            try {
-                if (ext === 'csv') {
-                    const text = await file.text();
-                    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-                    renderPreview(parsed.data || []);
-                } else if (ext === 'json') {
-                    const text = await file.text();
-                    const parsed = JSON.parse(text);
-                    renderPreview(Array.isArray(parsed) ? parsed : []);
-                } else if (ext === 'xlsx' || ext === 'xls') {
-                    const ab = await file.arrayBuffer();
-                    const wb = XLSX.read(ab, { type: 'array' });
-                    const sheet = wb.Sheets[wb.SheetNames[0]];
-                    const data = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-                    renderPreview(data);
-                } else {
-                    alert("Unsupported format. Use CSV, Excel, or JSON.");
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Error parsing file locally. Try using the Full Server Preview.");
-            }
-        });
-
-        previewServerBtn.addEventListener("click", async () => {
-            const file = fileInput.files[0];
-            if (!file) { alert("Please select a file first."); return; }
-            const form = new FormData();
-            form.append("file", file);
-            form.append("server_preview", "1");
-
-            const originalText = previewServerBtn.innerHTML;
-            previewServerBtn.disabled = true;
-            previewServerBtn.innerHTML = "<i class='bi bi-hourglass-split'></i> Previewing...";
-
-            try {
-                const resp = await fetch("{{ url_for('faculty.preview_questions', exam_id=exam.id) }}", {
-                    method: "POST",
-                    body: form,
-                    credentials: "same-origin"
-                });
-                const payload = await resp.json();
-                if (!resp.ok) throw new Error(payload.error || "Server preview failed");
-                renderPreview(payload.rows || []);
-            } catch (err) {
-                console.error(err);
-                alert("Server preview failed: " + (err.message || err));
-            } finally {
-                previewServerBtn.disabled = false;
-                previewServerBtn.innerHTML = originalText;
-            }
-        });
-
-        clearBtn.addEventListener("click", () => {
-            fileInput.value = "";
-            previewTable.innerHTML = "";
-            previewContainer.style.display = "none";
-        });
-
-        uploadForm.addEventListener("submit", () => {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = "<i class='bi bi-arrow-repeat'></i> Uploading...";
-        });
-    });
-</script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/upload_questions.js') }}"></script>
 {% endblock %}

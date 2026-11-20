@@ -949,3 +949,17 @@ kbd {
   .nx-brow { grid-template-columns: 20px minmax(0, 1fr) auto; }
   .nx-brow__file { grid-column: 2; justify-self: start; }
 }
+
+/* ── Add questions ─────────────────────────────────────────── */
+.nx-form-actions { justify-content: flex-end; padding-top: var(--space-2); }
+.nx-errors {
+  list-style: none; margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); display: grid; gap: 4px;
+  max-height: 260px; overflow-y: auto; border: 1px solid var(--danger); border-radius: var(--radius-md);
+  font: 400 var(--text-xs)/1.5 var(--font-mono); color: var(--text);
+}
+.nx-cell-clip { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-prose-block p { font-size: var(--text-sm); color: var(--text-muted); }
+.nx-prose-block code, .nx-dl code { font: 400 0.9em var(--font-mono); background: var(--bg-subtle); padding: 1px 4px; border-radius: 3px; color: var(--text); }
+.nx-dl--flush { padding: 0; }
+.nx-form > *, #checkResult { min-width: 0; }
+@media (max-width: 640px) { .nx-cell-clip { max-width: 46vw; } }

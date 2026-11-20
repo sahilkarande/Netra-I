@@ -61,6 +61,8 @@ REDESIGNED = [
     'frontend/static/js/pages/analytics.js',
     'frontend/templates/faculty/create_exam.html',
     'frontend/static/js/pages/create_exam.js',
+    'frontend/templates/faculty/upload_questions.html',
+    'frontend/static/js/pages/upload_questions.js',
 ]
 
 
@@ -741,3 +743,37 @@ def test_create_exam_error_keeps_what_was_typed(app, seed, as_user):
     resp = as_user('faca').post('/faculty/exam/create', data={'title': 'Kept title', 'duration_minutes': '0'})
     assert resp.status_code == 400
     assert 'value="Kept title"' in resp.data.decode()
+
+
+# ── Add questions ───────────────────────────────────────────────────────────
+
+import io  # noqa: E402
+
+
+def test_upload_page_on_design_system(app, seed, as_user):
+    html = as_user('faca').get(f"/faculty/exam/{seed['exam']}/upload").data.decode()
+    assert 'css/ds/tokens.css' in html and 'upload_questions.css' not in html
+    assert 'papaparse' not in html and 'alert(' not in html and 'onclick=' not in html
+    assert 'samples/questions_sample.csv' in html and 'name="file"' in html
+
+
+def test_preview_uses_the_upload_rules(app, seed, as_user):
+    client = as_user('faca')
+    bad = b'question,option_a,option_b,correct_answer\nOK?,a,b,A\nBroken,a,b,Z\n'
+    data = client.post(f"/faculty/exam/{seed['exam']}/preview_questions",
+                       data={'file': (io.BytesIO(bad), 'q.csv')}, content_type='multipart/form-data').get_json()
+    assert data['success'] is False and data['error_count'] == 1 and 'Row 3' in data['errors'][0]
+
+    sample = open(os.path.join(ROOT, 'frontend/static/samples/questions_sample.csv'), 'rb').read()
+    data = client.post(f"/faculty/exam/{seed['exam']}/preview_questions",
+                       data={'file': (io.BytesIO(sample), 'sample.csv')}, content_type='multipart/form-data').get_json()
+    assert data['success'] is True and data['total'] == 3 and data['total_points'] == 4
+
+
+def test_sample_file_uploads(app, seed, as_user):
+    sample = open(os.path.join(ROOT, 'frontend/static/samples/questions_sample.csv'), 'rb').read()
+    resp = as_user('faca').post(f"/faculty/exam/{seed['exam']}/upload",
+                                data={'file': (io.BytesIO(sample), 'sample.csv')}, content_type='multipart/form-data')
+    assert resp.status_code == 302
+    with app.app_context():
+        assert Question.query.filter_by(exam_id=seed['exam']).count() == 5

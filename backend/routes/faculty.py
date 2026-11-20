@@ -1489,27 +1489,20 @@ def preview_questions(exam_id):
     file = request.files.get('file') or request.files.get('csv_file')
     if not file:
         return jsonify({"error": "No file uploaded"}), 400
-        
-    filename = secure_filename(file.filename).lower()
-    try:
-        rows = []
-        if filename.endswith('.csv'):
-            stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-            rows = list(csv.DictReader(stream))
-        elif filename.endswith('.json'):
-            rows = json.loads(file.stream.read().decode("UTF8"))
-            if not isinstance(rows, list): rows = []
-        elif filename.endswith('.xlsx') or filename.endswith('.xls'):
-            import pandas as pd
-            df = pd.read_excel(file.stream)
-            rows = df.to_dict(orient='records')
-            
-        return jsonify({"rows": rows})
-    except Exception as e:
-        traceback.print_exc()
-        current_app.logger.exception('preview_questions failed')
-        return jsonify({"error": "Could not read the file."}), 500
-    return jsonify({"error": "Invalid file format"}), 400
+
+    # The same strict rules the upload applies, so a file that previews
+    # cleanly will upload, and one that will not is explained row by row.
+    from backend.services.question_splitter import validate_questions
+    filename = secure_filename(file.filename or '').lower()
+    questions, errors = validate_questions(filename, file.read())
+    return jsonify({
+        "success": not errors,
+        "total": len(questions),
+        "total_points": sum(q['points'] for q in questions),
+        "questions": questions[:50],
+        "errors": errors[:50],
+        "error_count": len(errors),
+    })
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/force_end', methods=['POST'])
 @login_required

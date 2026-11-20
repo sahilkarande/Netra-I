@@ -1,0 +1,4 @@
+question,option_a,option_b,option_c,option_d,correct_answer,points
+Which SQL clause filters rows after aggregation?,WHERE,HAVING,GROUP BY,ORDER BY,B,1
+"What does this query return?\n```SELECT dept, COUNT(*)\nFROM staff\nGROUP BY dept;```",One row per staff member,One row per department with its headcount,The total number of staff,An error,B,2
+Is a primary key allowed to be NULL?,Yes,No,,,B,1

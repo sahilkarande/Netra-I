@@ -15,6 +15,7 @@ real database.
 | `frontend/images/CDAC_Logo_org.png` | Logo | Not referenced by any template. |
 | `frontend/css/auth.css` | Styles for the old sign-in pages | Login, register, OTP and change-password now use the design system (`css/ds/`). |
 | `frontend/css/create_exam.css` | Styles for the old New exam page | The page now uses the design system (`css/ds/`). |
+| `frontend/css/upload_questions.css` | Styles for the old Add questions page | The page now uses the design system (`css/ds/`). |
 | `frontend/css/student_dashboard.css` | Styles for the old student dashboard | The student dashboard now uses the design system (`css/ds/`). |
 | `frontend/templates/import_students.html` | Stand-alone import page | No route renders it; import lives on the Manage Students page. |
 
