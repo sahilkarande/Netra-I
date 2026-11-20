@@ -314,7 +314,7 @@
             <div class="header-meta">
                 <span><i class="bi bi-journal-text"></i> {{ exam.title }}</span>
                 <span class="opacity-50">|</span>
-                <span><i class="bi bi-calendar3"></i> {{ exam.created_at.strftime('%d %b %Y') }}</span>
+                <span><i class="bi bi-calendar3"></i> {{ exam.created_at|localtime('%d %b %Y') }}</span>
                 <span class="opacity-50">|</span>
                 <span><i class="bi bi-person-badge"></i> {{ exam.creator.full_name }}</span>
             </div>

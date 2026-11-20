@@ -41,6 +41,9 @@ def get_lan_ip():
 # TABLES but never adds columns to a table that already exists, so anything
 # introduced later has to be ALTERed in here.
 LATE_COLUMNS = {
+    'exam': {
+        'times_utc': 'BOOLEAN DEFAULT 0',
+    },
     'users': {
         'password_changed': 'BOOLEAN DEFAULT 0',
         'password_changed_at': 'DATETIME',
@@ -135,6 +138,23 @@ def ensure_schema_indexes():
             print(f"⚠️  Could not create {name} on {table}: {e}")
 
 
+def convert_exam_times_to_utc():
+    """One-off data fix: exam windows used to be stored in the hall's local
+    time and compared with UTC, so exams opened and closed hours late. Rows
+    saved before the fix carry times_utc = 0; convert them once."""
+    from backend.models import Exam
+    from backend.services.time_service import local_to_utc
+
+    pending = Exam.query.filter(db.or_(Exam.times_utc == False, Exam.times_utc.is_(None))).all()  # noqa: E712
+    for exam in pending:
+        exam.start_time = local_to_utc(exam.start_time)
+        exam.end_time = local_to_utc(exam.end_time)
+        exam.times_utc = True
+    if pending:
+        db.session.commit()
+        print(f"✅ Converted the open/close times of {len(pending)} exam(s) to UTC")
+
+
 # Kept as an alias so older call sites keep working.
 ensure_user_columns = ensure_schema_columns
 
@@ -193,6 +213,10 @@ def create_app():
     
     # Configuration
     app.config['SECRET_KEY'] = load_secret_key(app.instance_path)
+
+    # Times are stored in UTC and shown in the exam hall's zone
+    from backend.services import time_service
+    time_service.init_app(app)
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///exam_platform.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
@@ -324,6 +348,7 @@ def create_app():
         db.create_all()
         ensure_schema_columns()
         ensure_schema_indexes()
+        convert_exam_times_to_utc()
         print("✅ Database initialized!")
 
     # ──────────────────────────────────────────────────────────────

@@ -42,7 +42,7 @@
                     <div class="student-banner-info">
                         <span><i class="bi bi-person-badge"></i> {{ student.prn_number or 'No PRN' }}</span>
                         <span><i class="bi bi-envelope"></i> {{ student.email }}</span>
-                        <span><i class="bi bi-calendar"></i> Joined {{ student.created_at.strftime('%b %Y') if student.created_at else 'N/A' }}</span>
+                        <span><i class="bi bi-calendar"></i> Joined {{ student.created_at|localtime('%b %Y') if student.created_at else 'N/A' }}</span>
                     </div>
                     
                     {% if student.is_verified %}

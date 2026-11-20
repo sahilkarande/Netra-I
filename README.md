@@ -136,6 +136,7 @@ All settings come from environment variables (or `.env`). See [.env.example](.en
 | `PORT` | `8800` | HTTP port |
 | `FLASK_DEBUG` | `false` | Werkzeug debugger for local development only; when on, the server listens on 127.0.0.1 and other machines cannot connect. Never on with `--ssl` |
 | `HOST` | `0.0.0.0` | Interface to listen on (ignored in debug mode) |
+| `APP_TIMEZONE` | `Asia/Kolkata` | Time zone of the exam hall (IANA name). Exam open/close times are typed and shown in this zone and stored in UTC |
 | `SESSION_IDLE_MINUTES` | `60` | Sign out a session idle this long |
 | `USE_SSL` | `false` | Mark session cookies HTTPS-only. Set to `true` when running behind an HTTPS proxy (nginx); `--ssl` sets this automatically |
 | `MAX_CONTENT_LENGTH` | 16 MB | Upload limit |

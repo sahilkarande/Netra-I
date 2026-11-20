@@ -197,7 +197,7 @@
             <span class="nx-avatar" aria-hidden="true">{{ ui.initials(name) }}</span>
             <span class="nx-feed__text">
               <span class="nx-feed__name">{{ name }}</span>
-              <span class="nx-feed__detail">{{ a.exam.title }} · <time datetime="{{ a.submitted_at.isoformat() }}Z">{{ a.submitted_at.strftime('%d %b, %H:%M') }}</time></span>
+              <span class="nx-feed__detail">{{ a.exam.title }} · <time datetime="{{ a.submitted_at.isoformat() }}Z">{{ a.submitted_at|localtime('%d %b, %H:%M') }}</time></span>
             </span>
             {% if a.percentage is not none %}
             <span class="nx-score nx-score--{{ 'pass' if a.passed else 'fail' }}">{{ '%.0f'|format(a.percentage) }}%</span>

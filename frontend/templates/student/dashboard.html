@@ -26,9 +26,9 @@
 
 {% macro exam_when(row) -%}
   {%- set exam = row.exam -%}
-  {%- if row.state == 'upcoming' and exam.start_time -%}Opens {{ exam.start_time.strftime('%d %b, %H:%M') }}
-  {%- elif row.state == 'open' and exam.end_time -%}Closes {{ exam.end_time.strftime('%d %b, %H:%M') }}
-  {%- elif row.state in ('awaiting', 'released', 'invalidated') and row.attempt.submitted_at -%}Submitted {{ row.attempt.submitted_at.strftime('%d %b') }}
+  {%- if row.state == 'upcoming' and exam.start_time -%}Opens {{ exam.start_time|localtime('%d %b, %H:%M') }}
+  {%- elif row.state == 'open' and exam.end_time -%}Closes {{ exam.end_time|localtime('%d %b, %H:%M') }}
+  {%- elif row.state in ('awaiting', 'released', 'invalidated') and row.attempt.submitted_at -%}Submitted {{ row.attempt.submitted_at|localtime('%d %b') }}
   {%- elif row.state == 'in_progress' -%}Your clock is running
   {%- endif -%}
 {%- endmacro %}
@@ -230,7 +230,7 @@
           <span class="nx-feed__text">
             <span class="nx-feed__name">{{ se.exam.title if se.exam else 'Removed exam' }}</span>
             <span class="nx-feed__detail">
-              {%- if se.submitted_at %}<time datetime="{{ se.submitted_at.isoformat() }}Z">{{ se.submitted_at.strftime('%d %b %Y, %H:%M') }}</time>{% endif -%}
+              {%- if se.submitted_at %}<time datetime="{{ se.submitted_at.isoformat() }}Z">{{ se.submitted_at|localtime('%d %b %Y, %H:%M') }}</time>{% endif -%}
               {%- if se.time_taken_minutes %} · {{ se.time_taken_minutes }} min{% endif -%}
             </span>
           </span>

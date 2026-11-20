@@ -228,14 +228,14 @@
                     <div class="info-label">
                         <i class="bi bi-calendar-plus-fill"></i> Registered
                     </div>
-                    <div class="info-value">{{ student.created_at.strftime('%d %b, %Y at %I:%M %p') if student.created_at else 'N/A' }}</div>
+                    <div class="info-value">{{ student.created_at|localtime('%d %b, %Y at %I:%M %p') if student.created_at else 'N/A' }}</div>
                 </div>
 
                 <div class="info-item">
                     <div class="info-label">
                         <i class="bi bi-clock-history"></i> Last Updated
                     </div>
-                    <div class="info-value">{{ student.updated_at.strftime('%d %b, %Y at %I:%M %p') if student.updated_at else 'N/A' }}</div>
+                    <div class="info-value">{{ student.updated_at|localtime('%d %b, %Y at %I:%M %p') if student.updated_at else 'N/A' }}</div>
                 </div>
 
             </div>
@@ -323,9 +323,9 @@
                             </td>
                             <td>
                                 <span style="color: var(--text-secondary); font-size: 0.875rem;">
-                                    {{ se.submitted_at.strftime('%d %b, %Y') if se.submitted_at else 'N/A' }}
+                                    {{ se.submitted_at|localtime('%d %b, %Y') if se.submitted_at else 'N/A' }}
                                     <br>
-                                    <small style="opacity: 0.7;">{{ se.submitted_at.strftime('%I:%M %p') if se.submitted_at else '' }}</small>
+                                    <small style="opacity: 0.7;">{{ se.submitted_at|localtime('%I:%M %p') if se.submitted_at else '' }}</small>
                                 </span>
                             </td>
                         </tr>

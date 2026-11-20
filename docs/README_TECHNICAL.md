@@ -134,6 +134,11 @@ see [§14](#14-scaling-analysis).
 `frontend/static/violations/`. OpenVINO models load from `ai_models/` (or `NETRA_MODEL_DIR`) and
 are compiled once per process.
 
+**Time.** Every stored datetime is naive UTC. Exam open/close times are typed and shown in the hall's
+zone (`APP_TIMEZONE`, default `Asia/Kolkata`); `backend/services/time_service.py` converts on save
+(`local_to_utc`) and on display (the `localtime` Jinja filter). Exams saved before this rule held local
+time; start-up converts those once (`convert_exam_times_to_utc` in `app.py`, keyed on `exam.times_utc`).
+
 Redis appears in `docker-compose.yml` but **nothing in the application connects to it.** There is
 no `message_queue` argument on `SocketIO()`, so multi-worker Socket.IO is not currently possible.
 

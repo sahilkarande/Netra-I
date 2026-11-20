@@ -451,7 +451,7 @@
                         {% endif %}
                     </td>
                     <td>{{ item.attempt_count }}</td>
-                    <td class="sub-text">{{ item.exam.created_at.strftime('%d %b %Y') if item.exam.created_at else '—'
+                    <td class="sub-text">{{ item.exam.created_at|localtime('%d %b %Y') if item.exam.created_at else '—'
                         }}</td>
                 </tr>
                 {% endfor %}

@@ -390,7 +390,7 @@
                     <td>{{ item.user.employee_id or '—' }}</td>
                     <td>{{ item.user.department or '—' }}</td>
                     <td><span class="badge-active">{{ item.exam_count }} exams</span></td>
-                    <td class="faculty-meta">{{ item.user.created_at.strftime('%d %b %Y') if item.user.created_at else
+                    <td class="faculty-meta">{{ item.user.created_at|localtime('%d %b %Y') if item.user.created_at else
                         '—' }}</td>
                     <td>
                         <button class="btn-delete-faculty"

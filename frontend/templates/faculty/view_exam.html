@@ -170,7 +170,7 @@
                                     {% if se.submitted_at %}
                                         {{ se.time_taken_minutes }}m taken
                                     {% else %}
-                                        Started {{ se.started_at.strftime('%H:%M') if se.started_at else '-' }}
+                                        Started {{ se.started_at|localtime('%H:%M') if se.started_at else '-' }}
                                     {% endif %}
                                 </td>
                                 <td>
@@ -338,7 +338,7 @@
                     <tr><td class="vx-text-dim">Passing Score</td><td>{{ exam.passing_score }}%</td></tr>
                     <tr><td class="vx-text-dim">Proctoring</td><td>{{ 'Enabled' if exam.enable_proctoring else 'Disabled' }}</td></tr>
                     <tr><td class="vx-text-dim">Max Violations</td><td>{{ exam.max_violations }}</td></tr>
-                    <tr><td class="vx-text-dim">Created At</td><td>{{ exam.created_at.strftime('%Y-%m-%d %H:%M') if exam.created_at else 'N/A' }}</td></tr>
+                    <tr><td class="vx-text-dim">Created At</td><td>{{ exam.created_at|localtime('%Y-%m-%d %H:%M') if exam.created_at else 'N/A' }}</td></tr>
                 </table>
             </div>
         </div>

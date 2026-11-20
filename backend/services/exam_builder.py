@@ -21,6 +21,8 @@ from typing import Dict, List, Optional, Tuple
 
 from backend.models import Exam
 
+from backend.services.time_service import local_to_utc
+
 ACCESS_KEY_LENGTH = 8
 # No O/0/I/1 — these get read aloud in a hall and mistyped.
 ACCESS_KEY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -162,8 +164,9 @@ def validate(form: Dict) -> Tuple[List[str], dict]:
     if redirect_to not in ('results', 'dashboard'):
         redirect_to = 'results'
 
-    starts_at = _as_datetime(form.get('start_time'))
-    ends_at = _as_datetime(form.get('end_time'))
+    # The form holds the hall's wall-clock time; the database holds UTC
+    starts_at = local_to_utc(_as_datetime(form.get('start_time')))
+    ends_at = local_to_utc(_as_datetime(form.get('end_time')))
     if starts_at and ends_at and ends_at <= starts_at:
         errors.append('The exam window must end after it starts.')
 

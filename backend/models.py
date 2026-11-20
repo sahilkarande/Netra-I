@@ -145,6 +145,9 @@ class Exam(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     start_time = db.Column(db.DateTime)
     end_time = db.Column(db.DateTime)
+    # start/end are UTC. False only on rows saved before that rule, which held
+    # the hall's local time; app start-up converts them once (app.py).
+    times_utc = db.Column(db.Boolean, default=True)
 
     # NEW ACCESS CONTROL
     allow_all_students = db.Column(db.Boolean, default=True)

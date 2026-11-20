@@ -211,7 +211,7 @@
                 <tr>
                     <td>
                         <div class="name-cell">{{ item.exam.title }}</div>
-                        <div class="sub-text">{{ item.exam.created_at.strftime('%d %b %Y') if item.exam.created_at else
+                        <div class="sub-text">{{ item.exam.created_at|localtime('%d %b %Y') if item.exam.created_at else
                             '' }}</div>
                     </td>
                     <td>
