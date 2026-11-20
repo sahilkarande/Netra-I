@@ -59,6 +59,8 @@ REDESIGNED = [
     'frontend/static/js/pages/view_exam.js',
     'frontend/templates/faculty/analytics.html',
     'frontend/static/js/pages/analytics.js',
+    'frontend/templates/faculty/create_exam.html',
+    'frontend/static/js/pages/create_exam.js',
 ]
 
 
@@ -692,3 +694,50 @@ def test_analytics_question_accuracy_counts_skips(app, seed, as_user):
     html = _analytics(as_user, seed)
     assert html.count('class="nx-qstats__row"') == 2
     assert '1 skipped' in html                                     # Q2 was not answered
+
+
+# ── New exam ────────────────────────────────────────────────────────────────
+
+def test_create_exam_page_on_design_system(app, seed, as_user):
+    html = as_user('faca').get('/faculty/exam/create').data.decode()
+    assert 'css/ds/tokens.css' in html and 'create_exam.css' not in html
+    assert 'js/pages/create_exam.js' in html
+    assert 'prompt(' not in html and 'onclick=' not in html
+    for name in ('title', 'duration_minutes', 'passing_score', 'start_time', 'end_time', 'exam_mode',
+                 'max_tab_switches', 'proctor_settings_json', 'post_exam_redirect'):
+        assert f'name="{name}"' in html, name
+    # every server-read checkbox is followed by a hidden "false"
+    for name in ('require_access_key', 'randomize_questions', 'show_leaderboard', 'is_active'):
+        assert f'<input type="hidden" name="{name}" value="false">' in html, name
+
+
+def test_unticked_options_are_saved_as_off(app, seed, as_user):
+    """An unticked box used to send nothing, which the server read as 'on'."""
+    client = as_user('faca')
+    resp = client.post('/faculty/exam/create', data={
+        'title': 'Unticked', 'duration_minutes': '30', 'passing_score': '40',
+        'require_access_key': 'false', 'randomize_questions': 'false',
+        'show_leaderboard': 'false', 'is_active': 'false'})
+    assert resp.status_code == 302
+    with app.app_context():
+        exam = Exam.query.filter_by(title='Unticked').one()
+        assert not exam.access_key and not exam.randomize_questions
+        assert not exam.show_leaderboard and not exam.is_active
+
+
+def test_ticked_options_still_win(app, seed, as_user):
+    client = as_user('faca')
+    from werkzeug.datastructures import MultiDict
+    client.post('/faculty/exam/create', data=MultiDict([
+        ('title', 'Ticked'), ('duration_minutes', '30'), ('passing_score', '40'),
+        ('require_access_key', 'true'), ('require_access_key', 'false'),
+        ('is_active', 'true'), ('is_active', 'false')]))
+    with app.app_context():
+        exam = Exam.query.filter_by(title='Ticked').one()
+        assert exam.access_key and exam.is_active
+
+
+def test_create_exam_error_keeps_what_was_typed(app, seed, as_user):
+    resp = as_user('faca').post('/faculty/exam/create', data={'title': 'Kept title', 'duration_minutes': '0'})
+    assert resp.status_code == 400
+    assert 'value="Kept title"' in resp.data.decode()

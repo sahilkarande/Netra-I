@@ -1,1002 +1,287 @@
-{% extends "base.html" %}
-{% block title %}Create Exam - Netra-I{% endblock %}
+{% extends "layouts/app.html" %}
+{% import 'components/ui.html' as ui %}
 
-{# Sticky-form values. Defaulted here so the page still renders if a caller
-   omits `form` — templates hot-reload but Python does not under --ssl. #}
+{# Sticky-form values: on a validation error the route renders this page again
+   with what was submitted, so nothing typed is lost. #}
 {% set form = form if form is defined and form else {} %}
 
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/create_exam.css') }}">
-{% endblock %}
+{% block title %}New exam{% endblock %}
+{% block topbar_title %}<b>New exam</b>{% endblock %}
+
+{# A checkbox the server reads as true/false. An unticked box sends nothing,
+   and the server treats "nothing" as the default (on), so a hidden "false"
+   follows it: ticked sends "true" first, which wins. #}
+{% macro toggle(name, label, desc, default='true', id=None) -%}
+  {%- set on = form.get(name, default) != 'false' -%}
+  <label class="nx-choice__item">
+    <input type="checkbox" name="{{ name }}" value="true"{% if id %} id="{{ id }}"{% endif %}{% if on %} checked{% endif %}>
+    <span><b>{{ label }}</b><small>{{ desc }}</small></span>
+  </label>
+  <input type="hidden" name="{{ name }}" value="false">
+{%- endmacro %}
+
+{% macro feature(id, icon, label, desc, checked=False, needs_camera=False) -%}
+  <div class="nx-setting nx-feature"{% if needs_camera %} data-needs-camera{% endif %}>
+    <span class="nx-feature__icon"><i class="bi bi-{{ icon }}" aria-hidden="true"></i></span>
+    <div class="nx-setting__text">
+      <span class="nx-setting__label" id="{{ id }}-label">{{ label }}</span>
+      <span class="nx-setting__desc">{{ desc }}</span>
+    </div>
+    <label class="nx-switch">
+      <input type="checkbox" role="switch" id="{{ id }}" aria-labelledby="{{ id }}-label"{% if checked %} checked{% endif %}>
+      <span class="nx-switch__track"></span>
+    </label>
+  </div>
+{%- endmacro %}
 
 {% block content %}
-<div class="cx">
-
-  <header>
-    <div class="cx-eyebrow">Exam Management</div>
-    <h1 class="cx-title">Create New Exam</h1>
-    <p class="cx-sub">
-      Configure once, then create a single exam, a whole batch, or split a question bank.
-      Timing, mode and proctoring below apply to every exam you create here.
-    </p>
-  </header>
-
-  <!-- ══ Mode switcher ══════════════════════════════════════════ -->
-  <div class="cx-modes" role="tablist" aria-label="Creation mode">
-    <button type="button" class="cx-mode" role="tab" id="mode-single"
-            aria-selected="true" aria-controls="panel-single" data-mode="single">
-      <i class="bi bi-file-earmark-plus"></i> Single Exam
-    </button>
-    <button type="button" class="cx-mode" role="tab" id="mode-batch"
-            aria-selected="false" aria-controls="panel-batch" data-mode="batch">
-      <i class="bi bi-stack"></i> Batch Create
-    </button>
-    <button type="button" class="cx-mode" role="tab" id="mode-split"
-            aria-selected="false" aria-controls="panel-split" data-mode="split">
-      <i class="bi bi-scissors"></i> Split Questions
-    </button>
+<header class="nx-page-header nx-enter">
+  <div>
+    <h1 class="nx-page-header__title">New exam</h1>
+    <p class="nx-page-header__meta">Set it up once. Create one exam, a batch with the same settings, or split a question bank into sets.</p>
   </div>
+  <div class="nx-segmented" role="group" aria-label="What to create">
+    <button type="button" data-mode="single" aria-pressed="true"><i class="bi bi-file-earmark-plus" aria-hidden="true"></i>One exam</button>
+    <button type="button" data-mode="batch" aria-pressed="false"><i class="bi bi-stack" aria-hidden="true"></i>Batch</button>
+    <button type="button" data-mode="split" aria-pressed="false"><i class="bi bi-scissors" aria-hidden="true"></i>Split questions</button>
+  </div>
+</header>
 
-  <form method="POST" id="cx-form" action="{{ url_for('faculty.create_exam') }}" novalidate>
-    <input type="hidden" name="proctor_settings_json" id="proctor_json">
+<form method="POST" id="cx-form" action="{{ url_for('faculty.create_exam') }}" novalidate
+      data-batch-url="{{ url_for('faculty.batch_create_exams') }}"
+      data-split-preview-url="{{ url_for('faculty.split_questions_preview') }}"
+      data-split-download-url="{{ url_for('faculty.split_questions_download') }}"
+      data-exam-url="{{ url_for('faculty.view_exam', exam_id=0) }}">
+  <input type="hidden" name="proctor_settings_json" id="proctor_json">
 
-    <div class="cx-grid">
+  <div class="nx-grid-main">
+    <div class="nx-stack">
 
-      <!-- ══ MAIN COLUMN ══════════════════════════════════════ -->
-      <div class="cx-main">
+      {# ── One exam ────────────────────────────────────────── #}
+      <section class="nx-panel nx-enter" style="--i: 1" id="panel-single" aria-labelledby="single-title">
+        <div class="nx-panel__head"><h2 class="nx-panel__title" id="single-title">Exam</h2></div>
+        <div class="nx-panel__body nx-form">
+          <div class="nx-field" id="field-title">
+            <label class="nx-label" for="cx-title">Title</label>
+            <input type="text" name="title" id="cx-title" class="nx-input" maxlength="200" autofocus
+                   value="{{ form.get('title', '') }}" placeholder="e.g. DBMS Mid-term · Section B">
+            <p class="nx-help" id="hint-title"></p>
+          </div>
+          <div class="nx-field">
+            <label class="nx-label" for="cx-desc">Description <span class="nx-label__aside">optional · shown to students before they start</span></label>
+            <textarea name="description" id="cx-desc" class="nx-input nx-textarea" rows="3">{{ form.get('description', '') }}</textarea>
+          </div>
+        </div>
+      </section>
 
-        <!-- ── Panel: what am I naming? ─────────────────────── -->
-
-        <!-- Single -->
-        <section class="cx-card cx-panel" id="panel-single" role="tabpanel" aria-labelledby="mode-single">
-          <div class="cx-card-head">
-            <span class="cx-card-icon"><i class="bi bi-info-circle-fill"></i></span>
-            <div>
-              <h2 class="cx-card-title">Exam Details</h2>
-              <p class="cx-card-note">Name and describe this exam</p>
+      {# ── Batch ───────────────────────────────────────────── #}
+      <section class="nx-panel" id="panel-batch" aria-labelledby="batch-title" hidden>
+        <div class="nx-panel__head">
+          <div>
+            <h2 class="nx-panel__title" id="batch-title">Exams to create <span class="nx-count" id="batch-count">0</span></h2>
+            <span class="nx-panel__sub">Each gets the settings below and its own access key. Attach a question file to load questions on creation.</span>
+          </div>
+          <div class="nx-panel__actions">
+            <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" id="batch-paste-toggle"><i class="bi bi-clipboard" aria-hidden="true"></i><span>Paste titles</span></button>
+            <button type="button" class="nx-btn nx-btn--secondary nx-btn--sm" id="batch-add"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add exam</span></button>
+          </div>
+        </div>
+        <div class="nx-panel__body nx-stack nx-stack--tight">
+          <div class="nx-paste" id="batch-paste-box" hidden>
+            <label class="nx-label" for="batch-paste-text">One title per line</label>
+            <textarea class="nx-input nx-textarea" id="batch-paste-text" rows="4" placeholder="DBMS · Set A&#10;DBMS · Set B"></textarea>
+            <div class="nx-btn-row">
+              <button type="button" class="nx-btn nx-btn--primary nx-btn--sm" id="batch-paste-add"><span>Add these</span></button>
+              <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" id="batch-paste-cancel"><span>Cancel</span></button>
             </div>
           </div>
-          <div class="cx-card-body">
-            <div class="cx-field">
-              <label class="cx-label" for="cx-title">Exam Title <span class="cx-req">*</span></label>
-              <input type="text" name="title" id="cx-title" class="cx-input" maxlength="200" autofocus
-                     value="{{ form.get('title', '') }}"
-                     placeholder="e.g., Mid-term Examination — SQL">
-              <div class="cx-hint" id="hint-title"></div>
+          <ol class="nx-brows" id="batch-list"></ol>
+          <div id="batch-empty">
+            {% call ui.empty_state('No exams yet', 'Add a row, or paste a list of titles. Press Enter in a title to add the next one.', icon='journal-plus') %}{% endcall %}
+          </div>
+        </div>
+      </section>
+
+      {# ── Split ───────────────────────────────────────────── #}
+      <section class="nx-panel" id="panel-split" aria-labelledby="split-title" hidden>
+        <div class="nx-panel__head">
+          <div>
+            <h2 class="nx-panel__title" id="split-title">Split a question bank</h2>
+            <span class="nx-panel__sub">Divide one file into sets to download. Nothing is created.</span>
+          </div>
+        </div>
+        <div class="nx-panel__body nx-form">
+          <label class="nx-drop" id="split-drop" for="split-file">
+            <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+            <span class="nx-drop__main" id="split-drop-main">Choose a question file</span>
+            <span class="nx-drop__sub" id="split-drop-sub">CSV, JSON or Excel · click or drop it here</span>
+          </label>
+          <input type="file" id="split-file" accept=".csv,.json,.xlsx,.xls" class="nx-visually-hidden">
+          <div class="nx-form-row">
+            <div class="nx-field">
+              <label class="nx-label" for="split-sets">Number of sets</label>
+              <input type="number" id="split-sets" class="nx-input" min="2" max="26" value="4">
             </div>
-            <div class="cx-field">
-              <label class="cx-label" for="cx-desc">Description <span class="cx-optional">optional</span></label>
-              <textarea name="description" id="cx-desc" class="cx-textarea"
-                        placeholder="Shown to students before they start…">{{ form.get('description', '') }}</textarea>
-            </div>
-            <div class="cx-callout">
-              <i class="bi bi-lightbulb-fill"></i>
-              <span>Creating several exams with the same setup? Switch to
-                <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" data-goto="batch"
-                        style="display:inline-flex; margin:0 2px;">Batch Create</button>
-                — everything you configure below carries over.</span>
+            <div class="nx-field">
+              <label class="nx-label" for="split-per">Questions per set <span class="nx-label__aside">blank = divide evenly</span></label>
+              <input type="number" id="split-per" class="nx-input" min="1" placeholder="Auto">
             </div>
           </div>
-        </section>
-
-        <!-- Batch -->
-        <section class="cx-card cx-panel" id="panel-batch" role="tabpanel" aria-labelledby="mode-batch" hidden>
-          <div class="cx-card-head">
-            <span class="cx-card-icon"><i class="bi bi-stack"></i></span>
-            <div>
-              <h2 class="cx-card-title">Exams to Create</h2>
-              <p class="cx-card-note">Every exam below uses the same timing, mode and proctoring</p>
-            </div>
+          <div class="nx-choice">
+            <label class="nx-choice__item"><input type="checkbox" id="split-unique" checked><span><b>No question repeats across sets</b><small>Each question lands in exactly one set</small></span></label>
+            <label class="nx-choice__item"><input type="checkbox" id="split-balance" checked><span><b>Same total marks in every set</b><small>Matters when questions carry different points</small></span></label>
           </div>
-          <div class="cx-card-body">
-            <div class="cx-batch-bar">
-              <span class="cx-batch-bar-label">
-                Exams <span class="cx-pill" id="batch-count">0</span>
-              </span>
-              <button type="button" class="cx-btn cx-btn-ghost cx-btn-sm" id="batch-paste">
-                <i class="bi bi-clipboard"></i> Paste list
-              </button>
-              <button type="button" class="cx-btn cx-btn-primary cx-btn-sm" id="batch-add">
-                <i class="bi bi-plus-lg"></i> Add exam
-              </button>
-            </div>
-
-            <div id="batch-list">
-              <div class="cx-empty" id="batch-empty">
-                <i class="bi bi-journal-plus"></i>
-                <p><strong>No exams yet</strong><br>
-                   Add a row, or paste a list of titles — one per line.</p>
-              </div>
-            </div>
-
-            <div class="cx-callout" style="margin-top:0.9rem;">
-              <i class="bi bi-info-circle-fill"></i>
-              <span>Attach a question file to any row to load its questions on creation.
-                Each exam gets its own access key.</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- Split -->
-        <section class="cx-card cx-panel" id="panel-split" role="tabpanel" aria-labelledby="mode-split" hidden>
-          <div class="cx-card-head">
-            <span class="cx-card-icon"><i class="bi bi-scissors"></i></span>
-            <div>
-              <h2 class="cx-card-title">Split a Question Bank</h2>
-              <p class="cx-card-note">Divide one file into sets you can download — nothing is created</p>
-            </div>
-          </div>
-          <div class="cx-card-body">
-            <div class="cx-drop" id="split-drop">
-              <i class="bi bi-cloud-arrow-up"></i>
-              <div class="cx-drop-main" id="split-drop-main">Choose a question file</div>
-              <div class="cx-drop-sub" id="split-drop-sub">CSV, JSON or Excel · click or drag it here</div>
-            </div>
-            <input type="file" id="split-file" accept=".csv,.json,.xlsx,.xls" class="cx-sr">
-
-            <div class="cx-row" style="margin-top:1rem;">
-              <div class="cx-field">
-                <label class="cx-label" for="split-sets">Number of sets</label>
-                <input type="number" id="split-sets" class="cx-input" min="2" max="26" value="4">
-              </div>
-              <div class="cx-field">
-                <label class="cx-label" for="split-per">Questions per set</label>
-                <input type="number" id="split-per" class="cx-input" min="1" placeholder="auto">
-                <div class="cx-hint">Leave blank to divide evenly</div>
-              </div>
-            </div>
-
-            <label class="cx-opt">
-              <input type="checkbox" id="split-unique" checked>
-              <span>
-                <span class="cx-opt-name">No question repeats across sets</span>
-                <span class="cx-opt-desc">Each question lands in exactly one set</span>
-              </span>
-            </label>
-            <label class="cx-opt">
-              <input type="checkbox" id="split-balance" checked>
-              <span>
-                <span class="cx-opt-name">Give every set the same total marks</span>
-                <span class="cx-opt-desc">Matters when questions carry different point values</span>
-              </span>
-            </label>
-
-            <div class="cx-field" style="margin-top:0.9rem;">
-              <label class="cx-label" for="split-format">Download format</label>
-              <select id="split-format" class="cx-select">
-                <option value="json">JSON — same shape as the question uploader</option>
-                <option value="csv">CSV — opens in Excel</option>
+          <div class="nx-field">
+            <label class="nx-label" for="split-format">Download as</label>
+            <label class="nx-select nx-select--block">
+              <select id="split-format" class="nx-input">
+                <option value="json">JSON, the same shape the question uploader takes</option>
+                <option value="csv">CSV, opens in Excel</option>
               </select>
-            </div>
-
-            <div class="cx-msg" id="split-msg"></div>
+            </label>
           </div>
-        </section>
+          <div class="nx-alert nx-tone-accent" id="split-msg" hidden role="status"></div>
+        </div>
+      </section>
 
-        <!-- ── Shared: timing & scoring ─────────────────────── -->
-        <section class="cx-card cx-shared">
-          <div class="cx-card-head">
-            <span class="cx-card-icon"><i class="bi bi-clock-history"></i></span>
-            <div>
-              <h2 class="cx-card-title">Timing &amp; Scoring</h2>
-              <p class="cx-card-note">How long students get, and what counts as a pass</p>
+      {# ── Timing & scoring (shared) ───────────────────────── #}
+      <section class="nx-panel nx-enter cx-shared" style="--i: 2" aria-labelledby="timing-title">
+        <div class="nx-panel__head"><h2 class="nx-panel__title" id="timing-title">Timing and scoring</h2></div>
+        <div class="nx-panel__body nx-form">
+          <div class="nx-form-row">
+            <div class="nx-field" id="field-dur">
+              <label class="nx-label" for="cx-dur">Duration</label>
+              <div class="nx-input-unit"><input type="number" name="duration_minutes" id="cx-dur" class="nx-input" min="1" max="600" value="{{ form.get('duration_minutes', '60') }}"><span>min</span></div>
+              <div class="nx-chips" aria-label="Common durations">
+                {% for m, l in ((15, '15m'), (30, '30m'), (60, '1h'), (90, '1h 30m'), (120, '2h')) %}<button type="button" class="nx-chip" data-dur="{{ m }}">{{ l }}</button>{% endfor %}
+              </div>
+              <p class="nx-help" id="hint-dur"></p>
             </div>
-          </div>
-          <div class="cx-card-body">
-            <div class="cx-row">
-              <div class="cx-field">
-                <label class="cx-label" for="cx-dur">Duration (minutes) <span class="cx-req">*</span></label>
-                <input type="number" name="duration_minutes" id="cx-dur" class="cx-input"
-                       min="1" max="600" value="{{ form.get('duration_minutes', '60') }}">
-                <div class="cx-chips">
-                  <button type="button" class="cx-chip" data-dur="15">15m</button>
-                  <button type="button" class="cx-chip" data-dur="30">30m</button>
-                  <button type="button" class="cx-chip" data-dur="60">1h</button>
-                  <button type="button" class="cx-chip" data-dur="90">1h 30m</button>
-                  <button type="button" class="cx-chip" data-dur="120">2h</button>
-                </div>
+            <div class="nx-field" id="field-pass">
+              <label class="nx-label" for="cx-pass">Pass mark</label>
+              <div class="nx-input-unit"><input type="number" name="passing_score" id="cx-pass" class="nx-input" min="0" max="100" step="0.1" value="{{ form.get('passing_score', '40') }}"><span>%</span></div>
+              <div class="nx-chips" aria-label="Common pass marks">
+                {% for p in (33, 40, 50, 60) %}<button type="button" class="nx-chip" data-pass="{{ p }}">{{ p }}%</button>{% endfor %}
               </div>
-              <div class="cx-field">
-                <label class="cx-label" for="cx-pass">Passing Score (%) <span class="cx-req">*</span></label>
-                <input type="number" name="passing_score" id="cx-pass" class="cx-input"
-                       min="0" max="100" step="0.1" value="{{ form.get('passing_score', '40') }}">
-                <div class="cx-chips">
-                  <button type="button" class="cx-chip" data-pass="33">33%</button>
-                  <button type="button" class="cx-chip" data-pass="40">40%</button>
-                  <button type="button" class="cx-chip" data-pass="50">50%</button>
-                  <button type="button" class="cx-chip" data-pass="60">60%</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="cx-field">
-              <label class="cx-label">Availability window <span class="cx-optional">optional</span></label>
-              <div class="cx-row">
-                <input type="datetime-local" name="start_time" id="cx-start" class="cx-input"
-                       value="{{ form.get('start_time', '') }}" aria-label="Opens at">
-                <input type="datetime-local" name="end_time" id="cx-end" class="cx-input"
-                       value="{{ form.get('end_time', '') }}" aria-label="Closes at">
-              </div>
-              <div class="cx-hint" id="hint-window">Leave both blank to open as soon as you activate the exam.</div>
-            </div>
-
-            <div class="cx-field">
-              <label class="cx-label">Exam Mode</label>
-              <div class="cx-choices">
-                <label class="cx-choice">
-                  <input type="radio" name="exam_mode" value="classroom"
-                         {% if form.get('exam_mode', 'classroom') != 'home' %}checked{% endif %}>
-                  <span class="cx-choice-name"><i class="bi bi-building"></i> Classroom</span>
-                  <span class="cx-choice-desc">Supervised lab or on-site exam</span>
-                </label>
-                <label class="cx-choice">
-                  <input type="radio" name="exam_mode" value="home"
-                         {% if form.get('exam_mode') == 'home' %}checked{% endif %}>
-                  <span class="cx-choice-name"><i class="bi bi-house"></i> Home</span>
-                  <span class="cx-choice-desc">Remote or online delivery</span>
-                </label>
-              </div>
+              <p class="nx-help" id="hint-pass"></p>
             </div>
           </div>
-        </section>
-
-        <!-- ── Shared: security & proctoring ────────────────── -->
-        <section class="cx-card cx-shared">
-          <div class="cx-card-head">
-            <span class="cx-card-icon"><i class="bi bi-shield-check"></i></span>
-            <div>
-              <h2 class="cx-card-title">Security &amp; Proctoring</h2>
-              <p class="cx-card-note">Enable only what you need — fewer checks mean fewer false alerts</p>
+          <div class="nx-field" id="field-window">
+            <span class="nx-label">Window <span class="nx-label__aside">optional · in the hall's local time</span></span>
+            <div class="nx-form-row">
+              <label class="nx-sublabel">Opens<input type="datetime-local" name="start_time" id="cx-start" class="nx-input" value="{{ form.get('start_time', '') }}"></label>
+              <label class="nx-sublabel">Closes<input type="datetime-local" name="end_time" id="cx-end" class="nx-input" value="{{ form.get('end_time', '') }}"></label>
             </div>
+            <p class="nx-help" id="hint-window">Leave both blank to open as soon as the exam is active.</p>
           </div>
-          <div class="cx-card-body">
-
-            <div class="cx-feature on" data-feature="camera">
-              <span class="cx-feature-icon"><i class="bi bi-camera-video-fill"></i></span>
-              <span class="cx-feature-text">
-                <span class="cx-feature-name">Camera Monitoring</span>
-                <span class="cx-feature-desc">Verify a face is visible and only one person is present</span>
-              </span>
-              <label class="cx-switch">
-                <input type="checkbox" id="ps_camera" checked>
-                <span class="cx-switch-track"></span>
-                <span class="cx-sr">Camera monitoring</span>
-              </label>
-            </div>
-
-            <div class="cx-feature" data-feature="head_pose" data-needs-camera>
-              <span class="cx-feature-icon"><i class="bi bi-arrow-left-right"></i></span>
-              <span class="cx-feature-text">
-                <span class="cx-feature-name">Head Movement Detection</span>
-                <span class="cx-feature-desc">Warn if a student looks away for too long</span>
-              </span>
-              <label class="cx-switch">
-                <input type="checkbox" id="ps_head_pose">
-                <span class="cx-switch-track"></span>
-                <span class="cx-sr">Head movement detection</span>
-              </label>
-            </div>
-
-            <div class="cx-feature" data-feature="object_detection" data-needs-camera>
-              <span class="cx-feature-icon"><i class="bi bi-phone"></i></span>
-              <span class="cx-feature-text">
-                <span class="cx-feature-name">Object Detection</span>
-                <span class="cx-feature-desc">Detect phones, books or laptops in frame</span>
-              </span>
-              <label class="cx-switch">
-                <input type="checkbox" id="ps_objects">
-                <span class="cx-switch-track"></span>
-                <span class="cx-sr">Object detection</span>
-              </label>
-            </div>
-
-            <div class="cx-feature" data-feature="voice_detection">
-              <span class="cx-feature-icon"><i class="bi bi-mic-fill"></i></span>
-              <span class="cx-feature-text">
-                <span class="cx-feature-name">Voice Detection</span>
-                <span class="cx-feature-desc">Flag talking during the exam. Works even with the camera off</span>
-              </span>
-              <label class="cx-switch">
-                <input type="checkbox" id="ps_voice">
-                <span class="cx-switch-track"></span>
-                <span class="cx-sr">Voice detection</span>
-              </label>
-            </div>
-
-            <div class="cx-feature on" data-feature="tab_switch">
-              <span class="cx-feature-icon"><i class="bi bi-window-stack"></i></span>
-              <span class="cx-feature-text">
-                <span class="cx-feature-name">Tab Switch Detection</span>
-                <span class="cx-feature-desc">Log and warn when a student leaves the exam window</span>
-              </span>
-              <label class="cx-switch">
-                <input type="checkbox" id="ps_tabswitch" checked>
-                <span class="cx-switch-track"></span>
-                <span class="cx-sr">Tab switch detection</span>
-              </label>
-            </div>
-
-            <div class="cx-row" style="margin-top:1rem;">
-              <div class="cx-field">
-                <label class="cx-label" for="ps_max_warnings">Max warnings</label>
-                <input type="number" id="ps_max_warnings" class="cx-input" min="1" max="100" value="25">
-                <div class="cx-hint">Then the exam auto-submits</div>
-              </div>
-              <div class="cx-field">
-                <label class="cx-label" for="max_tab_switches">Max tab switches</label>
-                <input type="number" name="max_tab_switches" id="max_tab_switches" class="cx-input"
-                       min="0" max="50" value="{{ form.get('max_tab_switches', '5') }}">
-                <div class="cx-hint">Counted separately from warnings</div>
-              </div>
-            </div>
-
-            <div class="cx-field">
-              <label class="cx-label">Detection strength</label>
-              <div class="cx-choices" style="grid-template-columns:repeat(3,1fr);">
-                <label class="cx-choice">
-                  <input type="radio" name="ps_sensitivity" value="low">
-                  <span class="cx-choice-name">Lenient</span>
-                  <span class="cx-choice-desc">Fewest false alerts</span>
-                </label>
-                <label class="cx-choice">
-                  <input type="radio" name="ps_sensitivity" value="medium" checked>
-                  <span class="cx-choice-name">Balanced</span>
-                  <span class="cx-choice-desc">Recommended</span>
-                </label>
-                <label class="cx-choice">
-                  <input type="radio" name="ps_sensitivity" value="high">
-                  <span class="cx-choice-name">Strict</span>
-                  <span class="cx-choice-desc">Catches small movements</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <!-- ══ SIDEBAR ══════════════════════════════════════════ -->
-      <aside class="cx-side">
-
-        <div class="cx-card">
-          <div class="cx-card-head">
-            <span class="cx-card-icon"><i class="bi bi-card-checklist"></i></span>
-            <h2 class="cx-card-title">Summary</h2>
-          </div>
-          <div class="cx-card-body tight">
-            <div class="cx-sum-row">
-              <span class="cx-sum-label" id="sum-what-label">Title</span>
-              <span class="cx-sum-val" id="sum-what">—</span>
-            </div>
-            <div class="cx-sum-row" data-exam-only>
-              <span class="cx-sum-label">Duration</span><span class="cx-sum-val" id="sum-dur">60 min</span>
-            </div>
-            <div class="cx-sum-row" data-exam-only>
-              <span class="cx-sum-label">Passing</span><span class="cx-sum-val" id="sum-pass">40%</span>
-            </div>
-            <div class="cx-sum-row" data-exam-only>
-              <span class="cx-sum-label">Mode</span><span class="cx-sum-val" id="sum-mode">Classroom</span>
-            </div>
-            <div class="cx-sum-row" data-exam-only>
-              <span class="cx-sum-label">Proctoring</span>
-              <span class="cx-sum-val" id="sum-proctor" style="color:var(--cx-primary);">Camera, Tab</span>
-            </div>
-            <div class="cx-sum-row" data-exam-only>
-              <span class="cx-sum-label">Questions</span><span class="cx-sum-val" id="sum-shuffle">Shuffled</span>
-            </div>
-            <div class="cx-sum-row" data-exam-only>
-              <span class="cx-sum-label">Status</span>
-              <span class="cx-sum-val" id="sum-status" style="color:var(--cx-success);">Active on create</span>
-            </div>
-            <div class="cx-sum-row" data-split-only hidden>
-              <span class="cx-sum-label">Sets</span><span class="cx-sum-val" id="sum-sets">4</span>
-            </div>
-            <div class="cx-sum-row" data-split-only hidden>
-              <span class="cx-sum-label">Overlap</span><span class="cx-sum-val" id="sum-overlap">None</span>
+          <div class="nx-field">
+            <span class="nx-label">Where students sit it</span>
+            <div class="nx-choice nx-choice--row" role="radiogroup" aria-label="Exam mode">
+              <label class="nx-choice__item"><input type="radio" name="exam_mode" value="classroom"{% if form.get('exam_mode', 'classroom') != 'home' %} checked{% endif %}><span><b>Classroom</b><small>Supervised lab or exam hall</small></span></label>
+              <label class="nx-choice__item"><input type="radio" name="exam_mode" value="home"{% if form.get('exam_mode') == 'home' %} checked{% endif %}><span><b>Home</b><small>Remote, unsupervised</small></span></label>
             </div>
           </div>
         </div>
+      </section>
 
-        <div class="cx-card cx-shared">
-          <div class="cx-card-head">
-            <span class="cx-card-icon"><i class="bi bi-flag-fill"></i></span>
-            <h2 class="cx-card-title">Delivery</h2>
+      {# ── Proctoring (shared) ─────────────────────────────── #}
+      <section class="nx-panel nx-enter cx-shared" style="--i: 3" aria-labelledby="proctor-title">
+        <div class="nx-panel__head">
+          <div>
+            <h2 class="nx-panel__title" id="proctor-title">Proctoring</h2>
+            <span class="nx-panel__sub">Turn on only what you need. Fewer checks mean fewer false alerts.</span>
           </div>
-          <div class="cx-card-body tight">
-            <div class="cx-field">
-              <label class="cx-label">After submission, show</label>
-              <div class="cx-choices">
-                <label class="cx-choice">
-                  <input type="radio" name="post_exam_redirect" value="results"
-                         {% if form.get('post_exam_redirect') == 'results' %}checked{% endif %}>
-                  <span class="cx-choice-name">Results</span>
-                </label>
-                <label class="cx-choice">
-                  <input type="radio" name="post_exam_redirect" value="dashboard"
-                         {% if form.get('post_exam_redirect', 'dashboard') != 'results' %}checked{% endif %}>
-                  <span class="cx-choice-name">Dashboard</span>
-                </label>
+        </div>
+        <div class="nx-panel__body">
+          {{ feature('ps_camera', 'camera-video', 'Camera', 'A face is visible and only one person is present', checked=True) }}
+          {{ feature('ps_head_pose', 'arrows-move', 'Head movement', 'Warn when a student looks away for too long', needs_camera=True) }}
+          {{ feature('ps_objects', 'phone', 'Objects', 'Phones, books or laptops in view', needs_camera=True) }}
+          {{ feature('ps_voice', 'mic', 'Voice', 'Talking during the exam; works with the camera off') }}
+          {{ feature('ps_tabswitch', 'window-stack', 'Tab switches', 'Leaving the exam window is logged and warned', checked=True) }}
+          <div class="nx-form nx-mt-4">
+            <div class="nx-form-row">
+              <div class="nx-field">
+                <label class="nx-label" for="ps_max_warnings">Warnings before auto-submit</label>
+                <input type="number" id="ps_max_warnings" class="nx-input" min="1" max="100" value="25">
+              </div>
+              <div class="nx-field">
+                <label class="nx-label" for="max_tab_switches">Tab switches before auto-submit</label>
+                <input type="number" name="max_tab_switches" id="max_tab_switches" class="nx-input" min="0" max="50" value="{{ form.get('max_tab_switches', '5') }}">
               </div>
             </div>
-
-            <label class="cx-opt">
-              <input type="checkbox" name="require_access_key" value="true" id="opt-key"
-                     {% if form.get('require_access_key', 'true') != 'false' %}checked{% endif %}>
-              <span>
-                <span class="cx-opt-name">Require an access key</span>
-                <span class="cx-opt-desc">An 8-character key is generated per exam</span>
-              </span>
-            </label>
-            <label class="cx-opt">
-              <input type="checkbox" name="randomize_questions" value="true" id="opt-shuffle"
-                     {% if form.get('randomize_questions', 'true') != 'false' %}checked{% endif %}>
-              <span>
-                <span class="cx-opt-name">Shuffle questions &amp; options</span>
-                <span class="cx-opt-desc">Per student, fixed across refreshes</span>
-              </span>
-            </label>
-            <label class="cx-opt">
-              <input type="checkbox" name="show_leaderboard" value="true"
-                     {% if form.get('show_leaderboard', 'true') != 'false' %}checked{% endif %}>
-              <span>
-                <span class="cx-opt-name">Show leaderboard</span>
-                <span class="cx-opt-desc">Visible only once results are published</span>
-              </span>
-            </label>
-            <label class="cx-opt">
-              <input type="checkbox" name="is_active" value="true" id="opt-active"
-                     {% if form.get('is_active', 'true') != 'false' %}checked{% endif %}>
-              <span>
-                <span class="cx-opt-name">Activate immediately</span>
-                <span class="cx-opt-desc">Leave off to prepare it first</span>
-              </span>
-            </label>
-          </div>
-        </div>
-
-        <div class="cx-card">
-          <div class="cx-card-body tight">
-            <button type="submit" class="cx-btn cx-btn-primary" id="cx-submit">
-              <i class="bi bi-plus-circle-fill"></i> <span id="cx-submit-text">Create Exam</span>
-            </button>
-            <a href="{{ url_for('faculty.faculty_dashboard') }}" class="cx-btn cx-btn-ghost"
-               style="margin-top:0.5rem;">Cancel</a>
-            <div class="cx-kbd-hint">
-              <span class="cx-kbd">Ctrl</span>+<span class="cx-kbd">Enter</span> to submit
-              &nbsp;·&nbsp; <span class="cx-kbd">Alt</span>+<span class="cx-kbd">1-3</span> to switch
+            <div class="nx-field">
+              <span class="nx-label">Detection strength</span>
+              <div class="nx-choice nx-choice--row nx-choice--3" role="radiogroup" aria-label="Detection strength">
+                <label class="nx-choice__item"><input type="radio" name="ps_sensitivity" value="low"><span><b>Lenient</b><small>Fewest false alerts</small></span></label>
+                <label class="nx-choice__item"><input type="radio" name="ps_sensitivity" value="medium" checked><span><b>Balanced</b><small>Recommended</small></span></label>
+                <label class="nx-choice__item"><input type="radio" name="ps_sensitivity" value="high"><span><b>Strict</b><small>Catches small movements</small></span></label>
+              </div>
             </div>
           </div>
         </div>
-      </aside>
+      </section>
     </div>
-  </form>
-</div>
 
-<!-- Overlay -->
-<div class="cx-overlay" id="cx-overlay">
-  <div class="cx-overlay-box">
-    <div id="ov-working">
-      <div class="cx-spinner"></div>
-      <h3 class="cx-card-title" id="ov-title">Creating exams…</h3>
-      <p class="cx-card-note" id="ov-sub">This only takes a moment</p>
-    </div>
-    <div id="ov-done" hidden>
-      <h3 class="cx-card-title" id="ov-done-title"></h3>
-      <p class="cx-card-note" id="ov-done-msg"></p>
-      <div class="cx-result-list" id="ov-list"></div>
-      <div style="display:flex; gap:0.5rem; margin-top:0.9rem;">
-        <a href="{{ url_for('faculty.faculty_dashboard') }}" class="cx-btn cx-btn-primary">Go to Dashboard</a>
-        <button type="button" class="cx-btn cx-btn-ghost" id="ov-more">Create more</button>
-      </div>
+    <div class="nx-stack nx-sticky-side">
+      <section class="nx-panel nx-enter cx-shared" style="--i: 4" aria-labelledby="delivery-title">
+        <div class="nx-panel__head"><h2 class="nx-panel__title" id="delivery-title">Delivery</h2></div>
+        <div class="nx-panel__body nx-stack nx-stack--tight">
+          <div class="nx-field">
+            <span class="nx-label">After submitting, students see</span>
+            <div class="nx-choice nx-choice--row" role="radiogroup" aria-label="After submitting">
+              <label class="nx-choice__item"><input type="radio" name="post_exam_redirect" value="results"{% if form.get('post_exam_redirect') == 'results' %} checked{% endif %}><span><b>Result</b><small>If released</small></span></label>
+              <label class="nx-choice__item"><input type="radio" name="post_exam_redirect" value="dashboard"{% if form.get('post_exam_redirect', 'dashboard') != 'results' %} checked{% endif %}><span><b>Dashboard</b></span></label>
+            </div>
+          </div>
+          <div class="nx-choice">
+            {{ toggle('require_access_key', 'Access key', 'An 8-character key per exam, announced in the hall', id='opt-key') }}
+            {{ toggle('randomize_questions', 'Shuffle questions and options', 'Per student; the same after a refresh', id='opt-shuffle') }}
+            {{ toggle('show_leaderboard', 'Leaderboard', 'Shown once results are published') }}
+            {{ toggle('is_active', 'Active straight away', 'Untick to prepare it first', id='opt-active') }}
+          </div>
+        </div>
+      </section>
+
+      <section class="nx-panel nx-enter" style="--i: 5" aria-labelledby="summary-title">
+        <div class="nx-panel__head"><h2 class="nx-panel__title" id="summary-title">Summary</h2></div>
+        <dl class="nx-dl">
+          <div><dt id="sum-what-label">Title</dt><dd id="sum-what">—</dd></div>
+          <div data-exam-only><dt>Duration</dt><dd id="sum-dur">60 min</dd></div>
+          <div data-exam-only><dt>Pass mark</dt><dd id="sum-pass">40%</dd></div>
+          <div data-exam-only><dt>Mode</dt><dd id="sum-mode">Classroom</dd></div>
+          <div data-exam-only><dt>Proctoring</dt><dd id="sum-proctor">Camera, tab switches</dd></div>
+          <div data-exam-only><dt>Questions</dt><dd id="sum-shuffle">Shuffled</dd></div>
+          <div data-exam-only><dt>Status</dt><dd id="sum-status">Active on create</dd></div>
+          <div data-split-only hidden><dt>Sets</dt><dd id="sum-sets">4</dd></div>
+          <div data-split-only hidden><dt>Overlap</dt><dd id="sum-overlap">None</dd></div>
+        </dl>
+        <div class="nx-panel__body nx-stack nx-stack--tight">
+          <button type="submit" class="nx-btn nx-btn--primary nx-btn--lg nx-btn--block" id="cx-submit">
+            <i class="bi bi-plus-lg" aria-hidden="true" id="cx-submit-icon"></i><span id="cx-submit-text">Create exam</span>
+          </button>
+          {{ ui.button('Cancel', href=url_for('faculty.faculty_dashboard'), variant='ghost') }}
+          <p class="nx-help nx-center"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit · <kbd>Alt</kbd> + <kbd>1</kbd>–<kbd>3</kbd> to switch</p>
+        </div>
+      </section>
     </div>
   </div>
-</div>
-
-<div class="cx-toast" id="cx-toast" role="status" aria-live="polite"></div>
-
-<script>
-(function createExamPage() {
-  'use strict';
-
-  const URLS = {
-    batch: "{{ url_for('faculty.batch_create_exams') }}",
-    splitPreview: "{{ url_for('faculty.split_questions_preview') }}",
-    splitDownload: "{{ url_for('faculty.split_questions_download') }}"
-  };
-
-  const form = document.getElementById('cx-form');
-  const submitBtn = document.getElementById('cx-submit');
-  const submitText = document.getElementById('cx-submit-text');
-  const toastEl = document.getElementById('cx-toast');
-
-  let mode = 'single';
-  let busy = false;
-
-  /* ── Small helpers ────────────────────────────────────── */
-  const $ = id => document.getElementById(id);
-  const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
-
-  let toastTimer;
-  function toast(text) {
-    toastEl.textContent = text;
-    toastEl.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3200);
-  }
-
-  function hint(el, text, kind) {
-    if (!el) return;
-    el.textContent = text || '';
-    el.className = 'cx-hint' + (kind ? ' ' + kind : '');
-  }
-
-  /* ── Mode switching ───────────────────────────────────── */
-  const PANELS = { single: 'panel-single', batch: 'panel-batch', split: 'panel-split' };
-
-  function setMode(next) {
-    if (!PANELS[next]) return;
-    mode = next;
-
-    document.querySelectorAll('.cx-mode').forEach(btn => {
-      btn.setAttribute('aria-selected', String(btn.dataset.mode === next));
-    });
-    Object.entries(PANELS).forEach(([key, id]) => { $(id).hidden = key !== next; });
-
-    /* Split creates nothing, so the shared exam settings do not apply to it. */
-    const splitting = next === 'split';
-    document.querySelectorAll('.cx-shared').forEach(el => { el.hidden = splitting; });
-
-    submitText.textContent = splitting ? 'Split & download sets'
-                           : next === 'batch' ? 'Create all exams'
-                           : 'Create Exam';
-    submitBtn.querySelector('.bi').className = splitting
-      ? 'bi bi-download'
-      : next === 'batch' ? 'bi bi-check2-all' : 'bi bi-plus-circle-fill';
-
-    document.querySelectorAll('[data-exam-only]').forEach(el => { el.hidden = splitting; });
-    document.querySelectorAll('[data-split-only]').forEach(el => { el.hidden = !splitting; });
-
-    try { history.replaceState(null, '', '?mode=' + next); } catch (e) { /* file:// etc. */ }
-    updateSummary();
-  }
-
-  document.querySelectorAll('.cx-mode').forEach(btn =>
-    on(btn, 'click', () => setMode(btn.dataset.mode)));
-  document.querySelectorAll('[data-goto]').forEach(btn =>
-    on(btn, 'click', () => setMode(btn.dataset.goto)));
-
-  /* ── Proctoring ───────────────────────────────────────── */
-  function syncFeatures() {
-    const cameraOn = $('ps_camera').checked;
-
-    document.querySelectorAll('.cx-feature').forEach(row => {
-      const input = row.querySelector('input[type=checkbox]');
-      const needsCamera = row.hasAttribute('data-needs-camera');
-
-      /* A camera-derived check cannot run without the camera, and the server
-         forces these off anyway — so show that here rather than let the form
-         promise something the exam will not do. */
-      if (needsCamera) {
-        input.disabled = !cameraOn;
-        row.classList.toggle('disabled', !cameraOn);
-        if (!cameraOn) input.checked = false;
-      }
-      row.classList.toggle('on', input.checked && !input.disabled);
-    });
-  }
-
-  function collectProctor() {
-    const sensitivity = form.querySelector('[name=ps_sensitivity]:checked')?.value || 'medium';
-    const camera = $('ps_camera').checked;
-
-    const settings = {
-      camera_enabled: camera,
-      face_detection: camera,
-      head_pose: camera && $('ps_head_pose').checked,
-      object_detection: camera && $('ps_objects').checked,
-      voice_detection: $('ps_voice').checked,
-      tab_switch: $('ps_tabswitch').checked,
-      sensitivity: sensitivity,
-      max_warnings: parseInt($('ps_max_warnings').value || '25', 10),
-      max_tab_switches: parseInt($('max_tab_switches').value || '5', 10)
-    };
-    $('proctor_json').value = JSON.stringify(settings);
-    return settings;
-  }
-
-  /* ── Quick-pick chips ─────────────────────────────────── */
-  function wireChips(attr, target) {
-    const chips = document.querySelectorAll(`.cx-chip[data-${attr}]`);
-    const sync = () => chips.forEach(c =>
-      c.classList.toggle('on', String(c.dataset[attr]) === String(target.value)));
-    chips.forEach(chip => on(chip, 'click', () => {
-      target.value = chip.dataset[attr];
-      target.dispatchEvent(new Event('input', { bubbles: true }));
-      sync();
-    }));
-    on(target, 'input', sync);
-    sync();
-  }
-
-  /* ── Summary ──────────────────────────────────────────── */
-  function updateSummary() {
-    const whatLabel = $('sum-what-label');
-    const what = $('sum-what');
-
-    if (mode === 'batch') {
-      whatLabel.textContent = 'Exams';
-      const n = batchRows().length;
-      what.textContent = n ? `${n} queued` : '—';
-    } else if (mode === 'split') {
-      whatLabel.textContent = 'File';
-      what.textContent = splitFile ? splitFile.name : '—';
-    } else {
-      whatLabel.textContent = 'Title';
-      what.textContent = $('cx-title').value.trim() || '—';
-    }
-
-    $('sum-dur').textContent = ($('cx-dur').value || 60) + ' min';
-    $('sum-pass').textContent = ($('cx-pass').value || 40) + '%';
-
-    const m = form.querySelector('[name=exam_mode]:checked')?.value || 'classroom';
-    $('sum-mode').textContent = m.charAt(0).toUpperCase() + m.slice(1);
-
-    const active = [];
-    if ($('ps_camera').checked) active.push('Camera');
-    if ($('ps_head_pose').checked && !$('ps_head_pose').disabled) active.push('Head');
-    if ($('ps_objects').checked && !$('ps_objects').disabled) active.push('Objects');
-    if ($('ps_voice').checked) active.push('Voice');
-    if ($('ps_tabswitch').checked) active.push('Tab');
-    $('sum-proctor').textContent = active.length ? active.join(', ') : 'None';
-
-    $('sum-shuffle').textContent = $('opt-shuffle').checked ? 'Shuffled' : 'Fixed order';
-
-    const activeEl = $('opt-active');
-    $('sum-status').textContent = activeEl.checked ? 'Active on create' : 'Draft';
-    $('sum-status').style.color = activeEl.checked ? 'var(--cx-success)' : 'var(--cx-text-3)';
-
-    if (mode === 'split') {
-      $('sum-sets').textContent = $('split-sets').value || '—';
-      $('sum-overlap').textContent = $('split-unique').checked ? 'None' : 'Allowed';
-    }
-  }
-
-  /* ── Validation ───────────────────────────────────────── */
-  let touched = false;
-
-  function validateShared(show) {
-    let ok = true;
-
-    const dur = parseInt($('cx-dur').value || '', 10);
-    const durBad = !dur || dur < 1 || dur > 600;
-    $('cx-dur').classList.toggle('is-bad', show && durBad);
-    if (durBad) ok = false;
-
-    const pass = parseFloat($('cx-pass').value || '');
-    const passBad = isNaN(pass) || pass < 0 || pass > 100;
-    $('cx-pass').classList.toggle('is-bad', show && passBad);
-    if (passBad) ok = false;
-
-    const start = $('cx-start').value, end = $('cx-end').value;
-    if (start && end && new Date(end) <= new Date(start)) {
-      hint($('hint-window'), 'The window must end after it starts.', 'bad');
-      ok = false;
-    } else if (start && end) {
-      hint($('hint-window'), 'Students can only begin inside this window.', 'good');
-    } else {
-      hint($('hint-window'), 'Leave both blank to open as soon as you activate the exam.');
-    }
-    return ok;
-  }
-
-  function validateSingle(show) {
-    const title = $('cx-title').value.trim();
-    if (!title) {
-      hint($('hint-title'), show ? 'A title is required.' : '', show ? 'bad' : null);
-      $('cx-title').classList.toggle('is-bad', show);
-      return false;
-    }
-    hint($('hint-title'), '');
-    $('cx-title').classList.remove('is-bad');
-    return true;
-  }
-
-  function validate(show) {
-    const force = show || touched;
-    if (mode === 'split') return true;
-    const a = validateShared(force);
-    const b = mode === 'single' ? validateSingle(force) : batchRows().length > 0;
-    return a && b;
-  }
-
-  /* ── Batch rows ───────────────────────────────────────── */
-  let rowSeq = 0;
-
-  function batchRows() {
-    return [...document.querySelectorAll('#batch-list .cx-brow')];
-  }
-
-  function renumber() {
-    batchRows().forEach((row, i) => { row.querySelector('.cx-brow-num').textContent = i + 1; });
-    const n = batchRows().length;
-    $('batch-count').textContent = n;
-    $('batch-empty').hidden = n > 0;
-    updateSummary();
-  }
-
-  function addRow(title) {
-    const id = ++rowSeq;
-    const row = document.createElement('div');
-    row.className = 'cx-brow';
-    row.dataset.row = id;
-    row.innerHTML = `
-      <span class="cx-brow-num"></span>
-      <input type="text" class="cx-input cx-brow-title" maxlength="200"
-             placeholder="Exam title" value="${(title || '').replace(/"/g, '&quot;')}">
-      <label class="cx-file-btn cx-brow-file" for="brow-file-${id}">
-        <i class="bi bi-paperclip"></i><span>Questions</span>
-      </label>
-      <input type="file" id="brow-file-${id}" class="cx-sr" accept=".csv,.json,.xlsx,.xls">
-      <button type="button" class="cx-icon-btn" aria-label="Remove this exam">
-        <i class="bi bi-trash3"></i>
-      </button>`;
-
-    $('batch-list').appendChild(row);
-
-    const fileInput = row.querySelector('input[type=file]');
-    const fileLabel = row.querySelector('.cx-file-btn');
-    on(fileInput, 'change', () => {
-      const f = fileInput.files[0];
-      fileLabel.classList.toggle('has', !!f);
-      fileLabel.querySelector('span').textContent = f ? f.name : 'Questions';
-    });
-
-    on(row.querySelector('.cx-icon-btn'), 'click', () => { row.remove(); renumber(); });
-    on(row.querySelector('.cx-brow-title'), 'input', updateSummary);
-
-    renumber();
-    return row;
-  }
-
-  on($('batch-add'), 'click', () => addRow().querySelector('.cx-brow-title').focus());
-
-  on($('batch-paste'), 'click', () => {
-    const text = prompt('Paste exam titles — one per line:');
-    if (!text) return;
-    const titles = text.split('\n').map(t => t.trim()).filter(Boolean);
-    titles.forEach(addRow);
-    if (titles.length) toast(`Added ${titles.length} exam${titles.length > 1 ? 's' : ''}.`);
-  });
-
-  /* ── Split ────────────────────────────────────────────── */
-  let splitFile = null;
-  const drop = $('split-drop');
-  const splitInput = $('split-file');
-
-  function setSplitFile(file) {
-    splitFile = file || null;
-    drop.classList.toggle('loaded', !!splitFile);
-    $('split-drop-main').textContent = splitFile ? splitFile.name : 'Choose a question file';
-    $('split-drop-sub').textContent = splitFile
-      ? Math.max(1, Math.round(splitFile.size / 1024)) + ' KB · click to choose another'
-      : 'CSV, JSON or Excel · click or drag it here';
-    updateSummary();
-  }
-
-  on(drop, 'click', () => splitInput.click());
-  on(splitInput, 'change', () => setSplitFile(splitInput.files[0]));
-  ['dragenter', 'dragover'].forEach(ev => on(drop, ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-  ['dragleave', 'drop'].forEach(ev => on(drop, ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  on(drop, 'drop', e => {
-    const f = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) { splitInput.files = e.dataTransfer.files; setSplitFile(f); }
-  });
-
-  function splitPayload() {
-    const fd = new FormData();
-    fd.append('file', splitFile);
-    fd.append('num_sets', $('split-sets').value || '');
-    fd.append('per_set', $('split-per').value || '');
-    fd.append('strategy', $('split-unique').checked ? 'unique' : 'shared');
-    fd.append('balance_marks', $('split-balance').checked ? 'true' : 'false');
-    fd.append('format', $('split-format').value);
-    return fd;
-  }
-
-  async function runSplit() {
-    const msg = $('split-msg');
-    if (!splitFile) { msg.textContent = 'Choose a question file first.'; msg.className = 'cx-msg bad'; return; }
-
-    msg.textContent = 'Splitting…'; msg.className = 'cx-msg';
-    try {
-      const res = await fetch(URLS.splitDownload, { method: 'POST', body: splitPayload() });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        msg.textContent = data.message || 'Could not split the file.';
-        msg.className = 'cx-msg bad';
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = splitFile.name.replace(/\.[^.]+$/, '') + '_sets.zip';
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-
-      msg.textContent = 'Downloaded. Upload each set to an exam the usual way.';
-      msg.className = 'cx-msg good';
-      toast('Sets downloaded.');
-    } catch (e) {
-      msg.textContent = 'Could not reach the server.';
-      msg.className = 'cx-msg bad';
-    }
-  }
-
-  /* Live preview of the split whenever the inputs change */
-  async function previewSplit() {
-    if (!splitFile) return;
-    const msg = $('split-msg');
-    try {
-      const res = await fetch(URLS.splitPreview, { method: 'POST', body: splitPayload() });
-      const data = await res.json();
-      if (!data.success) { msg.textContent = data.message; msg.className = 'cx-msg bad'; return; }
-      const p = data.plan;
-      msg.innerHTML = `<strong>${p.bank_total} questions → ${p.num_sets} sets of ${p.per_set}</strong>`
-        + (p.leftover ? ` · ${p.leftover} left over` : '')
-        + '<br>' + p.sets.map(s => `Set ${s.label}: ${s.count} questions, ${s.total_marks} marks`).join('<br>');
-      msg.className = 'cx-msg good';
-    } catch (e) { /* preview is best-effort */ }
-  }
-
-  ['split-sets', 'split-per', 'split-unique', 'split-balance'].forEach(id =>
-    on($(id), 'change', previewSplit));
-  on(splitInput, 'change', previewSplit);
-
-  /* ── Batch submit ─────────────────────────────────────── */
-  async function runBatch() {
-    const rows = batchRows();
-    const payload = [], files = [];
-
-    rows.forEach(row => {
-      const title = row.querySelector('.cx-brow-title').value.trim();
-      if (!title) return;
-      payload.push({ title });
-      files.push(row.querySelector('input[type=file]').files[0] || null);
-    });
-
-    if (!payload.length) { toast('Add at least one exam with a title.'); return; }
-
-    const fd = new FormData();
-    fd.append('exams_json', JSON.stringify(payload));
-
-    /* Shared settings ride along so every exam in the batch gets the same
-       timing, mode and proctoring. The server merges these into each row. */
-    ['duration_minutes', 'passing_score', 'start_time', 'end_time',
-     'max_tab_switches', 'proctor_settings_json'].forEach(name => {
-      const el = form.querySelector(`[name="${name}"]`);
-      if (el) fd.append(name, el.value);
-    });
-    fd.append('exam_mode', form.querySelector('[name=exam_mode]:checked')?.value || 'classroom');
-    fd.append('post_exam_redirect', form.querySelector('[name=post_exam_redirect]:checked')?.value || 'dashboard');
-    ['require_access_key', 'randomize_questions', 'show_leaderboard', 'is_active'].forEach(name => {
-      const el = form.querySelector(`[name="${name}"]`);
-      fd.append(name, el && el.checked ? 'true' : 'false');
-    });
-
-    files.forEach((file, i) => { if (file) fd.append(`file_${i}`, file); });
-
-    $('cx-overlay').classList.add('show');
-    $('ov-working').hidden = false;
-    $('ov-done').hidden = true;
-    $('ov-title').textContent = `Creating ${payload.length} exam${payload.length > 1 ? 's' : ''}…`;
-
-    try {
-      const res = await fetch(URLS.batch, { method: 'POST', body: fd });
-      const data = await res.json();
-
-      $('ov-working').hidden = true;
-      $('ov-done').hidden = false;
-
-      if (data.success) {
-        $('ov-done-title').textContent = 'Done';
-        $('ov-done-msg').textContent = data.message;
-        $('ov-list').innerHTML = (data.created_exams || []).map(e => `
-          <div class="cx-setrow">
-            <div>
-              <div class="cx-setrow-name">${e.title}</div>
-              <div class="cx-setrow-meta">${e.questions_count} questions · key ${e.access_key || '—'}</div>
-            </div>
-            <a class="cx-btn cx-btn-ghost cx-btn-sm" href="/faculty/exam/${e.id}">Open</a>
-          </div>`).join('')
-          + (data.failed || []).map(f => `
-          <div class="cx-setrow" style="border-color:var(--cx-danger);">
-            <div>
-              <div class="cx-setrow-name">${f.title}</div>
-              <div class="cx-setrow-meta" style="color:var(--cx-danger);">${f.errors.join(' ')}</div>
-            </div>
-          </div>`).join('');
-      } else {
-        $('ov-done-title').textContent = 'Nothing was created';
-        $('ov-done-msg').textContent = data.error || 'Please check the rows and try again.';
-        $('ov-list').innerHTML = (data.failed || []).map(f =>
-          `<div class="cx-setrow"><div><div class="cx-setrow-name">${f.title}</div>
-           <div class="cx-setrow-meta" style="color:var(--cx-danger);">${f.errors.join(' ')}</div></div></div>`).join('');
-      }
-    } catch (e) {
-      $('ov-working').hidden = true;
-      $('ov-done').hidden = false;
-      $('ov-done-title').textContent = 'Could not reach the server';
-      $('ov-done-msg').textContent = 'Nothing was created. Please try again.';
-    }
-  }
-
-  on($('ov-more'), 'click', () => {
-    $('cx-overlay').classList.remove('show');
-    $('batch-list').querySelectorAll('.cx-brow').forEach(r => r.remove());
-    renumber();
-  });
-
-  /* ── Submit ───────────────────────────────────────────── */
-  on(form, 'submit', async e => {
-    e.preventDefault();          // every mode is handled explicitly
-    if (busy) return;
-
-    touched = true;
-    collectProctor();
-
-    if (mode === 'split') { runSplit(); return; }
-
-    if (!validate(true)) {
-      const bad = form.querySelector('.is-bad');
-      if (bad) { bad.focus(); bad.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-      else if (mode === 'batch') toast('Add at least one exam.');
-      return;
-    }
-
-    if (mode === 'batch') { runBatch(); return; }
-
-    busy = true;
-    submitBtn.disabled = true;
-    submitText.textContent = 'Creating…';
-    form.submit();               // normal POST for the single path
-  });
-
-  /* ── Keyboard ─────────────────────────────────────────── */
-  on(document, 'keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      form.requestSubmit();
-      return;
-    }
-    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
-    if (e.altKey && ['1', '2', '3'].includes(e.key)) {
-      e.preventDefault();
-      setMode({ '1': 'single', '2': 'batch', '3': 'split' }[e.key]);
-      return;
-    }
-    /* Enter inside a batch title adds the next row — faster than reaching for the mouse. */
-    if (e.key === 'Enter' && inField && document.activeElement.classList.contains('cx-brow-title')) {
-      e.preventDefault();
-      addRow().querySelector('.cx-brow-title').focus();
-    }
-  });
-
-  /* ── Wire up ──────────────────────────────────────────── */
-  document.querySelectorAll('.cx-feature input[type=checkbox]').forEach(input =>
-    on(input, 'change', () => { syncFeatures(); updateSummary(); }));
-
-  on(form, 'input', () => { validate(false); updateSummary(); });
-  on(form, 'change', () => { validate(false); updateSummary(); });
-  [$('cx-title'), $('cx-dur'), $('cx-pass')].forEach(el =>
-    on(el, 'blur', () => { touched = true; validate(false); }));
-
-  wireChips('dur', $('cx-dur'));
-  wireChips('pass', $('cx-pass'));
-
-  const startMode = new URLSearchParams(location.search).get('mode');
-  setMode(PANELS[startMode] ? startMode : 'single');
-  syncFeatures();
-  updateSummary();
-})();
-</script>
+</form>
+
+<dialog class="nx-dialog" id="batch-result" aria-labelledby="ov-title">
+  <div class="nx-dialog__head">
+    <div>
+      <h2 class="nx-dialog__title" id="ov-title">Creating exams…</h2>
+      <span class="nx-panel__sub" id="ov-sub">This only takes a moment</span>
+    </div>
+  </div>
+  <div class="nx-dialog__body"><ul class="nx-results" id="ov-list"></ul></div>
+  <div class="nx-dialog__foot" id="ov-foot" hidden>
+    <button type="button" class="nx-btn nx-btn--ghost" id="ov-more">Create more</button>
+    {{ ui.button('Go to dashboard', href=url_for('faculty.faculty_dashboard'), variant='primary') }}
+  </div>
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/create_exam.js') }}"></script>
 {% endblock %}
