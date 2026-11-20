@@ -963,3 +963,6 @@ kbd {
 .nx-dl--flush { padding: 0; }
 .nx-form > *, #checkResult { min-width: 0; }
 @media (max-width: 640px) { .nx-cell-clip { max-width: 46vw; } }
+.nx-results--pad { padding: var(--space-4); }
+.nx-steps-list { margin: 0; padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) + 18px); display: grid; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-muted); }
+.nx-steps-list b { color: var(--text); font-weight: 500; }

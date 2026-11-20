@@ -63,6 +63,8 @@ REDESIGNED = [
     'frontend/static/js/pages/create_exam.js',
     'frontend/templates/faculty/upload_questions.html',
     'frontend/static/js/pages/upload_questions.js',
+    'frontend/templates/faculty/split_questions.html',
+    'frontend/static/js/pages/split_questions.js',
 ]
 
 
@@ -777,3 +779,11 @@ def test_sample_file_uploads(app, seed, as_user):
     assert resp.status_code == 302
     with app.app_context():
         assert Question.query.filter_by(exam_id=seed['exam']).count() == 5
+
+
+def test_splitter_page_on_design_system(app, seed, as_user):
+    html = as_user('faca').get('/faculty/split-questions').data.decode()
+    assert 'css/ds/tokens.css' in html and 'js/pages/split_questions.js' in html
+    assert 'data-preview-url="/faculty/split-questions/preview"' in html
+    assert 'data-download-url="/faculty/split-questions/download"' in html
+    assert re.search(r'href="/faculty/split-questions"\s+aria-current="page"', html)

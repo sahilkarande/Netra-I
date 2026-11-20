@@ -4,7 +4,7 @@ The rules and building blocks for every redesigned page. Pages move onto the
 system one at a time; until a page is redesigned it keeps `base.html` and the
 legacy stylesheets, untouched.
 
-**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views).
+**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views); exam management (exam page, analytics, new exam, add questions, question splitter).
 
 ---
 
@@ -166,8 +166,29 @@ Offer only the action the server will accept for that state.
 Stored times are UTC: print them with the `localtime` filter, e.g.
 `{{ se.submitted_at|localtime('%d %b %Y, %H:%M') }}`.
 
-**Confirmations.** Don't use `window.confirm()`. Confirm destructive actions
-in place (see the two-step delete in `js/pages/faculty_dashboard.js`).
+**Confirmations.** Don't use `window.confirm()`, `alert()` or `prompt()`.
+Give the button `data-nx-confirm="End now?"`: inside a form it is wired
+automatically (first press arms it, second press within 4 s submits); for a
+scripted action call `nx.confirmPress(button)`, which returns true on the
+second press. Report results with `nx.toast()`.
+
+### Dialogs and exam management
+
+| Component | Use |
+|---|---|
+| `<dialog class="nx-dialog">` (`--wide`, `__head`, `__title`, `__body`, `__foot`) | Modal work: open with `showModal()`. The browser traps focus, closes on Esc and makes the page inert |
+| `ui.score_chart(bands)` | Score-band bar chart as SVG; bands from `dashboard_service.band_counts()` |
+| `.nx-choice` + `__item` (`--row`, `--3`) | Radio or checkbox cards; the checked one is highlighted with `:has()` |
+| `.nx-chips` / `.nx-chip[aria-pressed]` | Quick values for a number input |
+| `.nx-drop` | File drop zone: a `<label for>` the hidden file input, so click and keyboard work natively |
+| `.nx-key` | An access key, large and selectable |
+| `.nx-disclosure` | A panel that opens with `<details>` |
+| `.nx-picker-grid` / `.nx-pick` | Selectable people in a dialog |
+| `.nx-input-unit` | Number input with a unit (`min`, `%`) inside it |
+
+Server-read checkboxes: an unticked box sends nothing, which the server
+treats as its default. Follow each with `<input type="hidden" name="…"
+value="false">` (see the `toggle` macro in `faculty/create_exam.html`).
 
 ### Exam runtime
 
