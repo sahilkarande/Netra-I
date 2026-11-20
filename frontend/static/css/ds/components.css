@@ -220,6 +220,7 @@
 .nx-tone-warning { --tone: var(--warning); --tone-subtle: var(--warning-subtle); }
 .nx-tone-accent  { --tone: var(--accent);  --tone-subtle: var(--accent-subtle); }
 .nx-tone-success { --tone: var(--success); --tone-subtle: var(--success-subtle); }
+.nx-tone-neutral { --tone: var(--text-subtle); --tone-subtle: var(--bg-subtle); }
 
 /* ── Table ───────────────────────────────────────────────── */
 .nx-table-wrap { overflow-x: auto; }
@@ -465,7 +466,10 @@ a.nx-table__primary:hover { color: var(--accent); }
 
 @media (max-width: 640px) {
   .nx-panel__actions { width: 100%; margin-left: 0; }
-  .nx-panel__actions .nx-search { flex: 1; }
+  .nx-panel__actions .nx-search { flex: 1 1 100%; }
+  .nx-panel__actions .nx-search .nx-input { width: 100%; }
+  .nx-panel__actions .nx-select { flex: 1; }
+  .nx-panel__actions .nx-select select.nx-input { width: 100%; }
 }
 
 /* ── Forms ───────────────────────────────────────────────────
@@ -587,3 +591,49 @@ a.nx-table__primary:hover { color: var(--accent); }
   .nx-form-row, .nx-checklist { grid-template-columns: minmax(0, 1fr); }
   .nx-otp input { height: 46px; font-size: var(--text-lg); }
 }
+
+/* ── Student dashboard ─────────────────────────────────────
+   Sort select, score trend, details list, small inline forms. */
+.nx-inline-form { display: inline-flex; margin: 0; }
+.nx-select { position: relative; display: inline-flex; }
+.nx-select select.nx-input {
+  appearance: none; -webkit-appearance: none;
+  height: 32px; padding: 0 var(--space-8) 0 var(--space-3);
+  font-size: var(--text-sm); cursor: pointer;
+}
+.nx-select::after {
+  content: ""; position: absolute; right: 12px; top: 50%; width: 6px; height: 6px;
+  border-right: 1.5px solid var(--text-subtle); border-bottom: 1.5px solid var(--text-subtle);
+  transform: translateY(-70%) rotate(45deg); pointer-events: none;
+}
+.nx-card__desc {
+  font-size: var(--text-xs); color: var(--text-muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.nx-feed__actions { display: inline-flex; gap: 2px; flex: none; }
+.nx-feed__hold {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  font-size: var(--text-xs); color: var(--text-subtle);
+}
+
+.nx-trend { list-style: none; display: grid; gap: var(--space-3); padding: var(--space-4); }
+.nx-trend__row { display: grid; grid-template-columns: minmax(0, 1fr) 96px 40px; align-items: center; gap: var(--space-3); }
+.nx-trend__label { font-size: var(--text-xs); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-trend__track { position: relative; height: 8px; border-radius: var(--radius-full); background: var(--bg-pressed); }
+.nx-trend__fill { position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: inherit; }
+.nx-trend__fill--pass { background: var(--success); }
+.nx-trend__fill--fail { background: var(--danger); }
+.nx-trend__mark {
+  position: absolute; top: -3px; bottom: -3px; left: var(--at); width: 2px;
+  margin-left: -1px; border-radius: 1px; background: var(--text);
+}
+.nx-trend__value { font: 500 var(--text-xs) var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+
+.nx-dl { display: grid; margin: 0; padding: var(--space-1) var(--space-4) var(--space-2); }
+.nx-dl > div {
+  display: flex; justify-content: space-between; align-items: center; gap: var(--space-4);
+  padding: var(--space-2) 0; border-top: 1px solid var(--border);
+}
+.nx-dl > div:first-child { border-top: 0; }
+.nx-dl dt { font-size: var(--text-sm); color: var(--text-muted); flex: none; }
+.nx-dl dd { margin: 0; font-size: var(--text-sm); text-align: right; min-width: 0; overflow-wrap: anywhere; }

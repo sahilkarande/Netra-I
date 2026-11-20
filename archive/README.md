@@ -13,6 +13,7 @@ real database.
 | `frontend/js/theme.js` | Old theme toggle | `base.html` implements the theme toggle inline. |
 | `frontend/images/CDAC_Logo_org.png` | Logo | Not referenced by any template. |
 | `frontend/css/auth.css` | Styles for the old sign-in pages | Login, register, OTP and change-password now use the design system (`css/ds/`). |
+| `frontend/css/student_dashboard.css` | Styles for the old student dashboard | The student dashboard now uses the design system (`css/ds/`). |
 | `frontend/templates/import_students.html` | Stand-alone import page | No route renders it; import lives on the Manage Students page. |
 
 To restore a file, move it back to its original location (shown in `git log --follow`).

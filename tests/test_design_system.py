@@ -49,6 +49,8 @@ REDESIGNED = [
     'frontend/templates/student/take_exam.html',
     'frontend/static/css/ds/exam.css',
     'frontend/static/js/pages/exam_key.js',
+    'frontend/templates/student/dashboard.html',
+    'frontend/static/js/pages/student_dashboard.js',
 ]
 
 
@@ -413,3 +415,105 @@ def test_exam_key_page(app, seed, as_user):
     assert f'data-verify-url="/exam/{seed["exam"]}/verify-key"' in html
     assert 'js/pages/exam_key.js' in html
     assert 'id="qs0"' not in html
+
+
+# ── Student dashboard ───────────────────────────────────────────────────────
+
+from backend.services.student_dashboard_service import exam_state  # noqa: E402
+
+
+def _student_home(as_user, username='stud1'):
+    resp = as_user(username).get('/student/dashboard')
+    assert resp.status_code == 200
+    return resp.data.decode()
+
+
+def _set_exam(app, exam_id, **fields):
+    with app.app_context():
+        exam = Exam.query.get(exam_id)
+        for k, v in fields.items():
+            setattr(exam, k, v)
+        db.session.commit()
+
+
+def test_student_dashboard_uses_design_system_shell(app, seed, as_user):
+    html = _student_home(as_user)
+    assert 'css/ds/tokens.css' in html and 'css/style.css' not in html
+    assert 'student_dashboard.css' not in html and 'chart.umd.js' not in html
+    assert re.search(r'href="/student/dashboard"\s+aria-current="page"', html)
+    assert f'href="/student/{seed["s1"]}/profile"' in html
+    assert '/faculty/dashboard' not in html                      # no staff navigation
+
+
+def test_submitted_exam_cannot_be_retaken(app, seed, as_user):
+    html = _student_home(as_user)                                # stud1 submitted; results hidden
+    assert 'Retake' not in html
+    assert f'action="/start-exam/{seed["exam"]}"' not in html
+    assert 'result on hold' in html.lower()
+    assert f'/student/exam/{seed["attempt"]}/result' not in html  # score stays locked
+
+
+def test_released_result_links_to_result_and_pdf(app, seed, as_user):
+    _set_exam(app, seed['exam'], results_published=True)
+    html = _student_home(as_user)
+    assert f'/student/exam/{seed["attempt"]}/result' in html
+    assert f'/student/exam/{seed["attempt"]}/download-pdf' in html
+    assert '50%' in html and 'nx-trend' in html
+
+
+def test_open_exam_offers_start(app, seed, as_user):
+    html = _student_home(as_user, 'stud2')
+    assert f'action="/start-exam/{seed["exam"]}"' in html
+    assert 'name="csrf_token"' in html
+
+
+def test_upcoming_exam_has_no_start(app, seed, as_user):
+    _set_exam(app, seed['exam'], start_time=datetime.utcnow() + timedelta(days=1))
+    html = _student_home(as_user, 'stud2')
+    assert f'action="/start-exam/{seed["exam"]}"' not in html
+    assert 'Upcoming' in html and 'Opens ' in html
+
+
+def test_in_progress_exam_shows_continue(app, seed, as_user):
+    client = as_user('stud2')
+    client.post(f'/start-exam/{seed["exam"]}')
+    html = client.get('/student/dashboard').data.decode()
+    assert 'is in progress' in html
+    assert f'href="/exam/{seed["exam"]}/take"' in html
+
+
+def test_unassigned_exams_are_not_listed(app, seed, as_user):
+    _set_exam(app, seed['exam'], allow_all_students=False, allowed_students=str(seed['s1']))
+    html = _student_home(as_user, 'stud2')
+    assert 'SQL Basics' not in html
+    assert 'No exams yet' in html
+
+
+def test_face_reminder_until_registered(app, seed, as_user, monkeypatch):
+    assert 'Register your face' in _student_home(as_user)
+    assert 'change-password?step=face' in _student_home(as_user)
+    from backend.services import face_service
+    monkeypatch.setattr(face_service, 'enrollment_locked', lambda user: True)
+    assert 'Register your face' not in _student_home(as_user)
+
+
+def test_exam_state():
+    class E:  # minimal stand-ins
+        is_active, force_ended, start_time, end_time = True, False, None, None
+
+    class A:
+        completed, status, is_invalidated, result_visible_to_student = False, 'started', False, False
+
+    now = datetime.utcnow()
+    assert exam_state(E(), None, now) == 'open'
+    assert exam_state(E(), A(), now) == 'in_progress'
+    done = A(); done.completed = True; done.status = 'submitted'
+    assert exam_state(E(), done, now) == 'awaiting'
+    done.result_visible_to_student = True
+    assert exam_state(E(), done, now) == 'released'
+    done.is_invalidated = True
+    assert exam_state(E(), done, now) == 'invalidated'
+    later = E(); later.start_time = now + timedelta(hours=1)
+    assert exam_state(later, None, now) == 'upcoming'
+    over = E(); over.end_time = now - timedelta(hours=1)
+    assert exam_state(over, None, now) == 'closed'

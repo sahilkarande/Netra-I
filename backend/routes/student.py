@@ -29,22 +29,27 @@ def student_dashboard():
     from backend.services.exam_service import finalize_overdue_attempts
     finalize_overdue_attempts(student_id=current_user.id)
 
-    # Get active and completed exams
-    available_exams = Exam.query.filter_by(is_active=True).all()
+    from backend.services.student_dashboard_service import exam_rows, score_trend
+    from backend.services import face_service
+
     my_exams = StudentExam.query.filter_by(student_id=current_user.id).all()
-    
+    attempted_ids = {se.exam_id for se in my_exams}
+
+    # Open exams assigned to this student, plus any exam they have an attempt
+    # on (so a finished exam stays listed after the instructor closes it)
+    exams = [e for e in Exam.query.filter_by(is_active=True).all() if e.is_assigned]
+    listed = {e.id for e in exams}
+    exams += [se.exam for se in my_exams if se.exam and se.exam_id not in listed]
+    rows = exam_rows(exams, my_exams)
+
     completed_exams = [se for se in my_exams if se.completed or se.status in ('submitted', 'completed')]
-    # Imported rows carry a started_at too, so only a finished attempt counts
-    attempted_exam_ids = {se.exam_id for se in my_exams if se.completed or se.status in ('submitted', 'completed')}
-    
-    for exam in available_exams:
-        exam.attempted_by_current_user = (exam.id in attempted_exam_ids)
+    completed_exams.sort(key=lambda se: se.submitted_at or datetime.min, reverse=True)
 
     # Only attempts whose results the instructor has published may reveal a score
     published_exams = [se for se in completed_exams if se.result_visible_to_student]
-    hidden_results_count = len(completed_exams) - len(published_exams)
+    hidden_results_count = sum(1 for se in completed_exams
+                               if not se.result_visible_to_student and not se.is_invalidated)
 
-    total_exams_taken = len(completed_exams)
     published_count = len(published_exams)
     avg_score = (sum(se.percentage or 0 for se in published_exams) / published_count) if published_count else 0
     passed_count = sum(1 for se in published_exams if se.passed)
@@ -59,23 +64,23 @@ def student_dashboard():
     # Only an attempt the student actually started is "in progress". Rows
     # pre-created at import are assignments, not attempts — resuming one would
     # skip start_exam and open the paper with the clock already run down.
-    in_progress = StudentExam.query.filter_by(
-        student_id=current_user.id, completed=False, status='started').first()
-    
-    return render_template('student/dashboard.html', 
-                         available_exams=available_exams, 
-                         my_exams=my_exams,
-                         completed_exams=completed_exams,
-                         published_exams=published_exams,
-                         visible_completed=published_exams,
-                         published_count=published_count,
-                         hidden_results_count=hidden_results_count,
-                         leaderboard_available=leaderboard_available,
-                         total_exams_taken=total_exams_taken,
-                         avg_score=avg_score,
-                         passed_count=passed_count,
-                         best_score=best_score,
-                         in_progress=in_progress)
+    in_progress = next((r for r in rows if r['state'] == 'in_progress'), None)
+
+    return render_template('student/dashboard.html',
+                           rows=rows,
+                           counts={s: sum(1 for r in rows if r['state'] == s)
+                                   for s in ('open', 'upcoming', 'in_progress')},
+                           completed_exams=completed_exams,
+                           published_count=published_count,
+                           hidden_results_count=hidden_results_count,
+                           leaderboard_available=leaderboard_available,
+                           total_exams_taken=len(completed_exams),
+                           avg_score=avg_score,
+                           passed_count=passed_count,
+                           best_score=best_score,
+                           trend=score_trend(published_exams),
+                           face_registered=face_service.enrollment_locked(current_user),
+                           in_progress=in_progress)
 
 @student_bp.route('/student/exam/<int:student_exam_id>/result')
 @login_required

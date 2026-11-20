@@ -41,6 +41,12 @@
     {{ nav_item('SQL console', 'terminal', 'admin.admin_sql_console') }}
     {% endif %}
   </nav>
+  {% elif current_user.role == 'student' %}
+  <nav class="nx-nav" aria-label="Student">
+    {{ nav_item('Dashboard', 'grid-1x2', 'student.student_dashboard', also=('student.student_exam_result',)) }}
+    {{ nav_item('My profile', 'person', 'student.student_profile', href=url_for('student.student_profile', student_id=current_user.id)) }}
+    {{ nav_item('Leaderboard', 'trophy', 'student.global_leaderboard') }}
+  </nav>
   {% endif %}
 
   <div class="nx-sidebar__foot">

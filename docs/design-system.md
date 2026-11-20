@@ -4,7 +4,7 @@ The rules and building blocks for every redesigned page. Pages move onto the
 system one at a time; until a page is redesigned it keeps `base.html` and the
 legacy stylesheets, untouched.
 
-**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit).
+**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard.
 
 ---
 
@@ -139,6 +139,19 @@ Import the macros with `{% import 'components/ui.html' as ui %}`.
 | `.nx-checklist` (`li.is-ok`) | Live requirements, e.g. password rules |
 | `.nx-face` (`__stage`, `__oval`, `__status`, `__dots`, `__actions`) | Camera capture for the face-liveness client |
 | `.nx-divider` | Labelled separator ("Or sign in with your face") |
+
+### Student dashboard
+
+| Component | Use |
+|---|---|
+| `.nx-select` | Native `<select>` styled like an input, with a chevron |
+| `.nx-trend` (`__row`, `__track`, `__fill--pass/--fail`, `__mark`) | One bar per result with a tick at the pass mark; set `--w` and `--at` |
+| `.nx-dl` | Label / value pairs ("Your details") |
+| `.nx-tone-neutral` | Grey stripe for informational attention items |
+
+Exam state for a student (open, upcoming, in progress, submitted, result out,
+invalidated, closed) comes from `backend/services/student_dashboard_service.py`.
+Offer only the action the server will accept for that state.
 
 **Confirmations.** Don't use `window.confirm()`. Confirm destructive actions
 in place (see the two-step delete in `js/pages/faculty_dashboard.js`).
