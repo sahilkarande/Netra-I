@@ -10,6 +10,7 @@ from backend.database import db
 from backend.models import User
 from backend.services import face_service
 from backend.services import liveness_service
+from backend.services import throttle
 from backend.utils.email_utils import send_otp_email
 
 auth_bp = Blueprint('auth', __name__)
@@ -37,7 +38,11 @@ def add_cache_control(response):
     return response
 
 def _find_user_by_identifier(login_input: str):
-    """Resolve a login box entry against username, email, PRN or roll ID."""
+    """Resolve a login box entry against username, email or PRN.
+
+    Roll numbers are deliberately not accepted: they repeat across batches, so
+    "12" could match several students and sign in the wrong one (audit P2-13).
+    """
     if not login_input:
         return None
     return User.query.filter(
@@ -45,7 +50,6 @@ def _find_user_by_identifier(login_input: str):
             User.username == login_input,
             User.email == login_input.lower(),
             User.prn_number == login_input,
-            User.roll_id == login_input,
         )
     ).first()
 
@@ -242,9 +246,12 @@ def login():
             
     return render_template('login.html')
 
-@auth_bp.route('/logout')
-@login_required
+@auth_bp.route('/logout', methods=['GET', 'POST'])
 def logout():
+    # POST only (with the CSRF token), so another site cannot sign a student
+    # out mid-exam with a link or an <img> (audit P2-6). A GET just goes home.
+    if request.method != 'POST':
+        return redirect(url_for('auth.index'))
     logout_user()
     session.clear()
     return redirect(url_for('auth.login'))
@@ -328,11 +335,28 @@ def change_password():
 
 @auth_bp.route('/password-hint', methods=['POST'])
 def password_hint():
-    """Return the hint a user saved for themselves (login helper)."""
+    """Return the hint a user saved for themselves (login helper).
+
+    Anyone who knows a PRN can ask, so lookups are rate-limited per account and
+    per machine (audit P2-8): enough for a student who forgot, too few to
+    harvest the hints of a whole batch.
+    """
     login_input = ((request.get_json(silent=True) or request.form).get('username') or '').strip()
 
     if not login_input:
         return jsonify({'success': False, 'message': 'Enter your username, email or PRN first.'}), 400
+
+    account_key = f'hint:{login_input.lower()}'
+    ip_key = f'hint-ip:{_client_ip()}'
+    for key, limit in ((account_key, HINT_PER_ACCOUNT), (ip_key, HINT_PER_IP)):
+        locked, minutes = throttle.is_locked_out(key, limit, LOOKUP_WINDOW_MINUTES)
+        if locked:
+            return jsonify({'success': False,
+                            'message': f'Too many hint requests. Try again in {minutes} minute(s), '
+                                       'or ask your faculty to reset your password.'}), 429
+    throttle.record(account_key, LOOKUP_WINDOW_MINUTES)
+    throttle.record(ip_key, LOOKUP_WINDOW_MINUTES)
+    current_app.logger.info('Password hint requested for %r from %s', login_input, _client_ip())
 
     user = _find_user_by_identifier(login_input)
 
@@ -346,9 +370,17 @@ def password_hint():
     }), 404
 
 
+# Lookup limits (per LOOKUP_WINDOW_MINUTES)
+LOOKUP_WINDOW_MINUTES = 10
+HINT_PER_ACCOUNT = 3
+HINT_PER_IP = 20
+FACE_AVAILABLE_PER_IP = 60
+
+
 def _client_ip():
-    return (request.headers.get('X-Forwarded-For', request.remote_addr or '')
-            .split(',')[0].strip())
+    # remote_addr only: X-Forwarded-For is whatever the client chooses to send.
+    # Behind a reverse proxy, set TRUST_PROXY=1 and ProxyFix fills remote_addr.
+    return request.remote_addr or ''
 
 
 def _log_face(identifier, stage, user_id=None, success=False, distance=None,
@@ -548,6 +580,13 @@ def face_available():
     login_input = ((request.get_json(silent=True) or request.form).get('username') or '').strip()
     if not login_input:
         return jsonify({'success': False, 'available': False}), 400
+
+    # Rate-limited per machine so it can't be used to sweep a PRN range for
+    # which accounts exist (audit P2-8). The login page asks once per edit.
+    ip_key = f'face-avail-ip:{_client_ip()}'
+    if throttle.is_locked_out(ip_key, FACE_AVAILABLE_PER_IP, LOOKUP_WINDOW_MINUTES)[0]:
+        return jsonify({'success': False, 'available': False}), 429
+    throttle.record(ip_key, LOOKUP_WINDOW_MINUTES)
 
     user = _find_user_by_identifier(login_input)
     available = bool(

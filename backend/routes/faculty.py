@@ -1303,8 +1303,7 @@ def faculty_reset_student_face(student_id):
         }), 400
 
     from backend.services import face_service
-    ip = (request.headers.get('X-Forwarded-For', request.remote_addr or '')
-          .split(',')[0].strip())
+    ip = request.remote_addr or ''
 
     ok, message = face_service.reset_enrollment(student, current_user,
                                                 reason=reason, ip_address=ip)

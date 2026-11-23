@@ -555,6 +555,22 @@ class FaceAuditLog(db.Model):
         return f"<FaceAuditLog {self.action} subject={self.subject_user_id}>"
 
 
+class LoginThrottle(db.Model):
+    """Failure counters for sign-in, face sign-in, exam keys and lookups.
+
+    Kept in the database so a server restart does not wipe a lockout
+    (services/throttle.py).
+    """
+    __tablename__ = 'login_throttle'
+
+    key = db.Column(db.String(200), primary_key=True)    # e.g. "pw:stud1", "hint-ip:10.0.0.7"
+    count = db.Column(db.Integer, nullable=False, default=0)
+    window_start = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    def __repr__(self):
+        return f"<LoginThrottle {self.key} {self.count}>"
+
+
 # ===========================
 # 🌀 SHUFFLE ASSIGNMENT HELPER
 # ===========================

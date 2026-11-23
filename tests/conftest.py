@@ -41,7 +41,6 @@ def clean_db(app):
     with app.app_context():
         db.drop_all()
         db.create_all()
-    face_service._failed_attempts.clear()
     attempt_device._last_seen.clear()
     yield
     with app.app_context():

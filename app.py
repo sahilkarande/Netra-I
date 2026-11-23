@@ -245,6 +245,13 @@ def create_app():
     # ──────────────────────────────────────────────────────────────
     # INITIALIZE EXTENSIONS
     # ──────────────────────────────────────────────────────────────
+    # Behind a reverse proxy (nginx etc.) the client address arrives in
+    # X-Forwarded-For. Trust that header only when told to: on a LAN with no
+    # proxy any browser could set it and pose as another machine.
+    if os.getenv('TRUST_PROXY', '').lower() in ('1', 'true', 'yes'):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
@@ -357,6 +364,8 @@ def create_app():
         ensure_schema_columns()
         ensure_schema_indexes()
         convert_exam_times_to_utc()
+        from backend.services import throttle
+        throttle.purge_expired()        # sign-in counters whose window ended a day ago
         print("✅ Database initialized!")
 
     # ──────────────────────────────────────────────────────────────
