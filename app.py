@@ -8,7 +8,7 @@ import eventlet
 eventlet.monkey_patch()
 
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, g
 from flask_login import login_required, current_user, logout_user
 import os
 import sys
@@ -198,22 +198,16 @@ def load_secret_key(instance_path):
 STAFF_ROLES = ('faculty', 'admin')
 
 
-def _configure_logging():
-    """INFO-level logs to stderr unless the host already configured logging."""
-    import logging
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s %(levelname)s %(name)s: %(message)s')
-
-
 def create_app():
     """Application factory"""
-    _configure_logging()
     app = Flask(
         __name__,
         template_folder='frontend/templates',
         static_folder='frontend/static'
     )
+    # First, so every later before_request runs with a request reference set
+    from backend import logging_setup
+    logging_setup.configure(app)
     
     # Configuration
     app.config['SECRET_KEY'] = load_secret_key(app.instance_path)
@@ -328,12 +322,15 @@ def create_app():
     def internal_error(err):
         db.session.rollback()
         app.logger.exception('Unhandled error on %s %s', request.method, request.path)
+        ref = g.get('request_id') or '-'
         if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
-            return jsonify({'success': False, 'error': 'Something went wrong. Please try again.'}), 500
+            return jsonify({'success': False, 'ref': ref,
+                            'error': f'Something went wrong (reference {ref}). Please try again.'}), 500
         return ('<!doctype html><title>Something went wrong</title>'
                 '<div style="font-family:sans-serif;max-width:480px;margin:15vh auto;text-align:center">'
                 '<h2>Something went wrong</h2><p>The error has been logged. '
-                '<a href="/">Return to your dashboard</a>.</p></div>'), 500
+                f'If it keeps happening, give your administrator this reference: <b>{ref}</b>.</p>'
+                '<p><a href="/">Return to your dashboard</a>.</p></div>'), 500
 
     # ──────────────────────────────────────────────────────────────
     # LOGIN MANAGER HELPERS

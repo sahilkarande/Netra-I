@@ -12,6 +12,9 @@ from backend.services import face_service
 from backend.services import liveness_service
 from backend.services import throttle
 from backend.utils.email_utils import send_otp_email
+import logging
+
+log = logging.getLogger(__name__)
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -406,7 +409,7 @@ def _log_face(identifier, stage, user_id=None, success=False, distance=None,
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"Could not log face attempt: {e}")
+        log.exception('Could not log face attempt')
 
 
 def _match_sequence(user, detail):
@@ -762,7 +765,7 @@ def _flag_exam_identity(student_exam_id, violation_type, message):
         log_proctor_event(attempt.id, violation_type, 'high', message)
     except Exception as e:
         db.session.rollback()
-        print(f'Could not flag exam identity issue: {e}')
+        log.exception('Could not flag exam identity issue')
 
 
 @auth_bp.route('/face/exam-check', methods=['POST'])

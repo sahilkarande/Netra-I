@@ -13,6 +13,7 @@ sys.path.insert(0, ROOT)
 _DB_DIR = tempfile.mkdtemp(prefix='netra_test_')
 os.environ['DATABASE_URL'] = 'sqlite:///' + os.path.join(_DB_DIR, 'test.db')
 os.environ['SECRET_KEY'] = 'test-secret-key'
+os.environ['LOG_DIR'] = os.path.join(_DB_DIR, 'logs')
 
 from app import create_app  # noqa: E402
 from backend.database import db  # noqa: E402

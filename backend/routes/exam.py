@@ -22,6 +22,9 @@ from backend.services.exam_service import (
     calculate_student_score, assign_shuffle, ANSWER_GRACE_SEC,
     finalize_overdue_attempts, remaining_seconds,
 )
+import logging
+
+log = logging.getLogger(__name__)
 
 exam_bp = Blueprint('exam', __name__)
 
@@ -510,7 +513,7 @@ def handle_calibration_binary(data):
         else:
             emit('calibration_result', {'success': False, 'message': 'Face error'})
     except Exception as e:
-        print(f"Calibration error: {e}")
+        log.exception('Calibration failed')
 
 @socketio.on('frameBinary')
 def handle_frame_binary(data):
@@ -559,7 +562,7 @@ def handle_frame_binary(data):
             emit('proctor_result', {'success': True})
 
     except Exception as e:
-        print(f"Frame error: {e}")
+        log.exception('Frame processing failed')
 
 @socketio.on('heartbeat')
 def handle_heartbeat(data):

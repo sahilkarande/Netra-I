@@ -4,6 +4,9 @@ from .admin import admin_bp
 from .faculty import faculty_bp
 from .student import student_bp
 from .exam import exam_bp
+import logging
+
+log = logging.getLogger(__name__)
 
 def register_blueprints(app: Flask):
     """Register all blueprints with the Flask application"""
@@ -13,4 +16,4 @@ def register_blueprints(app: Flask):
     app.register_blueprint(student_bp)
     app.register_blueprint(exam_bp)
     
-    print("✅ All blueprints registered successfully!")
+    log.info("All blueprints registered successfully!")

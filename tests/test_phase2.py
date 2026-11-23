@@ -235,3 +235,49 @@ def test_p2_13_roll_number_does_not_sign_in(app, seed):
     resp = client.post('/login', data={'username': '12', 'password': 'Passw0rd!'})
     assert resp.status_code == 200          # form re-shown, not signed in
     assert client.post('/login', data={'username': '250840125001', 'password': 'Passw0rd!'}).status_code == 302
+
+
+# ── P2-5: logging ───────────────────────────────────────────────────────────
+
+def test_p2_5_every_response_carries_a_request_id(app, seed):
+    resp = app.test_client().get('/login')
+    rid = resp.headers.get('X-Request-ID')
+    assert rid and len(rid) == 8
+
+
+def test_p2_5_log_file_written_with_request_reference(app, seed):
+    import logging
+    from backend import logging_setup
+    with app.test_request_context('/x'):
+        from flask import g
+        g.request_id = 'feedbeef'
+        logging.getLogger('netra.test').warning('hello from the test')
+    for h in logging.getLogger().handlers:
+        h.flush()
+    text = open(logging_setup.log_file_path(app), encoding='utf-8').read()
+    assert '[feedbeef] netra.test: hello from the test' in text
+
+
+def test_p2_5_unhandled_error_shows_reference(app, seed, monkeypatch):
+    def _boom():
+        raise RuntimeError('boom')
+    monkeypatch.setitem(app.view_functions, 'auth.login', _boom)
+    monkeypatch.setitem(app.config, 'PROPAGATE_EXCEPTIONS', False)
+    resp = app.test_client().get('/login')
+    assert resp.status_code == 500
+    ref = resp.headers.get('X-Request-ID')
+    assert ref and ref.encode() in resp.data
+    assert b'boom' not in resp.data           # no internals shown
+
+
+def test_p2_5_no_print_calls_left_in_backend():
+    import pathlib, re
+    root = pathlib.Path(__file__).resolve().parent.parent / 'backend'
+    offenders = []
+    for path in root.rglob('*.py'):
+        if path.name == 'email_utils.py':
+            continue        # prints the OTP to the console on purpose when SMTP is off
+        for n, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+            if re.match(r'\s*print\(', line):
+                offenders.append(f'{path.name}:{n}')
+    assert offenders == []

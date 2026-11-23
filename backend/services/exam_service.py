@@ -1,8 +1,11 @@
+import logging
 import random
 import json
 from datetime import datetime
 from backend.database import db
 from backend.models import StudentExam, Question, StudentAnswer
+
+log = logging.getLogger(__name__)
 
 def calculate_student_score(student_exam_id):
     """Calculate and update the score for a completed student exam"""
@@ -80,7 +83,7 @@ def calculate_student_score(student_exam_id):
         }
         
     except Exception as e:
-        print(f"❌ Error calculating score: {e}")
+        log.exception('Score calculation failed')
         db.session.rollback()
         return None
 

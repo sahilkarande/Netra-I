@@ -14,12 +14,15 @@ from enum import Enum
 
 import cv2
 import numpy as np
+import logging
+
+log = logging.getLogger(__name__)
 
 try:
     from openvino.runtime import Core
 except ImportError:
     Core = None
-    print("⚠️ OpenVINO not available — running in fallback mode")
+    log.warning("OpenVINO not available — running in fallback mode")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -153,8 +156,8 @@ class OpenVINOProctor:
             'sensitivity': 'medium',      # Default to balanced detection
         }
         self.feature_flags = {**defaults, **(feature_flags or {})}
-        print(f"🚀 [OpenVINO Proctor v{PROCTOR_ENGINE_VERSION}] Initialized")
-        print(f"🔧 [OpenVINO] Feature flags: camera={self.feature_flags.get('camera_enabled')}, "
+        log.debug(f"[OpenVINO Proctor v{PROCTOR_ENGINE_VERSION}] Initialized")
+        log.debug(f"[OpenVINO] Feature flags: camera={self.feature_flags.get('camera_enabled')}, "
               f"head_pose={self.feature_flags.get('head_pose')}, "
               f"object_det={self.feature_flags.get('object_detection')}, "
               f"voice={self.feature_flags.get('voice_detection')}")
@@ -214,10 +217,10 @@ class OpenVINOProctor:
         # Apply max warnings from faculty setting
         self.state.max_warnings = int(self.feature_flags.get('max_warnings', 25))
 
-        print(f"🎛️ [Proctor] Sensitivity={sensitivity}")
-        print(f"   yaw={self.yaw_threshold}° pitch={self.pitch_threshold}° face_conf={self.face_conf}")
-        print(f"   no_face_timeout={self.no_face_timeout}s cooldown={self.warning_cooldown}s deviation_min={self.deviation_min_duration}s")
-        print(f"   max_warnings={self.state.max_warnings} obj_conf={self.object_conf_threshold}")
+        log.debug(f"[Proctor] Sensitivity={sensitivity}")
+        log.debug(f"   yaw={self.yaw_threshold}° pitch={self.pitch_threshold}° face_conf={self.face_conf}")
+        log.debug(f"   no_face_timeout={self.no_face_timeout}s cooldown={self.warning_cooldown}s deviation_min={self.deviation_min_duration}s")
+        log.debug(f"   max_warnings={self.state.max_warnings} obj_conf={self.object_conf_threshold}")
 
         # Evidence capture directory
         os.makedirs(self.state.evidence_dir, exist_ok=True)
@@ -251,11 +254,7 @@ class OpenVINOProctor:
             )
 
         if self.degraded:
-            print("=" * 70)
-            print(f"⚠️  PROCTORING DEGRADED  (model_dir: {model_dir})")
-            for item in self.degraded:
-                print(f"   • {item}")
-            print("=" * 70)
+            log.warning("PROCTORING DEGRADED (model_dir: %s): %s", model_dir, '; '.join(self.degraded))
 
     def _load_face_detection_model(self, model_dir: str, device: str):
         self.fd_compiled = None
@@ -269,7 +268,7 @@ class OpenVINOProctor:
                 def _build():
                     compiled = self.core.compile_model(
                         self.core.read_model(fd_model_path), device)
-                    print("✅ Face detection model compiled (shared)")
+                    log.info("Face detection model compiled (shared)")
                     return compiled
 
                 self.fd_compiled = _cached(f"fd::{fd_model_path}::{device}", _build)
@@ -277,9 +276,9 @@ class OpenVINOProctor:
                 self.fd_output = self.fd_compiled.output(0)
                 _, _, self.fd_h, self.fd_w = self.fd_input.shape
             else:
-                print("⚠️ Face detection model not found — using Haar cascade fallback")
+                log.warning("Face detection model not found — using Haar cascade fallback")
         except Exception as e:
-            print(f"⚠️ Face detection model load failed: {e}")
+            log.warning(f"Face detection model load failed: {e}")
 
         # Haar cascade fallback
         self._face_cascade = None
@@ -291,7 +290,7 @@ class OpenVINOProctor:
                 if self._face_cascade.empty():
                     self._face_cascade = None
                 else:
-                    print("✅ Haar cascade fallback loaded")
+                    log.info("Haar cascade fallback loaded")
             except Exception:
                 pass
 
@@ -306,14 +305,14 @@ class OpenVINOProctor:
                 def _build():
                     compiled = self.core.compile_model(
                         self.core.read_model(hp_model_path), device)
-                    print("✅ Head pose model compiled (shared)")
+                    log.info("Head pose model compiled (shared)")
                     return compiled
 
                 self.hp_compiled = _cached(f"hp::{hp_model_path}::{device}", _build)
                 self.hp_input = self.hp_compiled.input(0)
                 _, _, self.hp_h, self.hp_w = self.hp_input.shape
         except Exception as e:
-            print(f"⚠️ Head pose model load failed: {e}")
+            log.warning(f"Head pose model load failed: {e}")
 
     def _load_object_detection_model(self, model_dir: str, device: str):
         self.obj_net = None
@@ -328,7 +327,7 @@ class OpenVINOProctor:
                 self.obj_net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
                 self.obj_model_type = "yolo"
                 self._yolo_output_layers = self.obj_net.getUnconnectedOutLayersNames()
-                print("✅ YOLO object detection model loaded")
+                log.info("YOLO object detection model loaded")
                 return
 
             ssd_proto = f"{model_dir}/MobileNetSSD_deploy.prototxt"
@@ -336,12 +335,12 @@ class OpenVINOProctor:
             if os.path.exists(ssd_proto) and os.path.exists(ssd_model):
                 self.obj_net = cv2.dnn.readNetFromCaffe(ssd_proto, ssd_model)
                 self.obj_model_type = "ssd"
-                print("✅ MobileNet-SSD object detection model loaded")
+                log.info("MobileNet-SSD object detection model loaded")
                 return
 
-            print("⚠️ No object detection model found — object detection disabled")
+            log.warning("No object detection model found — object detection disabled")
         except Exception as e:
-            print(f"⚠️ Object detection model load failed: {e}")
+            log.warning(f"Object detection model load failed: {e}")
 
     # ═══════════════════════════════════════════════════════════════════
     # DETECTION HELPERS
@@ -375,10 +374,10 @@ class OpenVINOProctor:
                         continue
                     boxes.append((xmin, ymin, xmax, ymax))
                 if self.state.frame_count % 20 == 0:
-                    print(f"👁️ [FaceDet] {len(boxes)} face(s) found (conf>={conf_thresh})")
+                    log.debug(f"[FaceDet] {len(boxes)} face(s) found (conf>={conf_thresh})")
                 return boxes
             except Exception as e:
-                print(f"⚠️ OpenVINO face detection error: {e}")
+                log.warning(f"OpenVINO face detection error: {e}")
 
         # Haar cascade fallback — tuned for multiple faces
         if self._face_cascade is not None:
@@ -391,10 +390,10 @@ class OpenVINOProctor:
                 )
                 boxes = [(x, y, x + fw, y + fh) for (x, y, fw, fh) in faces]
                 if self.state.frame_count % 20 == 0:
-                    print(f"👁️ [Haar] {len(boxes)} face(s) found")
+                    log.debug(f"[Haar] {len(boxes)} face(s) found")
                 return boxes
             except Exception as e:
-                print(f"⚠️ Haar cascade error: {e}")
+                log.warning(f"Haar cascade error: {e}")
 
         return []
 
@@ -439,7 +438,7 @@ class OpenVINOProctor:
             by, bp = self.state.baseline_yaw, self.state.baseline_pitch
             base = (f"y={by:.1f} p={bp:.1f}" if by is not None and bp is not None
                     else "uncalibrated")
-            print(f"🔄 [HeadPose] yaw={yaw:.1f}° pitch={pitch:.1f}° roll={roll:.1f}° "
+            log.debug(f"[HeadPose] yaw={yaw:.1f}° pitch={pitch:.1f}° roll={roll:.1f}° "
                   f"(baseline: {base})")
 
         return yaw, pitch, roll
@@ -479,7 +478,7 @@ class OpenVINOProctor:
                             continue
                         if class_id in YOLO_PROHIBITED:
                             label = YOLO_PROHIBITED[class_id]
-                            print(f"📱 [ObjDet] {label} detected! conf={confidence:.2f} (thresh={conf_thresh})")
+                            log.debug(f"[ObjDet] {label} detected! conf={confidence:.2f} (thresh={conf_thresh})")
                             detected.append({
                                 "label": label,
                                 "confidence": confidence,
@@ -500,14 +499,14 @@ class OpenVINOProctor:
                     class_id = int(detections[0, 0, i, 1])
                     if class_id in SSD_PROHIBITED:
                         label = SSD_PROHIBITED[class_id]
-                        print(f"📱 [ObjDet-SSD] {label} detected! conf={conf:.2f}")
+                        log.debug(f"[ObjDet-SSD] {label} detected! conf={conf:.2f}")
                         detected.append({"label": label, "confidence": conf})
 
             if self.state.frame_count % 20 == 0 and not detected:
-                print(f"📱 [ObjDet] No prohibited objects found (thresh={conf_thresh}, model={self.obj_model_type})")
+                log.debug(f"[ObjDet] No prohibited objects found (thresh={conf_thresh}, model={self.obj_model_type})")
 
         except Exception as e:
-            print(f"⚠️ Object detection error: {e}")
+            log.warning(f"Object detection error: {e}")
 
         return detected
 
@@ -535,10 +534,10 @@ class OpenVINOProctor:
             )
 
             cv2.imwrite(filepath, annotated)
-            print(f"📸 Evidence saved: {filepath}")
+            log.info(f"Evidence saved: {filepath}")
             return filepath
         except Exception as e:
-            print(f"⚠️ Evidence capture failed: {e}")
+            log.warning(f"Evidence capture failed: {e}")
             return None
 
     # ═══════════════════════════════════════════════════════════════════
@@ -637,10 +636,10 @@ class OpenVINOProctor:
                     pitch_list.append(pitch)
                     roll_list.append(roll)
                 except Exception as e:
-                    print(f"⚠️ [Calibration] Head pose failed on frame: {e}")
+                    log.warning(f"[Calibration] Head pose failed on frame: {e}")
                     # Still count as good frame for face detection
             except Exception as e:
-                print(f"⚠️ [Calibration] Frame processing error: {e}")
+                log.warning(f"[Calibration] Frame processing error: {e}")
                 continue
 
         # Set head pose baseline (use measured values or defaults)
@@ -648,13 +647,13 @@ class OpenVINOProctor:
             self.state.baseline_yaw = float(np.mean(yaw_list))
             self.state.baseline_pitch = float(np.mean(pitch_list))
             self.state.baseline_roll = float(np.mean(roll_list))
-            print(f"✅ [Calibration] Head pose baseline: yaw={self.state.baseline_yaw:.1f} pitch={self.state.baseline_pitch:.1f}")
+            log.info(f"[Calibration] Head pose baseline: yaw={self.state.baseline_yaw:.1f} pitch={self.state.baseline_pitch:.1f}")
         else:
             # Default baseline — assume looking straight at camera
             self.state.baseline_yaw = 0.0
             self.state.baseline_pitch = 0.0
             self.state.baseline_roll = 0.0
-            print(f"⚠️ [Calibration] Using default head pose baseline (0,0,0)")
+            log.warning(f"[Calibration] Using default head pose baseline (0,0,0)")
 
         # Set face position baseline
         if centers_x:
@@ -677,7 +676,7 @@ class OpenVINOProctor:
         self.state.frame_count = 0
 
         msg = f"Calibration successful (faces={len(centers_x)}, headpose={'yes' if yaw_list else 'default'})"
-        print(f"✅ [Calibration] {msg}")
+        log.info(f"[Calibration] {msg}")
         return True, msg
 
     # ═══════════════════════════════════════════════════════════════════
@@ -702,7 +701,7 @@ class OpenVINOProctor:
             self.state.baseline_yaw = 0.0
             self.state.baseline_pitch = 0.0
             self.state.baseline_roll = 0.0
-            print("⚠️ [check_frame] No calibration — using default baseline (0,0,0)")
+            log.warning("[check_frame] No calibration — using default baseline (0,0,0)")
 
         # Collect all violations found in this frame
         violations_found = []
@@ -791,7 +790,7 @@ class OpenVINOProctor:
                         self.state.baseline_pitch = (1 - alpha) * self.state.baseline_pitch + alpha * pitch
                         self.state.baseline_roll = (1 - alpha) * self.state.baseline_roll + alpha * roll
                 except Exception as e:
-                    print(f"⚠️ Head pose estimation error: {e}")
+                    log.warning(f"Head pose estimation error: {e}")
 
             # ── Process violations: issue the FIRST one that passes its per-type cooldown ──
             if violations_found:
@@ -812,7 +811,7 @@ class OpenVINOProctor:
             }
 
         except Exception as e:
-            print(f"⚠️ check_frame error: {e}")
+            log.warning(f"check_frame error: {e}")
             return "ERROR", {"message": f"Processing error: {str(e)}"}
 
     # ═══════════════════════════════════════════════════════════════════

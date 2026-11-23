@@ -38,6 +38,9 @@ import numpy as np
 from backend.database import db
 from backend.models import FaceAuditLog, FaceEnrollment, FaceLoginAttempt, User
 from backend.services import liveness_service as LV
+import logging
+
+log = logging.getLogger(__name__)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 DESCRIPTOR_DIM = 128
@@ -183,7 +186,7 @@ def log_attempt(identifier, user_id=None, success=False, distance=None,
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"⚠️ Could not log face login attempt: {e}")
+        log.exception('Could not log face login attempt')
 
 
 # ── Frame decoding ──────────────────────────────────────────────────────────
@@ -365,7 +368,7 @@ def audit(subject_id, action, actor=None, reason=None, sample_count=None,
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"Could not write face audit log: {e}")
+        log.exception('Could not write face audit log')
 
 
 def enrollment_locked(user: User) -> bool:
