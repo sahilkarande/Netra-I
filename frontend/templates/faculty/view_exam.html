@@ -286,10 +286,15 @@
           </label>
         </div>
         <div class="nx-divider-line" role="separator"></div>
-        <button type="button" class="nx-btn nx-btn--secondary nx-btn--sm nx-btn--block" data-publish data-nx-confirm="Publish and delete evidence?">
-          <i class="bi bi-shield-check" aria-hidden="true"></i><span>Publish results and clear evidence</span>
+        {% set purge_on = evidence_delete_after(exam) %}
+        {% if purge_on %}
+        <p class="nx-help">Results published. Proctoring images are deleted on <b>{{ purge_on|localtime('%d %b %Y') }}</b>.</p>
+        {% else %}
+        <button type="button" class="nx-btn nx-btn--secondary nx-btn--sm nx-btn--block" data-publish data-nx-confirm="Publish results?">
+          <i class="bi bi-shield-check" aria-hidden="true"></i><span>Publish results</span>
         </button>
-        <p class="nx-help nx-mt-2">Turns results on and permanently deletes this exam's stored proctoring images. Review flagged attempts first.</p>
+        <p class="nx-help nx-mt-2">Turns results on for students. Review flagged attempts first. Proctoring images are kept for {{ evidence_retention_days() }} days after publishing, then deleted automatically.</p>
+        {% endif %}
       </div>
     </section>
 

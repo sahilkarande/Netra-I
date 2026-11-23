@@ -21,7 +21,7 @@
 
 {% macro delete_form(exam, size='sm') -%}
   <form method="POST" action="{{ url_for('faculty.delete_exam', exam_id=exam.id) }}" class="nx-confirm" data-confirm-delete>
-    <span class="nx-confirm__ask" hidden>Delete permanently?</span>
+    <span class="nx-confirm__ask" hidden>Delete exam?</span>
     <button type="submit" class="nx-btn nx-btn--ghost nx-btn--icon nx-btn--{{ size }}" aria-label="Delete {{ exam.title }}" title="Delete exam">
       <i class="bi bi-trash3" aria-hidden="true"></i>
     </button>

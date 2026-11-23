@@ -350,9 +350,11 @@ def create_app():
     # Template filters: times in the exam hall's zone, safe question text.
     # Registered after the config above: touching app.jinja_env earlier would
     # create it before TEMPLATES_AUTO_RELOAD is set.
-    from backend.services import time_service, text_format
+    from backend.services import time_service, text_format, retention
     time_service.init_app(app)
     text_format.init_app(app)
+    app.jinja_env.globals.update(evidence_retention_days=retention.evidence_days,
+                                 evidence_delete_after=retention.evidence_delete_after)
 
     with app.app_context():
         from backend.routes import register_blueprints
@@ -542,6 +544,8 @@ if __name__ == '__main__':
     from backend.socket_io import socketio
     from backend.services.exam_service import start_attempt_sweeper
     start_attempt_sweeper(app, socketio)
+    from backend.services.retention import start_sweeper as start_retention_sweeper
+    start_retention_sweeper(app, socketio)
 
     run_kwargs = {
         "debug": debug,

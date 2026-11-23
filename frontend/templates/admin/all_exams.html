@@ -57,6 +57,37 @@
   {% call ui.empty_state('No exams yet', 'Exams appear here once faculty create them.', icon='journal') %}{% endcall %}
   {% endif %}
 </section>
+
+{% if deleted_exams %}
+<section class="nx-panel nx-enter" style="--i: 2" aria-labelledby="deleted-title" id="deletedExams">
+  <div class="nx-panel__head">
+    <div>
+      <h2 class="nx-panel__title" id="deleted-title">Recently deleted</h2>
+      <span class="nx-panel__sub">Restorable for {{ archive_days }} days, with questions, attempts, answers and flags</span>
+    </div>
+  </div>
+  <div class="nx-table-wrap">
+    <table class="nx-table nx-table--stack">
+      <thead><tr><th scope="col">Exam</th><th scope="col">Deleted</th><th scope="col" class="is-num">Questions</th><th scope="col" class="is-num">Attempts</th><th scope="col" class="is-actions"><span class="nx-visually-hidden">Actions</span></th></tr></thead>
+      <tbody>
+        {% for d in deleted_exams %}
+        <tr>
+          <td><span class="nx-table__primary">{{ d.title }}</span><span class="nx-table__secondary">Gone for good on {{ d.expires_at|localtime('%d %b %Y') }}</span></td>
+          <td data-label="Deleted">{{ d.deleted_at|localtime('%d %b %Y, %H:%M') }}<span class="nx-table__secondary">{{ ('by ' ~ d.deleted_by_name) if d.deleted_by_name else '' }}</span></td>
+          <td class="is-num nx-num" data-label="Questions">{{ d.questions }}</td>
+          <td class="is-num nx-num" data-label="Attempts">{{ d.attempts }}</td>
+          <td class="is-actions"><div class="nx-row-actions">
+            <form method="POST" action="{{ url_for('admin.restore_deleted_exam', name=d.name) }}" class="nx-inline-form">
+              <button type="submit" class="nx-btn nx-btn--secondary nx-btn--sm" data-nx-confirm="Restore it?"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span>Restore</span></button>
+            </form>
+          </div></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

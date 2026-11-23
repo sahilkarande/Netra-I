@@ -501,10 +501,22 @@ def delete_exam(exam_id):
     if not _faculty_can_access_exam(exam):
         flash('Unauthorized access', 'error')
         return redirect(url_for('faculty.faculty_dashboard'))
-        
+
+    # Archive first (audit P2-10): if the archive can't be written, nothing is deleted
+    from backend.services import retention
+    try:
+        retention.archive_exam(exam, current_user)
+    except OSError:
+        current_app.logger.exception('Could not archive exam %s; not deleting it', exam.id)
+        flash('The exam could not be deleted because its backup copy could not be saved. '
+              'Please tell your administrator.', 'error')
+        return redirect(url_for('faculty.faculty_dashboard'))
+
+    title = exam.title
     db.session.delete(exam)
     db.session.commit()
-    flash('Exam deleted successfully', 'success')
+    flash(f'"{title}" deleted. An administrator can restore it within '
+          f'{retention.archive_days()} days.', 'success')
     return redirect(url_for('faculty.faculty_dashboard'))
 
 @faculty_bp.route('/faculty/exam/<int:exam_id>/upload', methods=['GET', 'POST'])
@@ -692,45 +704,23 @@ def faculty_publish_results(exam_id):
     if not _faculty_can_access_exam(exam):
         return jsonify({"error": "Not your exam"}), 403
 
-    student_exams = StudentExam.query.filter_by(exam_id=exam_id).all()
-    deleted_images = 0
-    deleted_dirs = set()
-
-    for se in student_exams:
-        violations = ExamViolation.query.filter_by(student_exam_id=se.id).all()
-        for v in violations:
-            if hasattr(v, 'evidence_path') and v.evidence_path:
-                try:
-                    if os.path.exists(v.evidence_path):
-                        os.remove(v.evidence_path)
-                        deleted_images += 1
-                    parent = os.path.dirname(v.evidence_path)
-                    if parent: deleted_dirs.add(parent)
-                except Exception:
-                    pass
-                v.evidence_path = None
-
-        if se.id in PROCTOR_INSTANCES:
-            try: del PROCTOR_INSTANCES[se.id]
-            except: pass
-        _heartbeat_registry.pop(se.id, None)
-        _last_frame_processed.pop(se.id, None)
-
-    for d in deleted_dirs:
-        try:
-            if os.path.isdir(d) and not os.listdir(d):
-                os.rmdir(d)
-                parent = os.path.dirname(d)
-                if os.path.isdir(parent) and not os.listdir(parent): os.rmdir(parent)
-        except:
-            pass
+    # Evidence is no longer deleted here (audit P2-10): it stays for
+    # EVIDENCE_RETENTION_DAYS so a result can still be disputed, then the
+    # retention sweep removes it. Only the in-memory proctoring state goes.
+    for (se_id,) in db.session.query(StudentExam.id).filter_by(exam_id=exam_id):
+        PROCTOR_INSTANCES.pop(se_id, None)
+        _heartbeat_registry.pop(se_id, None)
+        _last_frame_processed.pop(se_id, None)
 
     exam.results_published = True
     exam.results_published_at = datetime.utcnow()
     exam.results_published_by = current_user.id
     db.session.commit()
 
-    return jsonify({"success": True, "message": f"Results published! {deleted_images} images cleaned."})
+    from backend.services import retention
+    days = retention.evidence_days()
+    return jsonify({"success": True,
+                    "message": f"Results published. Proctoring images are kept for {days} days, then deleted."})
 
 def _credentials_dir():
     path = os.path.join(current_app.instance_path, 'credentials')
@@ -1723,8 +1713,6 @@ def faculty_extend_exam_time(exam_id):
 # Proctoring review
 # ═══════════════════════════════════════════════════════════════════════
 
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-_EVIDENCE_ROOT = os.path.join(_PROJECT_ROOT, 'frontend', 'static', 'violations')
 
 
 def _staff_attempt_or_none(student_exam_id):
@@ -1740,16 +1728,8 @@ def _staff_attempt_or_none(student_exam_id):
 def _evidence_file(violation):
     """Absolute path of a violation's evidence image, only if it is inside the
     evidence directory — the stored path is never trusted to point elsewhere."""
-    if not violation or not violation.evidence_path:
-        return None
-    path = violation.evidence_path
-    if not os.path.isabs(path):
-        path = os.path.join(_PROJECT_ROOT, path)
-    path = os.path.realpath(path)
-    root = os.path.realpath(_EVIDENCE_ROOT)
-    if os.path.commonpath([path, root]) != root or not os.path.isfile(path):
-        return None
-    return path
+    from backend.services.retention import evidence_file
+    return evidence_file(violation.evidence_path) if violation else None
 
 
 @faculty_bp.route('/api/proctor/status/<int:student_exam_id>')

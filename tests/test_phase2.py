@@ -281,3 +281,132 @@ def test_p2_5_no_print_calls_left_in_backend():
             if re.match(r'\s*print\(', line):
                 offenders.append(f'{path.name}:{n}')
     assert offenders == []
+
+
+# ── P2-10: evidence retention and restorable exam deletion ──────────────────
+
+@pytest.fixture
+def evidence(app, seed, tmp_path, monkeypatch):
+    """A flagged moment with an evidence image on stud1's submitted attempt."""
+    from backend.services import retention
+    root = tmp_path / 'violations'
+    (root / 'attempt').mkdir(parents=True)
+    monkeypatch.setattr(retention, 'EVIDENCE_ROOT', str(root))
+    image = root / 'attempt' / 'flag.jpg'
+    image.write_bytes(b'\xff\xd8 fake jpeg')
+    with app.app_context():
+        v = ExamViolation(student_exam_id=seed['attempt'], violation_type='phone', severity='high',
+                          message='Phone in view', evidence_path=str(image))
+        db.session.add(v)
+        db.session.commit()
+        vid = v.id
+    return dict(seed, image=image, violation=vid)
+
+
+def test_p2_10_publishing_keeps_the_evidence(app, evidence, as_user):
+    resp = as_user('faca').post(f"/api/faculty/publish-results/{evidence['exam']}")
+    assert resp.get_json()['success']
+    assert '30 days' in resp.get_json()['message']
+    assert evidence['image'].exists()
+    with app.app_context():
+        assert db.session.get(ExamViolation, evidence['violation']).evidence_path
+
+
+def test_p2_10_sweep_deletes_evidence_after_retention(app, evidence):
+    from datetime import datetime, timedelta
+    from backend.models import Exam
+    from backend.services import retention
+    with app.app_context():
+        exam = db.session.get(Exam, evidence['exam'])
+        exam.results_published, exam.results_published_at = True, datetime.utcnow() - timedelta(days=29)
+        db.session.commit()
+        assert retention.purge_expired()['evidence'] == 0
+        assert evidence['image'].exists()
+
+        exam.results_published_at = datetime.utcnow() - timedelta(days=31)
+        db.session.commit()
+        assert retention.purge_expired()['evidence'] == 1
+        assert not evidence['image'].exists()
+        assert not evidence['image'].parent.exists()          # empty folder tidied
+        assert db.session.get(ExamViolation, evidence['violation']).evidence_path is None
+
+
+def test_p2_10_sweep_never_deletes_outside_the_evidence_folder(app, evidence, tmp_path):
+    from datetime import datetime, timedelta
+    from backend.models import Exam
+    from backend.services import retention
+    outside = tmp_path / 'precious.txt'
+    outside.write_text('keep me')
+    with app.app_context():
+        db.session.get(ExamViolation, evidence['violation']).evidence_path = str(outside)
+        exam = db.session.get(Exam, evidence['exam'])
+        exam.results_published, exam.results_published_at = True, datetime.utcnow() - timedelta(days=40)
+        db.session.commit()
+        retention.purge_expired()
+    assert outside.exists()
+
+
+def test_p2_10_delete_archives_and_admin_restores(app, evidence, as_user):
+    from backend.models import Exam, Question, StudentAnswer
+    with app.app_context():
+        db.session.add(StudentAnswer(student_exam_id=evidence['attempt'], question_id=evidence['q2'],
+                                     selected_answer='B'))
+        se = db.session.get(StudentExam, evidence['attempt'])
+        se.question_order = f"[{evidence['q2']}, {evidence['q1']}]"
+        db.session.commit()
+
+    resp = as_user('faca').post(f"/faculty/exam/{evidence['exam']}/delete", follow_redirects=True)
+    assert b'An administrator can restore it' in resp.data
+    with app.app_context():
+        assert db.session.get(Exam, evidence['exam']) is None
+
+    admin = as_user('admin1')
+    page = admin.get('/admin/all-exams').get_data(as_text=True)
+    assert 'Recently deleted' in page and 'SQL Basics' in page
+    import re
+    name = re.search(r'/admin/deleted-exams/(exam-[^/]+\.json)/restore', page).group(1)
+
+    assert as_user('faca').post(f'/admin/deleted-exams/{name}/restore').status_code == 403
+    resp = admin.post(f'/admin/deleted-exams/{name}/restore', follow_redirects=True)
+    assert b'restored with its results' in resp.data
+
+    with app.app_context():
+        exam = Exam.query.filter_by(title='SQL Basics').one()
+        qids = {q.question_text: q.id for q in Question.query.filter_by(exam_id=exam.id)}
+        att = StudentExam.query.filter_by(exam_id=exam.id).one()
+        assert (att.student_id, att.score, att.percentage) == (evidence['s1'], 1, 50)
+        assert att.get_question_order() == [qids['Q2'], qids['Q1']]           # remapped ids
+        ans = StudentAnswer.query.filter_by(student_exam_id=att.id).one()
+        assert (ans.question_id, ans.selected_answer) == (qids['Q2'], 'B')
+        v = ExamViolation.query.filter_by(student_exam_id=att.id).one()
+        assert v.evidence_path == str(evidence['image'])
+    assert 'Recently deleted' not in admin.get('/admin/all-exams').get_data(as_text=True)
+
+
+def test_p2_10_restore_rejects_bad_names(app, seed, as_user):
+    admin = as_user('admin1')
+    for name in ('..%2F..%2Fapp.py', 'exam-1-20260101T000000.json', 'x.json'):
+        resp = admin.post(f'/admin/deleted-exams/{name}/restore', follow_redirects=True)
+        assert resp.status_code in (200, 404)
+        assert b'restored with its results' not in resp.data
+
+
+def test_p2_10_archives_expire_with_their_evidence(app, evidence, as_user):
+    from datetime import datetime, timedelta
+    from backend.services import retention
+    as_user('faca').post(f"/faculty/exam/{evidence['exam']}/delete")
+    with app.app_context():
+        assert len(retention.list_archives()) == 1
+        assert retention.purge_expired()['archives'] == 0
+        result = retention.purge_expired(now=datetime.utcnow() + timedelta(days=31))
+        assert result == {'evidence': 1, 'archives': 1}
+        assert retention.list_archives() == []
+    assert not evidence['image'].exists()
+
+
+def test_p2_10_faculty_copy_no_longer_says_publishing_deletes(app, seed, as_user):
+    client = as_user('faca')
+    for url in (f"/faculty/exam/{seed['exam']}", f"/faculty/exam/{seed['exam']}/analytics"):
+        html = client.get(url).get_data(as_text=True)
+        assert 'delete evidence' not in html.lower()
+        assert 'Publishing deletes' not in html

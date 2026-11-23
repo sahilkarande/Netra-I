@@ -356,7 +356,33 @@ def admin_all_exams():
             'attempt_count': count,
             'avg_score': round(avg or 0, 1),
         })
-    return render_template('admin/all_exams.html', exam_data=exam_data)
+    from backend.services import retention
+    return render_template('admin/all_exams.html', exam_data=exam_data,
+                           deleted_exams=retention.list_archives(),
+                           archive_days=retention.archive_days())
+
+
+@admin_bp.route('/admin/deleted-exams/<name>/restore', methods=['POST'])
+@login_required
+def restore_deleted_exam(name):
+    """Bring back an exam a faculty member deleted (audit P2-10)."""
+    if not is_admin_user():
+        return "Access Denied", 403
+    from backend.services import retention
+    try:
+        exam, skipped = retention.restore_archive(name, current_user)
+    except FileNotFoundError:
+        flash('That deleted exam is no longer available.', 'error')
+        return redirect(url_for('admin.admin_all_exams'))
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Restoring %s failed', name)
+        flash('The exam could not be restored. The backup copy has been kept.', 'error')
+        return redirect(url_for('admin.admin_all_exams'))
+    note = (f' {skipped} attempt(s) were left out because those students no longer exist.'
+            if skipped else '')
+    flash(f'"{exam.title}" restored with its results.{note}', 'success')
+    return redirect(url_for('admin.admin_all_exams'))
 
 @admin_bp.route('/admin/sql_console', methods=['GET'])
 @login_required

@@ -1,6 +1,7 @@
 """Shared fixtures: an app on a throwaway SQLite file and seeded users."""
 
 import os
+import shutil
 import sys
 import tempfile
 
@@ -43,6 +44,7 @@ def clean_db(app):
         db.drop_all()
         db.create_all()
     attempt_device._last_seen.clear()
+    shutil.rmtree(os.path.join(app.instance_path, 'deleted_exams'), ignore_errors=True)
     yield
     with app.app_context():
         db.session.remove()
