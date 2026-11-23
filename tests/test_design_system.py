@@ -73,6 +73,14 @@ REDESIGNED = [
     'frontend/static/js/pages/student_report.js',
     'frontend/templates/leaderboard.html',
     'frontend/static/js/pages/leaderboard.js',
+    'frontend/templates/admin/dashboard.html',
+    'frontend/templates/admin/manage_faculty.html',
+    'frontend/templates/admin/students.html',
+    'frontend/templates/admin/all_exams.html',
+    'frontend/templates/admin/sql_console.html',
+    'frontend/static/js/pages/manage_faculty.js',
+    'frontend/static/js/pages/all_exams.js',
+    'frontend/static/js/pages/sql_console.js',
 ]
 
 
@@ -904,3 +912,57 @@ def test_leaderboard_end_date_includes_that_day(app, seed, as_user):
         db.session.commit()
     html = as_user('faca').get('/global_leaderboard?start=2026-03-10&end=2026-03-10').data.decode()
     assert 'Stud1' in html
+
+
+# ── Administration ──────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize('url', ['/admin/dashboard', '/admin/manage-faculty', '/admin/students',
+                                 '/admin/all-exams', '/admin/sql_console'])
+def test_admin_pages_on_design_system(app, seed, as_user, url):
+    html = as_user('admin1').get(url).data.decode()
+    assert 'css/ds/tokens.css' in html and 'css/style.css' not in html
+    assert 'confirm(' not in html and 'alert(' not in html and 'onclick=' not in html
+    assert re.search(rf'href="{re.escape(url)}"\s+aria-current="page"', html), url
+
+
+def test_sql_writes_need_opt_in(app, seed, as_user):
+    admin = as_user('admin1')
+    resp = admin.post('/admin/sql_console/run', json={'sql': "UPDATE users SET full_name = 'X'"})
+    assert resp.status_code == 400 and resp.get_json()['needs_write']
+    with app.app_context():
+        assert User.query.filter_by(full_name='X').count() == 0
+    resp = admin.post('/admin/sql_console/run', json={'sql': "UPDATE users SET full_name = 'X' WHERE username = 'stud2'",
+                                                      'allow_write': True})
+    assert resp.get_json()['success']
+    with app.app_context():
+        assert User.query.filter_by(full_name='X').count() == 1
+
+
+def test_create_faculty_with_temporary_password(app, seed, as_user):
+    data = as_user('admin1').post('/admin/create-faculty', json={
+        'username': 'newfac', 'email': 'NewFac@x.in', 'department': 'DBDA'}).get_json()
+    assert data['success'] and len(data['temporary_password']) >= 8
+    with app.app_context():
+        u = User.query.filter_by(username='newfac').one()
+        assert u.email == 'newfac@x.in' and u.password_changed is False
+    client = app.test_client()
+    assert login(client, 'newfac', data['temporary_password']).status_code == 302
+
+
+def test_create_faculty_rejects_short_password(app, seed, as_user):
+    resp = as_user('admin1').post('/admin/create-faculty', json={'username': 'f2', 'email': 'f2@x.in', 'password': 'short'})
+    assert resp.status_code == 400
+
+
+def test_reset_faculty_password(app, seed, as_user):
+    data = as_user('admin1').post(f"/admin/faculty/{seed['fac_a']}/reset-password").get_json()
+    assert data['success']
+    assert login(app.test_client(), 'faca', data['temporary_password']).status_code == 302
+    from tests.conftest import PASSWORD as OLD
+    with app.app_context():
+        from werkzeug.security import check_password_hash
+        assert not check_password_hash(User.query.get(seed['fac_a']).password_hash, OLD)
+    with app.app_context():
+        assert User.query.get(seed['fac_a']).password_changed is False
+    assert as_user('admin1').post(f"/admin/faculty/{seed['s1']}/reset-password").status_code == 400
+    assert as_user('facb').post(f"/admin/faculty/{seed['fac_a']}/reset-password").status_code == 403

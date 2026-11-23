@@ -4,7 +4,7 @@ The rules and building blocks for every redesigned page. Pages move onto the
 system one at a time; until a page is redesigned it keeps `base.html` and the
 legacy stylesheets, untouched.
 
-**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views); exam management (exam page, analytics, new exam, add questions, question splitter); students and reports (students, edit student, batch report, leaderboard).
+**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views); exam management (exam page, analytics, new exam, add questions, question splitter); students and reports (students, edit student, batch report, leaderboard); administration (overview, faculty, all students, all exams, SQL console).
 
 ---
 
