@@ -1,10 +1,9 @@
 # Netra-I Design System
 
-The rules and building blocks for every redesigned page. Pages move onto the
-system one at a time; until a page is redesigned it keeps `base.html` and the
-legacy stylesheets, untouched.
+The rules and building blocks for every page. All pages now use it; the old
+`base.html` and `style.css` are in `archive/`.
 
-**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views); exam management (exam page, analytics, new exam, add questions, question splitter); students and reports (students, edit student, batch report, leaderboard); administration (overview, faculty, all students, all exams, SQL console).
+**Redesigned so far:** faculty dashboard; sign-in flow (login, register, email verification, password change and first-login onboarding); taking an exam (access key, system check, instructions, the paper, submit); student dashboard; result page; student profile (student and staff views); exam management (exam page, analytics, new exam, add questions, question splitter); students and reports (students, edit student, batch report, leaderboard); administration (overview, faculty, all students, all exams, SQL console); landing page. That is every page.
 
 ---
 
@@ -34,6 +33,7 @@ frontend/static/css/ds/
   layout.css       app shell: sidebar, top bar, page column, grids, drawer
   components.css   buttons, switches, inputs, badges, panels, stats, tables,
                    cards, feed, menus, toasts, empty states, bar chart
+  public.css       landing page (hero, exam-hall picture, sections)
   exam.css         the exam runtime (system check, paper, camera widget,
                    dialogs) and the access-key gate
 frontend/static/js/ds/app.js        theme menu, dropdowns, drawer, nx.toast()
@@ -43,6 +43,7 @@ frontend/templates/
   layouts/app.html          the app shell (sidebar); signed-in pages extend this
   layouts/auth.html         sign-in shell (brand panel + form); set uses_face = True
                             before extending to load the face-liveness client
+  layouts/public.html       landing page: brand bar, theme menu, Sign in
   layouts/exam.html         distraction-free exam shell: no sidebar, no account
                             menu; takes body_class and uses_face
   partials/                 theme_init, csrf, sidebar, topbar_end, theme_menu, toasts
@@ -50,8 +51,7 @@ frontend/templates/
                             empty_state, initials
 ```
 
-`layouts/app.html` loads only the design-system CSS: no Bootstrap and no
-`style.css`. Old and new styles cannot affect each other.
+Every layout loads only the design-system CSS: no Bootstrap and no legacy stylesheet.
 
 ---
 

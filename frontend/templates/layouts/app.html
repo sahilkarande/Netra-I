@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 {#
   Netra-I app shell (design system).
-  Pages that have been redesigned extend this instead of base.html. It loads
-  only the design-system stylesheets — no Bootstrap, no legacy style.css — so
-  redesigned pages cannot be affected by old rules and vice versa.
+  Signed-in pages extend this. It loads only the design-system stylesheets.
+  The other shells are layouts/auth.html (sign-in), layouts/exam.html (the
+  exam itself) and layouts/public.html (landing page).
 
   Blocks: title, topbar_title, content, extra_css, extra_js
 #}

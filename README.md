@@ -186,7 +186,7 @@ Netra-I/
 │   └── utils/email_utils.py  # OTP email (console fallback)
 │
 ├── frontend/
-│   ├── templates/            # Jinja2 pages: base.html, auth pages, admin/, faculty/, student/
+│   ├── templates/            # Jinja2 pages: layouts/, partials/, components/, auth pages, admin/, faculty/, student/
 │   │                         # layouts/, partials/, components/ = design-system shell and macros
 │   └── static/
 │       ├── css/  js/  images/

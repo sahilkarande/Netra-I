@@ -11,13 +11,14 @@ real database.
 | `backend_utils/delete_all_questions.py` | Was `backend/utils/view_users.py` | Despite its old name, it **deletes every question**. Renamed so the name says what it does. |
 | `frontend/js/exam.js` | Old exam-page script | `student/take_exam.html` carries its own runtime inline. |
 | `frontend/js/analytics.js` | Chart.js setup for the old analytics page | Analytics now draws its charts server-side as SVG; the old page never passed it any scores, so its charts were always empty. |
-| `frontend/js/theme.js` | Old theme toggle | `base.html` implements the theme toggle inline. |
+| `frontend/js/theme.js` | Old theme toggle | The theme menu lives in `static/js/ds/app.js`. |
 | `frontend/images/CDAC_Logo_org.png` | Logo | Not referenced by any template. |
 | `frontend/css/auth.css` | Styles for the old sign-in pages | Login, register, OTP and change-password now use the design system (`css/ds/`). |
 | `frontend/css/create_exam.css` | Styles for the old New exam page | The page now uses the design system (`css/ds/`). |
 | `frontend/css/upload_questions.css` | Styles for the old Add questions page | The page now uses the design system (`css/ds/`). |
 | `frontend/css/edit_student.css`, `frontend/css/student_management.css`, `frontend/css/student_report.css` | Styles for the old Students, Edit student and Report pages | Those pages now use the design system (`css/ds/`). |
 | `frontend/js/student_management.js` | Script for the old Students page | Replaced by `static/js/pages/manage_students.js`. |
+| `frontend/templates/base.html`, `frontend/css/style.css`, `frontend/css/exam.css` | The old page shell and its ~16,700-line stylesheet | Every page now uses the design-system layouts in `templates/layouts/` and `css/ds/`. |
 | `frontend/css/student_dashboard.css` | Styles for the old student dashboard | The student dashboard now uses the design system (`css/ds/`). |
 | `frontend/templates/import_students.html` | Stand-alone import page | No route renders it; import lives on the Manage Students page. |
 

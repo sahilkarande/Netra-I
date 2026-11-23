@@ -81,6 +81,9 @@ REDESIGNED = [
     'frontend/static/js/pages/manage_faculty.js',
     'frontend/static/js/pages/all_exams.js',
     'frontend/static/js/pages/sql_console.js',
+    'frontend/templates/layouts/public.html',
+    'frontend/templates/index.html',
+    'frontend/static/css/ds/public.css',
 ]
 
 
@@ -966,3 +969,15 @@ def test_reset_faculty_password(app, seed, as_user):
         assert User.query.get(seed['fac_a']).password_changed is False
     assert as_user('admin1').post(f"/admin/faculty/{seed['s1']}/reset-password").status_code == 400
     assert as_user('facb').post(f"/admin/faculty/{seed['fac_a']}/reset-password").status_code == 403
+
+
+def test_landing_page(app):
+    html = app.test_client().get('/').data.decode()
+    assert 'css/ds/public.css' in html and 'css/style.css' not in html
+    assert 'href="/login"' in html
+    assert 'cloud' not in html.lower()                 # it runs on the campus server
+    assert not re.search('[\U0001F300-\U0001FAFF]', html)  # no emoji
+
+
+def test_signed_in_users_skip_the_landing_page(app, seed, as_user):
+    assert as_user('stud1').get('/').headers['Location'].endswith('/student/dashboard')
