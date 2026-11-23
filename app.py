@@ -44,6 +44,10 @@ LATE_COLUMNS = {
     'exam': {
         'times_utc': 'BOOLEAN DEFAULT 0',
     },
+    'student_exam': {
+        'device_token': 'VARCHAR(64)',
+        'device_switches': 'INTEGER DEFAULT 0',
+    },
     'users': {
         'password_changed': 'BOOLEAN DEFAULT 0',
         'password_changed_at': 'DATETIME',

@@ -518,6 +518,14 @@ DRAGGABLE FLOATING CAMERA WIDGET
   </div>
 </div>
 
+{# ── MOVED TO ANOTHER DEVICE ── #}
+<div id="moved-overlay" role="alertdialog" aria-modal="true" aria-labelledby="movedTitle" aria-describedby="movedSub">
+  <div class="fso-icon"><i class="bi bi-display" aria-hidden="true"></i></div>
+  <div class="fso-title" id="movedTitle">This exam moved to another device</div>
+  <div class="fso-sub" id="movedSub">It was opened on another computer after this one stopped responding. Carry on there; your saved answers went with it. If that wasn't you, tell your invigilator now.</div>
+  <a class="btn-begin" href="{{ url_for('student.student_dashboard') }}">Back to my dashboard</a>
+</div>
+
 {# ── FULLSCREEN BLOCKER ── #}
 <div id="fs-overlay">
   <div class="fso-icon"><i class="bi bi-fullscreen-exit" aria-hidden="true"></i></div>
@@ -1285,6 +1293,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
     /* Exam closed server-side: stop retrying, the status poll will submit */
     let body = {};
     try { body = r ? await r.json() : {}; } catch (_) { }
+    if (r && r.status === 409 && body.moved) { movedAway(); return; }
     if (r && r.status === 409 && !body.retry) {
       setAS('', 'Exam closed — submitting');
       pollStatus();
@@ -1306,6 +1315,7 @@ DRAGGABLE FLOATING CAMERA WIDGET
     if (S.done) return;
     try {
       const d = await (await fetch(CFG.urls.status)).json();
+      if (d.moved) { movedAway(); return; }
       if (d.force_ended || d.exam_status === 'ended') { addLog('Exam force-ended by instructor', 'le'); autoSubmit('Exam ended by instructor'); return; }
       /* The server's clock is authoritative: picks up time extensions and
          corrects drift in this browser's countdown */
@@ -1600,6 +1610,23 @@ DRAGGABLE FLOATING CAMERA WIDGET
     form.appendChild(ans);
     clearJournal();
     document.body.appendChild(form); form.submit();
+  }
+
+  /* Another device took this attempt over (this one had gone quiet). Stop
+     everything here without submitting: the exam continues over there. */
+  function movedAway() {
+    if (S.done) return;
+    S.done = true;
+    [S._timerT, S._autoT, S._pollT, S._frameT, S._heartbeatT].forEach(clearInterval);
+    clearTimeout(S._retryT); clearTimeout(S._saveT);
+    if (_audioInterval) clearInterval(_audioInterval);
+    if (_audioCtx) { try { _audioCtx.close(); } catch (e) { } }
+    if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+    if (S.socket) { try { S.socket.disconnect(); } catch (e) { } }
+    clearJournal();
+    if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => { });
+    g('fs-overlay').style.display = 'none';
+    g('moved-overlay').style.display = 'flex';
   }
 
   function autoSubmit(reason) {

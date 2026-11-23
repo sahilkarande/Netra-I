@@ -18,6 +18,7 @@ from app import create_app  # noqa: E402
 from backend.database import db  # noqa: E402
 from backend.models import User, Exam, Question, StudentExam  # noqa: E402
 from backend.services import face_service  # noqa: E402
+from backend.services import attempt_device  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
 
 PASSWORD = 'Passw0rd!'
@@ -41,6 +42,7 @@ def clean_db(app):
         db.drop_all()
         db.create_all()
     face_service._failed_attempts.clear()
+    attempt_device._last_seen.clear()
     yield
     with app.app_context():
         db.session.remove()

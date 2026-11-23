@@ -327,6 +327,10 @@ class StudentExam(db.Model):
     total_violations = db.Column(db.Integer, default=0)
     proctoring_status = db.Column(db.String(20), default='active')  # active, warning, terminated
 
+    # One attempt, one device (services/attempt_device.py)
+    device_token = db.Column(db.String(64))            # held in the claiming browser's session
+    device_switches = db.Column(db.Integer, default=0) # times it moved after the holder went quiet
+
     # Relationships
     answers = db.relationship('StudentAnswer', backref='student_exam', lazy=True, cascade='all, delete-orphan')
     activity_logs = db.relationship('ActivityLog', backref='student_exam', lazy=True, cascade='all, delete-orphan')

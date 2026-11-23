@@ -12,6 +12,7 @@ from backend.database import db
 from backend.models import Exam, Question, StudentExam, StudentAnswer, ActivityLog, ExamViolation, ExamCalibration
 from backend.socket_io import socketio
 from backend.services import face_service
+from backend.services import attempt_device
 from backend.services.proctor_service import (
     get_proctor_instance, detect_faces, decode_base64_image,
     log_proctor_event, _heartbeat_registry, _last_frame_processed,
@@ -62,6 +63,13 @@ def _exam_closed_reason(exam):
 def _staff_can_access(exam):
     from backend.routes.faculty import _faculty_can_access_exam
     return current_user.role in ('faculty', 'admin') and _faculty_can_access_exam(exam)
+
+
+MOVED_MESSAGE = 'This exam is now open on another device.'
+
+
+def _moved_response():
+    return jsonify({"error": MOVED_MESSAGE, "moved": True}), 409
 
 
 def _time_up(student_exam, exam, grace_sec=0):
@@ -157,6 +165,12 @@ def take_exam(exam_id):
     if _needs_access_key(exam):
         return render_template('student/exam_key.html', exam=exam)
 
+    # One attempt, one device: a second computer is refused while the first is
+    # still in use, and may take over once it has gone quiet (crash recovery).
+    if attempt_device.claim(student_exam) == attempt_device.BLOCKED:
+        return render_template('student/exam_elsewhere.html', exam=exam,
+                               wait_seconds=attempt_device.DEVICE_STALE_SECONDS), 409
+
     questions = Question.query.filter_by(exam_id=exam_id).all()
 
     # ── Per-student shuffle ──────────────────────────────────────────────
@@ -240,6 +254,9 @@ def save_answer():
 
     if student_exam.completed:
         return jsonify({"error": "This exam has already been submitted."}), 409
+    if not attempt_device.is_current(student_exam):
+        return _moved_response()
+    attempt_device.touch(student_exam)
 
     exam = student_exam.exam
     if _time_up(student_exam, exam, grace_sec=ANSWER_GRACE_SEC):
@@ -275,6 +292,11 @@ def submit_exam(student_exam_id):
 
     already_done = student_exam.completed
 
+    # A device that lost the attempt to another one must not submit it
+    if is_owner and not already_done and not attempt_device.is_current(student_exam):
+        flash(MOVED_MESSAGE + ' Submit it from there.', 'error')
+        return redirect(url_for('student.student_dashboard'))
+
     # The page sends its final answer map with the submit, so answers whose
     # last autosave failed (Wi-Fi drop near the end) are still recorded.
     if is_owner and not already_done:
@@ -298,6 +320,7 @@ def submit_exam(student_exam_id):
 
     # Free the per-attempt vision instance — otherwise it lives for the process lifetime
     cleanup_proctor_instance(student_exam_id)
+    attempt_device.forget(student_exam_id)
 
     exam = student_exam.exam
     if not is_owner:
@@ -321,6 +344,8 @@ def api_update_tabcount(student_exam_id):
     student_exam = StudentExam.query.get_or_404(student_exam_id)
     if student_exam.student_id != current_user.id:
         return jsonify({"error": "Unauthorized"}), 403
+    if not attempt_device.is_current(student_exam):
+        return _moved_response()
 
     # The count only ever goes up — a student must not be able to reset it
     student_exam.tab_switch_count = max(student_exam.tab_switch_count or 0, new_count)
@@ -342,6 +367,8 @@ def api_log_activity(student_exam_id):
     student_exam = StudentExam.query.get_or_404(student_exam_id)
     if student_exam.student_id != current_user.id:
         return jsonify({"error": "Unauthorized"}), 403
+    if not attempt_device.is_current(student_exam):
+        return _moved_response()
 
     log = ActivityLog(
         student_exam_id=student_exam.id,
@@ -365,6 +392,9 @@ def api_check_exam_status(student_exam_id):
 
     if student_exam.student_id != current_user.id:
         return jsonify({"error": "Unauthorized"}), 403
+    if not student_exam.completed and not attempt_device.is_current(student_exam):
+        return _moved_response()
+    attempt_device.touch(student_exam)
 
     exam = student_exam.exam
     finalize_overdue_attempts(attempt_id=student_exam.id)
@@ -440,6 +470,8 @@ def _owned_active_attempt(student_exam_id):
     attempt = StudentExam.query.get(student_exam_id)
     if not attempt or attempt.student_id != current_user.id or attempt.completed:
         return None
+    if not attempt_device.is_current(attempt):
+        return None     # the attempt moved to another device
     return attempt
 
 

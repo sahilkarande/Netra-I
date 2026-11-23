@@ -30,7 +30,7 @@ body.nx-exam { background: var(--bg-canvas); }
 .question-slide.active { display: block; }
 
 /* ── Shared overlay + dialog ─────────────────────────────── */
-#modal-instr, #modal-submit, #fs-overlay, #sc-rec-blocker {
+#modal-instr, #modal-submit, #fs-overlay, #moved-overlay, #sc-rec-blocker {
   position: fixed;
   inset: 0;
   display: none;            /* the script sets display:flex to open */
@@ -45,6 +45,9 @@ body.nx-exam { background: var(--bg-canvas); }
 #modal-submit { z-index: 10000; }
 #fs-overlay { z-index: 20000; flex-direction: column; gap: var(--space-3); text-align: center; background: var(--bg-canvas); }
 #sc-rec-blocker { z-index: 99999; background: var(--bg-canvas); }
+#moved-overlay { z-index: 100000; flex-direction: column; gap: var(--space-3); text-align: center; background: var(--bg-canvas); }
+#moved-overlay .fso-sub { max-width: 46ch; }
+#moved-overlay a.btn-begin { text-decoration: none; }
 
 .instr-modal, .submit-modal, .scrb-inner {
   width: min(640px, 100%);
