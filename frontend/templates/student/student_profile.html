@@ -1,477 +1,167 @@
-{% extends "base.html" %}
-{% block title %}Student Profile - {{ student.full_name }}{% endblock %}
+{% extends "layouts/app.html" %}
+{% import 'components/ui.html' as ui %}
+
+{#
+  One template, two viewers:
+  - the student, on their own profile (student.student_profile): scores only
+    for released results
+  - faculty/admin (faculty.faculty_student_profile): attempts on exams they
+    can access, every score, and a password reset
+#}
+{% set is_staff = current_user.role in ('faculty', 'admin') %}
+{% set name = student.full_name or student.username %}
+{% set visible = student_exams|selectattr('result_visible_to_student')|list if not is_staff
+                 else student_exams|rejectattr('is_invalidated')|list %}
+{% set scored = visible|selectattr('percentage', 'ne', none)|list %}
+{% set avg = (scored|sum(attribute='percentage') / scored|length) if scored else None %}
+{% set passed = scored|selectattr('passed')|list|length %}
+{% set flags = student_exams|map(attribute='total_violations')|map('default', 0, true)|sum %}
+
+{% block title %}{{ 'My profile' if not is_staff else name }}{% endblock %}
+{% block topbar_title %}{% if is_staff %}<b>Students</b> · {{ name }}{% else %}<b>My profile</b>{% endif %}{% endblock %}
 
 {% block content %}
-<div class="container">
-    <!-- Back Button -->
-    <div style="margin-bottom: 1.5rem;">
-        <a href="{{ url_for('auth.index') }}" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
-            <i class="bi bi-arrow-left"></i>
-            Back to Dashboard
-        </a>
-    </div>
+{% call ui.page_header(name, (student.prn_number or student.username) ~ ((' · ' ~ student.batch) if student.batch else '') ~ ((' · ' ~ (student.course or student.department)) if (student.course or student.department) else '')) %}
+  {% if is_staff %}
+  {{ ui.button('All students', href=url_for('faculty.faculty_students'), icon='arrow-left') }}
+  {{ ui.button('Edit details', href=url_for('faculty.faculty_edit_student', student_id=student.id), variant='primary', icon='pencil') }}
+  {% else %}
+  {{ ui.button('Change password', href=url_for('auth.change_password'), icon='shield-lock') }}
+  {% endif %}
+{% endcall %}
 
-    <!-- ===================================
-         ENHANCED STUDENT BANNER
-         =================================== -->
-    <div class="student-banner">
-        <div class="student-banner-content">
-            <!-- Left Section: Avatar + Info -->
-            <div class="student-banner-left">
-                <!-- Profile Avatar with Initials -->
-                <div class="student-avatar">
-                    {% set name_parts = (student.full_name or student.username).split() %}
-                    
-                    <div class="student-avatar-placeholder">
+<section class="nx-grid-stats" aria-label="Summary">
+  {{ ui.stat('Exams taken', student_exams|length, icon='journal-check',
+             note=(scored|length ~ ' with a released result') if not is_staff else (scored|length ~ ' scored'), i=1) }}
+  {{ ui.stat('Average score', ('%.0f'|format(avg)) if avg is not none else '—', unit='%' if avg is not none else None, icon='bar-chart',
+             meter=avg, note='Released results' if not is_staff else 'Across scored attempts', i=2) }}
+  {{ ui.stat('Passed', passed ~ ' / ' ~ scored|length, icon='check2-circle',
+             meter=((passed / scored|length * 100) if scored else None), meter_tone='success', note='At or above the pass mark', i=3) }}
+  {{ ui.stat('Proctoring flags', flags, icon='flag', note='Across all attempts', i=4) }}
+</section>
 
-                        {% if student.gender == "Male" %}
-                            <img src="{{ url_for('static', filename='images/Male.png') }}" 
-                                class="avatar-gender-image" 
-                                alt="Male">
-
-                        {% elif student.gender == "Female" %}
-                            <img src="{{ url_for('static', filename='images/Female.png') }}" 
-                                class="avatar-gender-image" 
-                                alt="Female">
-
-                        {% else %}
-                            {% if name_parts|length > 1 %}
-                                {{ name_parts[0][0] }}{{ name_parts[-1][0] }}
-                            {% else %}
-                                {{ name_parts[0][0] }}{{ name_parts[0][1] if name_parts[0]|length > 1 else '' }}
-                            {% endif %}
-                        {% endif %}
-
-                    </div>
-
-                    <!-- Status Badge -->
-                    <div class="student-avatar-badge"></div>
-                </div>
-                
-                <!-- Student Information -->
-                <div class="student-info">
-                    <h2 class="student-name">
-                        {{ student.full_name or student.username }}
-                    </h2>
-                    <p class="student-prn">
-                        <i class="bi bi-hash"></i> 
-                        {{ student.prn_number or 'N/A' }}
-                    </p>
-                </div>
-            </div>
-            
-            <!-- Right Section: Status + Actions -->
-            <div class="student-banner-right">
-                <!-- Verification Status Badge -->
-                {% if student.is_verified %}
-                    <div class="student-status-badge active">
-                        <i class="bi bi-check-circle-fill"></i>
-                        Verified
-                    </div>
+<div class="nx-grid-main">
+  <div class="nx-stack">
+    <section class="nx-panel nx-enter" style="--i: 5" aria-labelledby="attempts-title">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="attempts-title">Exams</h2>
+          <span class="nx-panel__sub">Newest first</span>
+        </div>
+      </div>
+      {% if student_exams %}
+      <div class="nx-table-wrap">
+        <table class="nx-table nx-table--stack">
+          <thead>
+            <tr>
+              <th scope="col">Exam</th>
+              <th scope="col">Score</th>
+              <th scope="col" class="is-num">Time</th>
+              <th scope="col" class="is-num">Flags</th>
+              <th scope="col" class="is-actions"><span class="nx-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for se in student_exams %}
+            {% set can_see = is_staff or se.result_visible_to_student %}
+            {% set finished = se.completed or se.status in ('submitted', 'completed') %}
+            <tr>
+              <td>
+                <span class="nx-table__primary">{{ se.exam.title if se.exam else 'Removed exam' }}</span>
+                <span class="nx-table__secondary">
+                  {%- if se.submitted_at %}{{ se.submitted_at|localtime('%d %b %Y, %H:%M') }}{% elif not finished %}In progress{% endif -%}
+                </span>
+              </td>
+              <td data-label="Score">
+                {% if se.is_invalidated %}{{ ui.badge('Invalidated', 'danger') }}
+                {% elif not finished %}{{ ui.badge('In progress', 'warning') }}
+                {% elif can_see and se.percentage is not none %}
+                <span class="nx-score nx-score--{{ 'pass' if se.passed else 'fail' }}">{{ '%.0f'|format(se.percentage) }}%</span>
+                <span class="nx-table__secondary nx-num">{{ '%g'|format(se.score or 0) }} / {{ '%g'|format(se.total_points or 0) }}{% if is_staff and not se.result_visible_to_student %} · not released{% endif %}</span>
                 {% else %}
-                    <div class="student-status-badge inactive">
-                        <i class="bi bi-clock-fill"></i>
-                        Pending
-                    </div>
+                <span class="nx-feed__hold"><i class="bi bi-lock" aria-hidden="true"></i>On hold</span>
                 {% endif %}
-                
-                {% if current_user.role in ('faculty', 'admin') %}
-                <!-- Reset Password Button -->
-                <button class="student-action-btn" onclick="openPasswordModal()">
-                    <i class="bi bi-key-fill"></i>
-                    Reset Password
-                </button>
+              </td>
+              <td class="is-num" data-label="Time">{{ (se.time_taken_minutes ~ ' min') if se.time_taken_minutes is not none else '—' }}</td>
+              <td class="is-num" data-label="Flags">
+                {%- if se.total_violations %}<span class="nx-text-warning">{{ se.total_violations }}</span>{% else %}<span class="nx-table__muted">0</span>{% endif -%}
+              </td>
+              <td class="is-actions">
+                {% if finished and can_see and not se.is_invalidated %}
+                {{ ui.button('Result for ' ~ (se.exam.title if se.exam else 'exam'), href=url_for('student.student_exam_result', student_exam_id=se.id), variant='ghost', size='sm', icon='eye', icon_only=True) }}
+                {{ ui.button('PDF for ' ~ (se.exam.title if se.exam else 'exam'), href=url_for('student.download_result_pdf', student_exam_id=se.id), variant='ghost', size='sm', icon='download', icon_only=True) }}
                 {% endif %}
-            </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      {% call ui.empty_state('No exams yet',
+            ('This student has not taken any of your exams yet.' if is_staff else 'Exams you sit appear here with their results once released.'),
+            icon='inbox') %}{% endcall %}
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="nx-stack">
+    <section class="nx-panel nx-enter" style="--i: 6" aria-labelledby="details-title">
+      <div class="nx-panel__head">
+        <h2 class="nx-panel__title" id="details-title">Details</h2>
+      </div>
+      <dl class="nx-dl">
+        <div><dt>Username</dt><dd>{{ student.username }}</dd></div>
+        <div><dt>Email</dt><dd>{{ student.email }}</dd></div>
+        <div><dt>PRN</dt><dd class="nx-num">{{ student.prn_number or '—' }}</dd></div>
+        <div><dt>Batch</dt><dd>{{ student.batch or '—' }}</dd></div>
+        <div><dt>Course</dt><dd>{{ student.course or student.department or '—' }}</dd></div>
+        <div><dt>Phone</dt><dd class="nx-num">{{ student.phone or '—' }}</dd></div>
+        {% if student.gender %}<div><dt>Gender</dt><dd>{{ student.gender }}</dd></div>{% endif %}
+        <div><dt>Joined</dt><dd>{{ student.created_at|localtime('%d %b %Y') if student.created_at else '—' }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="nx-panel nx-enter" style="--i: 7" aria-labelledby="security-title">
+      <div class="nx-panel__head">
+        <h2 class="nx-panel__title" id="security-title">Sign-in</h2>
+      </div>
+      <dl class="nx-dl">
+        <div><dt>Account</dt><dd>{% if student.is_verified %}{{ ui.badge('Verified', 'success') }}{% else %}{{ ui.badge('Not verified', 'warning') }}{% endif %}</dd></div>
+        <div><dt>Password</dt><dd>{% if student.password_changed %}{{ ui.badge('Set by student', 'success') }}{% else %}{{ ui.badge('Temporary', 'warning') }}{% endif %}</dd></div>
+        <div><dt>Face</dt><dd>
+          {%- if face_registered %}{{ ui.badge('Registered', 'success') }}
+          {%- elif is_staff %}{{ ui.badge('Not registered', 'neutral') }}
+          {%- else %}<a href="{{ url_for('auth.change_password', step='face') }}">Register now</a>{% endif -%}
+        </dd></div>
+      </dl>
+
+      {% if is_staff %}
+      <div class="nx-panel__body nx-reset" id="passwordReset"
+           data-reset-url="{{ url_for('faculty.faculty_change_student_password', student_id=student.id) }}">
+        <p class="nx-help">Give the student a new temporary password. They must choose their own at next sign-in.</p>
+        <div class="nx-reset__actions" data-reset-step="ask">
+          <button type="button" class="nx-btn nx-btn--secondary nx-btn--sm" data-reset-start>
+            <i class="bi bi-key" aria-hidden="true"></i><span>Reset password</span>
+          </button>
         </div>
-        
-        <!-- Optional: Extended Details Grid -->
-        {% if student_exams %}
-        <div class="student-details-grid">
-            <div class="student-detail-item">
-                <div class="student-detail-label">Total Exams</div>
-                <div class="student-detail-value">{{ student_exams|length }}</div>
-            </div>
-            <div class="student-detail-item">
-                <div class="student-detail-label">Completed</div>
-                <div class="student-detail-value">
-                    {{ student_exams|selectattr('completed')|list|length }}
-                </div>
-            </div>
-            <div class="student-detail-item">
-                <div class="student-detail-label">Average Score</div>
-                <div class="student-detail-value">
-                    {% set total_percentage = student_exams|map(attribute='percentage')|select|sum %}
-                    {% set count = student_exams|selectattr('percentage')|list|length %}
-                    {% if count > 0 %}
-                        {{ "%.1f"|format(total_percentage / count) }}%
-                    {% else %}
-                        N/A
-                    {% endif %}
-                </div>
-            </div>
-            <div class="student-detail-item">
-                <div class="student-detail-label">Password Status</div>
-                <div class="student-detail-value">
-                    {% if student.password_changed %}
-                        <span style="color: #d1fae5;">✓ Changed</span>
-                    {% else %}
-                        <span style="color: #fde68a;">⚠ Must Change</span>
-                    {% endif %}
-                </div>
-            </div>
+        <div class="nx-reset__actions" data-reset-step="confirm" hidden>
+          <span class="nx-reset__ask">Reset {{ name }}'s password?</span>
+          <button type="button" class="nx-btn nx-btn--danger nx-btn--sm" data-reset-confirm><span>Reset</span></button>
+          <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-reset-cancel><span>Cancel</span></button>
         </div>
-        {% endif %}
-    </div>
-
-    <!-- Student Information Card -->
-    <div class="card" style="margin-bottom: 2rem;">
-        <div class="card-header">
-            <h3 class="card-title">
-                <i class="bi bi-info-circle-fill"></i> Student Information
-            </h3>
+        <div class="nx-reset__result" data-reset-step="done" hidden role="status">
+          <span class="nx-help">Temporary password. It is shown only once:</span>
+          <code class="nx-reset__password" id="tempPassword"></code>
+          <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-reset-copy><i class="bi bi-copy" aria-hidden="true"></i><span>Copy</span></button>
         </div>
-        <div class="card-body">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
-                
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-person-badge-fill"></i> Full Name
-                    </div>
-                    <div class="info-value">{{ student.full_name or 'N/A' }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-at"></i> Username
-                    </div>
-                    <div class="info-value">{{ student.username }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-envelope-fill"></i> Email
-                    </div>
-                    <div class="info-value">{{ student.email }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-card-text"></i> PRN Number
-                    </div>
-                    <div class="info-value">{{ student.prn_number or 'N/A' }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-calendar-event-fill"></i> Batch
-                    </div>
-                    <div class="info-value">{{ student.batch or 'N/A' }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-building-fill"></i> Department
-                    </div>
-                    <div class="info-value">{{ student.department or 'N/A' }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-phone-fill"></i> Phone
-                    </div>
-                    <div class="info-value">{{ student.phone or 'N/A' }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-gender-ambiguous"></i> Gender
-                    </div>
-                    <div class="info-value">{{ student.gender or 'N/A' }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-shield-check-fill"></i> Verification Status
-                    </div>
-                    <div class="info-value">
-                        {% if student.is_verified %}
-                            <span class="badge badge-success">
-                                <i class="bi bi-check-circle-fill"></i> Verified
-                            </span>
-                        {% else %}
-                            <span class="badge badge-warning">
-                                <i class="bi bi-clock-fill"></i> Pending
-                            </span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-key-fill"></i> Password Status
-                    </div>
-                    <div class="info-value">
-                        {% if student.password_changed %}
-                            <span class="badge badge-success">
-                                <i class="bi bi-check-circle-fill"></i> Changed
-                            </span>
-                        {% else %}
-                            <span class="badge badge-warning">
-                                <i class="bi bi-exclamation-triangle-fill"></i> Must Change
-                            </span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-calendar-plus-fill"></i> Registered
-                    </div>
-                    <div class="info-value">{{ student.created_at.strftime('%d %b, %Y at %I:%M %p') if student.created_at else 'N/A' }}</div>
-                </div>
-
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="bi bi-clock-history"></i> Last Updated
-                    </div>
-                    <div class="info-value">{{ student.updated_at.strftime('%d %b, %Y at %I:%M %p') if student.updated_at else 'N/A' }}</div>
-                </div>
-
-            </div>
-        </div>
-    </div>
-
-    <!-- Exam Performance -->
-    {% if student_exams %}
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">
-                <i class="bi bi-graph-up-arrow"></i> Exam Performance
-            </h3>
-            <span class="badge" style="background: var(--primary-color); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600;">
-                <i class="bi bi-file-earmark-text-fill"></i> {{ student_exams|length }} Exams Taken
-            </span>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th><i class="bi bi-journal-text"></i> Exam Title</th>
-                            <th><i class="bi bi-123"></i> Score</th>
-                            <th><i class="bi bi-percent"></i> Percentage</th>
-                            <th><i class="bi bi-check-circle"></i> Status</th>
-                            <th><i class="bi bi-clock"></i> Time Taken</th>
-                            <th><i class="bi bi-exclamation-triangle"></i> Violations</th>
-                            <th><i class="bi bi-calendar"></i> Submitted</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for se in student_exams %}
-                        <tr {% if not se.passed %}style="background: rgba(239, 68, 68, 0.05);"{% endif %}>
-                            <td>
-                                <strong style="color: var(--text-primary);">{{ se.exam.title }}</strong>
-                            </td>
-                            <td>
-                                <strong style="font-family: 'Courier New', monospace;">{{ se.score or 0 }}/{{ se.total_points or 0 }}</strong>
-                            </td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                    <div class="progress-container" style="width: 100px; height: 8px;">
-                                        <div class="progress-bar {{ 'success' if se.passed else 'danger' }}" 
-                                             style="width: {{ se.percentage or 0 }}%;"></div>
-                                    </div>
-                                    <strong style="font-size: 0.95rem; min-width: 50px;">{{ "%.1f"|format(se.percentage or 0) }}%</strong>
-                                </div>
-                            </td>
-                            <td>
-                                {% if se.is_invalidated %}
-                                    <span class="badge badge-danger">
-                                        <i class="bi bi-slash-circle-fill"></i> Invalidated
-                                    </span>
-                                {% elif se.passed %}
-                                    <span class="badge badge-success">
-                                        <i class="bi bi-check-circle-fill"></i> Passed
-                                    </span>
-                                {% else %}
-                                    <span class="badge badge-danger">
-                                        <i class="bi bi-x-circle-fill"></i> Failed
-                                    </span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span style="font-family: 'Courier New', monospace; color: var(--text-secondary);">
-                                    {% if se.time_taken %}
-                                        {{ (se.time_taken // 60)|int }}m {{ se.time_taken % 60 }}s
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </span>
-                            </td>
-                            <td>
-                                {% set vcount = se.total_violations or 0 %}
-                                {% if vcount > 0 %}
-                                    <span class="badge badge-warning">
-                                        <i class="bi bi-exclamation-triangle-fill"></i> {{ vcount }}
-                                    </span>
-                                {% else %}
-                                    <span class="badge badge-success">
-                                        <i class="bi bi-shield-check"></i> None
-                                    </span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span style="color: var(--text-secondary); font-size: 0.875rem;">
-                                    {{ se.submitted_at.strftime('%d %b, %Y') if se.submitted_at else 'N/A' }}
-                                    <br>
-                                    <small style="opacity: 0.7;">{{ se.submitted_at.strftime('%I:%M %p') if se.submitted_at else '' }}</small>
-                                </span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    {% else %}
-    <!-- No Exams Card -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">
-                <i class="bi bi-graph-up-arrow"></i> Exam Performance
-            </h3>
-        </div>
-        <div class="card-body">
-            <div class="empty-state">
-                <div class="empty-state-icon">
-                    <i class="bi bi-inbox"></i>
-                </div>
-                <h4 class="empty-state-title">No Exams Taken Yet</h4>
-                <p class="empty-state-text">
-                    This student hasn't taken any exams yet. Exam performance data will appear here once they complete their first exam.
-                </p>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-</div>
-
-<!-- Password Reset Modal -->
-<div id="passwordModal" class="password-modal">
-    <div class="password-modal-content">
-        <div class="password-modal-header">
-            <h3>
-                <i class="bi bi-key-fill" style="color: #ef4444;"></i>
-                Reset Student Password
-            </h3>
-            <button class="password-modal-close" onclick="closePasswordModal()">
-                <i class="bi bi-x"></i>
-            </button>
-        </div>
-
-        <div class="password-warning">
-            <p>
-                <i class="bi bi-exclamation-triangle-fill"></i>
-                <strong>Warning:</strong> This will reset the password for <strong>{{ student.full_name or student.username }}</strong>. 
-                The student will be required to change it on their next login.
-            </p>
-        </div>
-
-        <form id="passwordResetForm">
-            <div style="background: var(--card-bg, #f8fafc); border: 1px dashed var(--border, #cbd5e1); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; text-align: center;">
-                <p style="margin: 0; color: var(--text-primary, #334155); font-size: 1.1rem;">
-                    <span id="tempPwLabel">A new random temporary password will be generated and shown here once.</span> <br>
-                    <strong id="tempPwValue" style="font-size: 1.5rem; letter-spacing: 2px; color: var(--primary-color, #4f46e5); display: block; margin-top: 0.5rem; user-select: all;"></strong>
-                </p>
-            </div>
-
-            <button type="submit" class="btn-reset-password" id="submitBtn">
-                <i class="bi bi-shield-check"></i>
-                Confirm Reset Password
-            </button>
-        </form>
-    </div>
+      </div>
+      {% endif %}
+    </section>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    // Open password modal
-    function openPasswordModal() {
-        document.getElementById('passwordModal').classList.add('active');
-    }
-
-    // Close password modal
-    function closePasswordModal() {
-        document.getElementById('passwordModal').classList.remove('active');
-        document.getElementById('passwordResetForm').reset();
-        document.getElementById('passwordMatchStatus').style.display = 'none';
-        document.getElementById('passwordMatchStatus').className = '';
-    }
-
-    // Close on outside click
-    document.addEventListener('click', function(e) {
-        const modal = document.getElementById('passwordModal');
-        if (e.target === modal) {
-            closePasswordModal();
-        }
-    });
-
-    // Close on Escape key
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closePasswordModal();
-        }
-    });
-
-    // Handle form submission
-    document.getElementById('passwordResetForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const submitBtn = document.getElementById('submitBtn');
-        
-        // Confirm action
-        if (!confirm('Reset this student\'s password to a new random temporary password?')) {
-            return;
-        }
-        
-        // Disable button and show loading
-        const originalHTML = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.classList.add('loading');
-        submitBtn.innerHTML = '<span>Resetting Password...</span>';
-        
-        try {
-            const response = await fetch('{{ url_for("faculty.faculty_change_student_password", student_id=student.id) }}', {
-                method: 'POST'
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                /* Shown once, here, so the faculty can copy it — never in an alert */
-                document.getElementById('tempPwLabel').textContent = 'Temporary password (give it to the student; it is not shown again):';
-                document.getElementById('tempPwValue').textContent = data.temporary_password || '';
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="bi bi-check2"></i> Done';
-                submitBtn.type = 'button';
-                submitBtn.onclick = () => location.reload();
-            } else {
-                alert('❌ ' + data.message);
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('loading');
-                submitBtn.innerHTML = originalHTML;
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('❌ An error occurred: ' + error.message);
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('loading');
-            submitBtn.innerHTML = originalHTML;
-        }
-    });
-</script>
+{% if is_staff %}<script src="{{ url_for('static', filename='js/pages/student_profile.js') }}"></script>{% endif %}
 {% endblock %}

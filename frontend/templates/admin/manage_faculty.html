@@ -1,444 +1,115 @@
-{% extends "base.html" %}
-{% block title %}Manage Faculty - Admin Panel{% endblock %}
+{% extends "layouts/app.html" %}
+{% import 'components/ui.html' as ui %}
 
-{% block extra_css %}
-<style>
-    .admin-panel {
-        max-width: 1100px;
-        margin: 2rem auto;
-        padding: 0 1rem;
-    }
-
-    .admin-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .admin-header h1 {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin: 0;
-    }
-
-    .admin-header .badge {
-        background: var(--primary-color);
-        color: #fff;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-
-    /* Stats row */
-    .stats-row {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2rem;
-    }
-
-    .stat-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 1.25rem;
-        text-align: center;
-    }
-
-    .stat-card .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--primary-color);
-    }
-
-    .stat-card .stat-label {
-        font-size: 0.85rem;
-        color: var(--text-secondary);
-        margin-top: 0.25rem;
-    }
-
-    /* Create form card */
-    .create-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 2rem;
-    }
-
-    .create-card h2 {
-        font-size: 1.2rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-        color: var(--text-primary);
-    }
-
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1rem;
-    }
-
-    .form-grid .form-group {
-        margin-bottom: 0;
-    }
-
-    .form-grid label {
-        display: block;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-secondary);
-        margin-bottom: 0.3rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .form-grid input,
-    .form-grid select {
-        width: 100%;
-        padding: 0.6rem 0.75rem;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        font-size: 0.9rem;
-    }
-
-    .form-grid input:focus,
-    .form-grid select:focus {
-        border-color: var(--primary-color);
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 99, 102, 241), 0.15);
-    }
-
-    .form-actions {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 1rem;
-        gap: 0.75rem;
-    }
-
-    .btn-create {
-        background: linear-gradient(135deg, #10b981, #059669);
-        color: #fff;
-        border: none;
-        padding: 0.65rem 1.5rem;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 0.9rem;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .btn-create:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-    }
-
-    /* Faculty table */
-    .faculty-table-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        overflow: hidden;
-    }
-
-    .faculty-table-card h2 {
-        font-size: 1.2rem;
-        font-weight: 600;
-        padding: 1.25rem 1.5rem 0.75rem;
-        color: var(--text-primary);
-        margin: 0;
-    }
-
-    .faculty-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .faculty-table th {
-        background: var(--bg-secondary);
-        padding: 0.75rem 1rem;
-        text-align: left;
-        font-size: 0.8rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: var(--text-secondary);
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .faculty-table td {
-        padding: 0.85rem 1rem;
-        border-bottom: 1px solid var(--border-color);
-        font-size: 0.9rem;
-        color: var(--text-primary);
-    }
-
-    .faculty-table tr:last-child td {
-        border-bottom: none;
-    }
-
-    .faculty-table tr:hover {
-        background: var(--bg-secondary);
-    }
-
-    .faculty-name {
-        font-weight: 600;
-    }
-
-    .faculty-meta {
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-    }
-
-    .badge-active {
-        background: #dcfce7;
-        color: #166534;
-        padding: 0.2rem 0.6rem;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-
-    .btn-delete-faculty {
-        background: none;
-        border: 1px solid #ef4444;
-        color: #ef4444;
-        padding: 0.35rem 0.75rem;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .btn-delete-faculty:hover {
-        background: #ef4444;
-        color: #fff;
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 3rem 1rem;
-        color: var(--text-secondary);
-    }
-
-    .empty-state i {
-        font-size: 2.5rem;
-        display: block;
-        margin-bottom: 0.75rem;
-        opacity: 0.5;
-    }
-
-    .nav-links-admin {
-        display: flex;
-        gap: 0.75rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .nav-links-admin a {
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        text-decoration: none;
-        font-size: 0.85rem;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-
-    .nav-links-admin a:hover {
-        border-color: var(--primary-color);
-        color: var(--primary-color);
-    }
-
-    @media (max-width: 768px) {
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .admin-header {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-    }
-</style>
-{% endblock %}
+{% block title %}Faculty{% endblock %}
+{% block topbar_title %}<b>Administration</b> · faculty{% endblock %}
 
 {% block content %}
-<div class="admin-panel">
+{% call ui.page_header('Faculty', faculty_data|length ~ ' account' ~ ('s' if faculty_data|length != 1 else '') ~ '. Faculty in the same department share exams and students.') %}{% endcall %}
 
-    <!-- Admin Nav -->
-    <div class="admin-nav"
-        style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;padding:0.75rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;">
-        <a href="{{ url_for('admin.admin_dashboard') }}"
-            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
-                class="bi bi-speedometer2"></i> Dashboard</a>
-        <a href="{{ url_for('admin.manage_faculty') }}"
-            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;background:var(--primary-color);color:#fff;text-decoration:none;font-size:0.85rem;font-weight:500;"><i
-                class="bi bi-person-badge"></i> Manage Faculty</a>
-        <a href="{{ url_for('admin.admin_students') }}"
-            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
-                class="bi bi-people"></i> All Students</a>
-        <a href="{{ url_for('admin.admin_all_exams') }}"
-            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
-                class="bi bi-journal-text"></i> All Exams</a>
-        <a href="{{ url_for('student.global_leaderboard') }}"
-            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
-                class="bi bi-trophy"></i> Leaderboard</a>
-        <a href="{{ url_for('admin.admin_sql_console') }}"
-            style="display:flex;align-items:center;gap:0.4rem;padding:0.55rem 1rem;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:0.85rem;font-weight:500;"><i
-                class="bi bi-terminal"></i> SQL Console</a>
-    </div>
-
-    <!-- Header -->
-    <div class="admin-header">
-        <div>
-            <h1><i class="bi bi-shield-lock"></i> Faculty Management</h1>
-            <p style="color: var(--text-secondary); margin: 0.25rem 0 0;">Create and manage faculty accounts</p>
-        </div>
-        <span class="badge">{{ faculty_data | length }} Faculty</span>
-    </div>
-
-    <!-- Stats -->
-    <div class="stats-row">
-        <div class="stat-card">
-            <div class="stat-value">{{ faculty_data | length }}</div>
-            <div class="stat-label">Total Faculty</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ faculty_data | sum(attribute='exam_count') }}</div>
-            <div class="stat-label">Total Exams</div>
-        </div>
-    </div>
-
-    <!-- Create Faculty Form -->
-    <div class="create-card">
-        <h2><i class="bi bi-person-plus"></i> Create New Faculty</h2>
-        <form method="POST" action="{{ url_for('admin.create_faculty') }}">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label for="full_name">Full Name *</label>
-                    <input type="text" id="full_name" name="full_name" placeholder="Sahil Karande" required>
-                </div>
-                <div class="form-group">
-                    <label for="username">Username *</label>
-                    <input type="text" id="username" name="username" placeholder="sahil" required>
-                </div>
-                <div class="form-group">
-                    <label for="email">Email *</label>
-                    <input type="email" id="email" name="email" placeholder="sahil@cdac.in" required>
-                </div>
-                <div class="form-group">
-                    <label for="password">Password *</label>
-                    <input type="password" id="password" name="password" placeholder="Strong password" required
-                        minlength="6">
-                </div>
-                <div class="form-group">
-                    <label for="employee_id">Employee ID</label>
-                    <input type="text" id="employee_id" name="employee_id" placeholder="EMP-001">
-                </div>
-                <div class="form-group">
-                    <label for="phone">Phone</label>
-                    <input type="tel" id="phone" name="phone" placeholder="+91 9876543210">
-                </div>
-                <div class="form-group">
-                    <label for="department">Department</label>
-                    <input type="text" id="department" name="department" value="PGCP-BDA"
-                        placeholder="Department name">
-                </div>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn-create">
-                    <i class="bi bi-plus-circle"></i> Create Faculty
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <!-- Faculty List -->
-    <div class="faculty-table-card">
-        <h2><i class="bi bi-people"></i> Existing Faculty</h2>
-
-        {% if faculty_data %}
-        <table class="faculty-table">
-            <thead>
-                <tr>
-                    <th>Faculty</th>
-                    <th>Email</th>
-                    <th>Employee ID</th>
-                    <th>Department</th>
-                    <th>Exams</th>
-                    <th>Created</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in faculty_data %}
-                <tr id="faculty-row-{{ item.user.id }}">
-                    <td>
-                        <div class="faculty-name">{{ item.user.full_name or item.user.username }}</div>
-                        <div class="faculty-meta">@{{ item.user.username }}</div>
-                    </td>
-                    <td>{{ item.user.email }}</td>
-                    <td>{{ item.user.employee_id or '—' }}</td>
-                    <td>{{ item.user.department or '—' }}</td>
-                    <td><span class="badge-active">{{ item.exam_count }} exams</span></td>
-                    <td class="faculty-meta">{{ item.user.created_at.strftime('%d %b %Y') if item.user.created_at else
-                        '—' }}</td>
-                    <td>
-                        <button class="btn-delete-faculty"
-                            onclick='deleteFaculty({{ item.user.id }}, {{ (item.user.full_name or item.user.username)|tojson }})'>
-                            <i class="bi bi-trash"></i> Delete
-                        </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty-state">
-            <i class="bi bi-people"></i>
-            <p>No faculty accounts yet. Create one above.</p>
+<div class="nx-grid-main" id="facultyPage"
+     data-delete-url="{{ url_for('admin.delete_faculty', faculty_id=0) }}"
+     data-reset-url="{{ url_for('admin.reset_faculty_password', faculty_id=0) }}">
+  <div class="nx-stack">
+    <section class="nx-panel nx-enter" style="--i: 1" aria-labelledby="list-title">
+      <div class="nx-panel__head">
+        <h2 class="nx-panel__title" id="list-title">Accounts</h2>
+        {% if faculty_data|length > 6 %}
+        <div class="nx-panel__actions">
+          <label class="nx-search"><span class="nx-visually-hidden">Search faculty</span><i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" class="nx-input" id="facultySearch" placeholder="Name, email or department" autocomplete="off"></label>
         </div>
         {% endif %}
-    </div>
+      </div>
+      {% if faculty_data %}
+      <div class="nx-table-wrap">
+        <table class="nx-table nx-table--stack">
+          <thead><tr><th scope="col">Faculty</th><th scope="col">Department</th><th scope="col" class="is-num">Exams</th><th scope="col">Password</th><th scope="col" class="is-actions"><span class="nx-visually-hidden">Actions</span></th></tr></thead>
+          <tbody>
+            {% for item in faculty_data %}
+            {% set u = item.user %}
+            {% set name = u.full_name or u.username %}
+            <tr data-faculty-row data-search="{{ (name ~ ' ' ~ u.email ~ ' ' ~ (u.department or '') ~ ' ' ~ (u.employee_id or ''))|lower }}">
+              <td>
+                <div class="nx-person">
+                  <span class="nx-avatar" aria-hidden="true">{{ ui.initials(name) }}</span>
+                  <span><span class="nx-table__primary">{{ name }}</span><span class="nx-table__secondary">{{ u.email }}{% if u.employee_id %} · {{ u.employee_id }}{% endif %}</span></span>
+                </div>
+              </td>
+              <td data-label="Department">{% if u.department %}{{ u.department }}{% else %}<span class="nx-text-warning">None</span>{% endif %}</td>
+              <td class="is-num nx-num" data-label="Exams">{{ item.exam_count }}</td>
+              <td data-label="Password">{% if u.password_changed %}{{ ui.badge('Set', 'success') }}{% else %}{{ ui.badge('Temporary', 'warning') }}{% endif %}</td>
+              <td class="is-actions">
+                <div class="nx-row-actions">
+                  <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm" data-reset="{{ u.id }}" data-name="{{ name }}" data-nx-confirm="Reset password?"><i class="bi bi-key" aria-hidden="true"></i><span>Reset password</span></button>
+                  {% if item.exam_count %}
+                  <span class="nx-btn nx-btn--ghost nx-btn--sm nx-btn--icon is-disabled" title="Owns {{ item.exam_count }} exam{{ 's' if item.exam_count != 1 }}; reassign or delete them first" aria-disabled="true"><i class="bi bi-trash3" aria-hidden="true"></i></span>
+                  {% else %}
+                  <button type="button" class="nx-btn nx-btn--ghost nx-btn--sm nx-btn--icon" data-delete="{{ u.id }}" data-nx-confirm="Delete?" aria-label="Delete {{ name }}" title="Delete"><i class="bi bi-trash3" aria-hidden="true"></i><span class="nx-visually-hidden">Delete</span></button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      {% call ui.empty_state('No faculty yet', 'Add the first faculty account with the form.', icon='person-plus') %}{% endcall %}
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="nx-stack">
+    <section class="nx-panel nx-enter" style="--i: 2" aria-labelledby="new-title">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="new-title">Add faculty</h2>
+          <span class="nx-panel__sub">They choose their own password at first sign-in</span>
+        </div>
+      </div>
+      <form method="POST" action="{{ url_for('admin.create_faculty') }}" class="nx-panel__body nx-form" id="createFaculty" novalidate>
+        <div class="nx-field"><label class="nx-label" for="full_name">Full name</label><input class="nx-input" id="full_name" name="full_name" maxlength="100" autocomplete="off"></div>
+        <div class="nx-field" id="f-username"><label class="nx-label" for="username">Username</label><input class="nx-input" id="username" name="username" required maxlength="80" autocomplete="off" autocapitalize="none"></div>
+        <div class="nx-field" id="f-email"><label class="nx-label" for="email">Email</label><input class="nx-input" type="email" id="email" name="email" required maxlength="120" autocomplete="off"></div>
+        <div class="nx-field">
+          <label class="nx-label" for="department">Department <span class="nx-label__aside">shares exams with colleagues</span></label>
+          <input class="nx-input" id="department" name="department" list="departmentList" maxlength="100" autocomplete="off" placeholder="e.g. DBDA">
+          <datalist id="departmentList">{% for d in departments %}<option value="{{ d }}">{% endfor %}</datalist>
+        </div>
+        <div class="nx-form-row">
+          <div class="nx-field"><label class="nx-label" for="employee_id">Employee ID <span class="nx-label__aside">optional</span></label><input class="nx-input" id="employee_id" name="employee_id" maxlength="50" autocomplete="off"></div>
+          <div class="nx-field"><label class="nx-label" for="phone">Phone <span class="nx-label__aside">optional</span></label><input class="nx-input" type="tel" id="phone" name="phone" maxlength="20"></div>
+        </div>
+        <div class="nx-field" id="f-password">
+          <label class="nx-label" for="password">Password <span class="nx-label__aside">blank = a temporary one</span></label>
+          <div class="nx-input-wrap">
+            <input class="nx-input" type="password" id="password" name="password" minlength="8" autocomplete="new-password">
+            <button type="button" class="nx-input-wrap__btn" data-reveal="password" aria-label="Show password"><i class="bi bi-eye" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <p class="nx-help nx-text-danger" id="createError" role="alert" hidden></p>
+        <button type="submit" class="nx-btn nx-btn--primary nx-btn--block" id="createBtn"><i class="bi bi-person-plus" aria-hidden="true"></i><span>Add faculty</span></button>
+      </form>
+    </section>
+  </div>
 </div>
 
-<script>
-    async function deleteFaculty(id, name) {
-        if (!confirm(`Are you sure you want to delete faculty "${name}"?\n\nThis will also delete ALL their exams and related data. This cannot be undone.`)) {
-            return;
-        }
+<dialog class="nx-dialog" id="passwordDialog" aria-labelledby="pwTitle">
+  <div class="nx-dialog__head"><h2 class="nx-dialog__title" id="pwTitle">Temporary password</h2></div>
+  <div class="nx-dialog__body nx-stack nx-stack--tight">
+    <p class="nx-help" id="pwFor"></p>
+    <code class="nx-reset__password nx-key" id="pwValue"></code>
+    <p class="nx-help">It is shown only once. They must choose their own password when they sign in.</p>
+  </div>
+  <div class="nx-dialog__foot">
+    <button type="button" class="nx-btn nx-btn--ghost" id="pwCopy"><i class="bi bi-copy" aria-hidden="true"></i><span>Copy</span></button>
+    <button type="button" class="nx-btn nx-btn--primary" id="pwDone"><span>Done</span></button>
+  </div>
+</dialog>
+{% endblock %}
 
-        try {
-            const resp = await fetch(`/admin/delete-faculty/${id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
-            });
-            
-            if (resp.redirected || !resp.headers.get('content-type')?.includes('application/json')) {
-                window.location.reload();
-                return;
-            }
-
-            const data = await resp.json();
-
-            if (data.success) {
-                document.getElementById(`faculty-row-${id}`)?.remove();
-                alert(data.message);
-            } else {
-                alert('Error: ' + (data.error || 'Unknown error'));
-            }
-        } catch (err) {
-            alert('Operation failed: ' + err.message);
-        }
-    }
-</script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/auth_forms.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/manage_faculty.js') }}"></script>
 {% endblock %}

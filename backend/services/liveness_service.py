@@ -55,6 +55,9 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+import logging
+
+log = logging.getLogger(__name__)
 
 # ── Challenge protocol ──────────────────────────────────────────────────────
 
@@ -184,8 +187,8 @@ def _load_deep_pad():
 
     path = os.path.join(_MODEL_DIR, 'anti-spoof-minifasnet.onnx')
     if not os.path.exists(path):
-        print('ℹ️  [Liveness] No deep PAD model found — using heuristic ensemble only.')
-        print(f'   Drop a MiniFASNet ONNX at {path} for stronger anti-spoofing.')
+        log.info('[Liveness] No deep PAD model found — using heuristic ensemble only.')
+        log.info(f'   Drop a MiniFASNet ONNX at {path} for stronger anti-spoofing.')
         return None
 
     try:
@@ -194,9 +197,9 @@ def _load_deep_pad():
         net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
         _deep_pad = net
         DEEP_PAD_AVAILABLE = True
-        print('✅ [Liveness] Deep PAD model loaded — heuristics become secondary.')
+        log.info('[Liveness] Deep PAD model loaded — heuristics become secondary.')
     except Exception as e:
-        print(f'⚠️  [Liveness] Deep PAD model failed to load: {e}')
+        log.warning(f'[Liveness] Deep PAD model failed to load: {e}')
 
     return _deep_pad
 
@@ -220,7 +223,7 @@ def deep_pad_score(face_bgr: np.ndarray) -> Optional[float]:
             return float(probs[1])
         return float(out[0])
     except Exception as e:
-        print(f'⚠️  [Liveness] Deep PAD inference failed: {e}')
+        log.warning(f'[Liveness] Deep PAD inference failed: {e}')
         return None
 
 

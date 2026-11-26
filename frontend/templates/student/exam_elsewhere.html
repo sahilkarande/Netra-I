@@ -1,0 +1,34 @@
+{% extends "layouts/exam.html" %}
+{% block title %}Open on another device · {{ exam.title }}{% endblock %}
+
+{% block content %}
+<div class="nx-gate">
+  <header class="nx-gate__bar">
+    <a class="nx-brand" href="{{ url_for('student.student_dashboard') }}" aria-label="Back to your dashboard">
+      <img class="nx-brand__cdac nx-brand__cdac--on-light" src="{{ url_for('static', filename='images/brand/cdac-mark-on-light.png') }}" alt="C-DAC" width="37" height="26">
+      <img class="nx-brand__cdac nx-brand__cdac--on-dark" src="{{ url_for('static', filename='images/brand/cdac-mark-on-dark.png') }}" alt="" width="37" height="26">
+      <span class="nx-brand__rule" aria-hidden="true"></span>
+      <span class="nx-brand__name">Netra-I</span>
+    </a>
+    {% include 'partials/theme_menu.html' %}
+  </header>
+
+  <main id="main" class="nx-gate__main">
+    <div class="nx-gate__card nx-form">
+      <div class="nx-gate__icon" aria-hidden="true"><i class="bi bi-display"></i></div>
+      <div class="nx-auth-head">
+        <p class="nx-eyebrow">Open on another device</p>
+        <h1>{{ exam.title }}</h1>
+        <p>Your exam is still running on another computer, so it can't be opened here as well. This attempt has been recorded for your invigilator.</p>
+      </div>
+      <p class="nx-help">If you have moved to this computer, close the exam on the other one, or tell your invigilator. About {{ wait_seconds }} seconds after the other computer stops, it opens here, with your saved answers and the time you have left.</p>
+      <a class="nx-btn nx-btn--primary nx-btn--lg nx-btn--block" href="{{ url_for('exam.take_exam', exam_id=exam.id) }}">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i><span>Try again</span>
+      </a>
+      <a class="nx-btn nx-btn--ghost nx-btn--block" href="{{ url_for('student.student_dashboard') }}">
+        <span>Back to my dashboard</span>
+      </a>
+    </div>
+  </main>
+</div>
+{% endblock %}

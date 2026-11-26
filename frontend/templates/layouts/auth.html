@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+{#
+  Netra-I sign-in shell (design system).
+  Used by login, register, OTP verification and change password / onboarding.
+  Loads only the design-system stylesheets, like layouts/app.html.
+
+  Blocks: title, content, rail_title, rail_body, extra_js
+  Set `uses_face = True` before extending to load the face-liveness client.
+#}
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Sign in{% endblock %} · Netra-I</title>
+  <link rel="icon" href="{{ url_for('static', filename='images/applogo.png') }}" type="image/png">
+
+  {% include 'partials/theme_init.html' %}
+  {% include 'partials/csrf.html' %}
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/fonts.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/components.css') }}">
+
+  {% if uses_face %}
+  <script>
+    /* Local face-api.js + models (offline) for face sign-in and enrolment */
+    window.NETRA_FACEAPI_SRC = "{{ url_for('static', filename='vendor/face-api/face-api.min.js') }}";
+    window.NETRA_FACE_MODEL_URL = "{{ url_for('static', filename='vendor/face-api/models') }}";
+  </script>
+  <script src="{{ url_for('static', filename='js/face_liveness.js') }}"></script>
+  {% endif %}
+</head>
+<body>
+  <a class="nx-skip" href="#main">Skip to content</a>
+
+  <div class="nx-auth">
+    <aside class="nx-auth__rail" aria-label="About Netra-I">
+      <a class="nx-brand" href="{{ url_for('auth.index') }}" aria-label="Netra-I home">
+        <img class="nx-brand__cdac nx-brand__cdac--on-light" src="{{ url_for('static', filename='images/brand/cdac-mark-on-light.png') }}" alt="C-DAC" width="37" height="26">
+        <img class="nx-brand__cdac nx-brand__cdac--on-dark" src="{{ url_for('static', filename='images/brand/cdac-mark-on-dark.png') }}" alt="" width="37" height="26">
+        <span class="nx-brand__rule" aria-hidden="true"></span>
+        <span>
+          <span class="nx-brand__name">Netra-I</span>
+          <span class="nx-brand__org">Exam platform</span>
+        </span>
+      </a>
+
+      <div class="nx-auth__pitch">
+        <p class="nx-auth__headline">{% block rail_title %}Proctored exams that run on your campus network.{% endblock %}</p>
+        {% block rail_body %}
+        <ul class="nx-auth__facts">
+          <li><i class="bi bi-wifi-off" aria-hidden="true"></i><span><b>Works without internet.</b> Everything is served from the exam server in your hall.</span></li>
+          <li><i class="bi bi-person-check" aria-hidden="true"></i><span><b>Faculty decide.</b> The AI invigilator flags moments; a teacher reviews every one.</span></li>
+          <li><i class="bi bi-eye-slash" aria-hidden="true"></i><span><b>No video recording.</b> Only flagged moments are kept, until results are published.</span></li>
+        </ul>
+        {% endblock %}
+      </div>
+
+      <p class="nx-auth__foot">C-DAC · Centre for Development of Advanced Computing</p>
+    </aside>
+
+    <div class="nx-auth__main">
+      <div class="nx-auth__bar">
+        <a class="nx-brand nx-auth__mobile-brand" href="{{ url_for('auth.index') }}" aria-label="Netra-I home">
+          <img class="nx-brand__cdac nx-brand__cdac--on-light" src="{{ url_for('static', filename='images/brand/cdac-mark-on-light.png') }}" alt="C-DAC" width="37" height="26">
+          <img class="nx-brand__cdac nx-brand__cdac--on-dark" src="{{ url_for('static', filename='images/brand/cdac-mark-on-dark.png') }}" alt="" width="37" height="26">
+          <span class="nx-brand__rule" aria-hidden="true"></span>
+          <span class="nx-brand__name">Netra-I</span>
+        </a>
+        {% include 'partials/topbar_end.html' %}
+      </div>
+
+      <main id="main" class="nx-auth__content" tabindex="-1">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {% include 'partials/toasts.html' %}
+
+  <script src="{{ url_for('static', filename='js/ds/app.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

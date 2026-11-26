@@ -1,0 +1,89 @@
+/*
+ * Netra-I design system · public pages (layouts/public.html, index.html)
+ * The hero picture is an exam hall seen from above, the same seating-grid
+ * idea as the sign-in rail.
+ */
+.nx-public-bar {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  background: var(--bg-surface);
+  background: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.nx-public-bar .nx-brand { padding: 0; }
+.nx-public-bar__end { display: flex; align-items: center; gap: var(--space-2); }
+#main { display: grid; gap: var(--space-16); width: min(1160px, 100%); margin: 0 auto; padding: var(--space-12) var(--space-6) var(--space-16); }
+#main:focus { outline: none; }
+
+.nx-hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: var(--space-12); align-items: center; }
+.nx-hero__text { display: grid; gap: var(--space-5); }
+.nx-hero__title { font: 600 clamp(2.1rem, 4.4vw, 3.4rem)/1.08 var(--font-display); letter-spacing: -0.03em; text-wrap: balance; }
+.nx-hero__lead { font-size: var(--text-md); line-height: 1.6; color: var(--text-muted); max-width: 52ch; }
+.nx-hero__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+
+.nx-hall {
+  margin: 0; padding: var(--space-6); display: grid; gap: var(--space-4);
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+.nx-hall__front {
+  display: grid; place-items: center; height: 30px; border-radius: var(--radius-md);
+  background: var(--bg-subtle); border: 1px dashed var(--border-strong);
+  font: 500 var(--text-2xs)/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-subtle);
+}
+.nx-hall__grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-3); }
+.nx-hall__desk {
+  aspect-ratio: 4 / 3; display: grid; place-items: center; border-radius: var(--radius-md);
+  background: var(--bg-subtle); border: 1px solid var(--border); color: var(--text-subtle); font-size: 13px;
+}
+.nx-hall__desk.is-done { background: var(--success-subtle); border-color: transparent; color: var(--success); }
+.nx-hall__desk.is-flag { background: var(--warning-subtle); border-color: var(--warning); color: var(--warning); }
+.nx-hall__desk.is-you { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); box-shadow: 0 0 0 4px var(--accent-subtle); }
+.nx-hall__legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); font-size: var(--text-xs); color: var(--text-muted); }
+.nx-hall__legend span { display: inline-flex; align-items: center; gap: 6px; }
+.nx-hall__key { width: 12px; height: 9px; border-radius: 2px; background: var(--bg-subtle); border: 1px solid var(--border-strong); }
+.nx-hall__key.is-done { background: var(--success-subtle); border-color: var(--success); }
+.nx-hall__key.is-flag { background: var(--warning-subtle); border-color: var(--warning); }
+
+.nx-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.nx-fact { display: grid; gap: var(--space-2); align-content: start; padding: var(--space-5); border-top: 2px solid var(--accent); }
+.nx-fact .bi { font-size: 20px; color: var(--accent); }
+.nx-fact h2 { font: 600 var(--text-md)/1.3 var(--font-display); }
+.nx-fact p { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.6; }
+
+.nx-section-title { font: 600 var(--text-2xl)/1.2 var(--font-display); letter-spacing: -0.02em; margin-bottom: var(--space-6); }
+.nx-steps-row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); counter-reset: none; }
+.nx-steps-row li { display: grid; gap: var(--space-2); align-content: start; padding: var(--space-5); background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.nx-steps-row__n { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-subtle); color: var(--accent); font: 600 var(--text-sm) var(--font-mono); }
+.nx-steps-row h3 { font: 600 var(--text-md)/1.3 var(--font-display); }
+.nx-steps-row p { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.6; }
+
+.nx-audience { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.nx-audience .nx-panel__title { display: flex; align-items: center; gap: var(--space-2); }
+.nx-audience .nx-panel__title .bi { color: var(--accent); }
+.nx-ticks { list-style: none; margin: 0; padding: var(--space-4); display: grid; gap: var(--space-3); }
+.nx-ticks li { position: relative; padding-left: 26px; font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; }
+.nx-ticks li::before {
+  content: "\f272"; font-family: "bootstrap-icons"; position: absolute; left: 0; top: 0;
+  color: var(--success); font-size: 15px; line-height: 1.4;
+}
+
+.nx-public-foot {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2);
+  width: min(1160px, 100%); margin: 0 auto; padding: var(--space-6);
+  border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-subtle);
+}
+
+@media (max-width: 900px) {
+  .nx-hero { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  .nx-facts, .nx-steps-row, .nx-audience { grid-template-columns: minmax(0, 1fr); }
+  #main { gap: var(--space-12); padding: var(--space-8) var(--space-4) var(--space-12); }
+}
+@media (max-width: 520px) {
+  .nx-public-bar { padding: var(--space-3) var(--space-4); }
+  .nx-public-bar .nx-brand__org { display: none; }
+  .nx-hall { padding: var(--space-4); }
+  .nx-hall__grid { gap: var(--space-2); }
+}

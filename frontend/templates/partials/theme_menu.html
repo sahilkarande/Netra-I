@@ -1,0 +1,12 @@
+{# Theme picker (Match device / Light / Dark). Behaviour in js/ds/app.js. #}
+    <div class="nx-menu-wrap">
+      <button type="button" class="nx-btn nx-btn--ghost nx-btn--icon" data-nx-menu-toggle="nx-theme-menu" aria-label="Theme">
+        <i class="bi bi-circle-half" data-nx-theme-icon aria-hidden="true"></i>
+      </button>
+      <div class="nx-menu" id="nx-theme-menu" role="menu" aria-label="Theme">
+        <div class="nx-menu__label nx-eyebrow">Appearance</div>
+        <button type="button" class="nx-menu__item" role="menuitemradio" data-nx-theme="system" aria-checked="true"><i class="bi bi-circle-half" aria-hidden="true"></i>Match device<i class="bi bi-check2 nx-menu__check" aria-hidden="true"></i></button>
+        <button type="button" class="nx-menu__item" role="menuitemradio" data-nx-theme="light" aria-checked="false"><i class="bi bi-sun" aria-hidden="true"></i>Light<i class="bi bi-check2 nx-menu__check" aria-hidden="true"></i></button>
+        <button type="button" class="nx-menu__item" role="menuitemradio" data-nx-theme="dark" aria-checked="false"><i class="bi bi-moon-stars" aria-hidden="true"></i>Dark<i class="bi bi-check2 nx-menu__check" aria-hidden="true"></i></button>
+      </div>
+    </div>

@@ -89,13 +89,13 @@ Netra-I/
 │
 ├── frontend/
 │   ├── templates/                  # 26 Jinja2 templates
-│   │   ├── base.html               # nav, theme, flash messages
+│   │   ├── layouts/                # app, auth, exam and public shells (design system)
 │   │   ├── student/take_exam.html  # 2 738 lines — the exam runtime
 │   │   ├── student/exam_key.html   # access-key gate
 │   │   └── admin/ faculty/ student/
 │   └── static/
-│       ├── css/  (10 files; style.css is ~16 700 lines)
-│       ├── js/   (analytics, face_liveness, student_management)
+│       ├── css/ds/                 # design system: tokens, base, layout, components, exam, public
+│       ├── js/   ds/app.js, pages/<page>.js, face_liveness.js
 │       ├── vendor/                 # all third-party JS/CSS/fonts + face-api models (offline)
 │       ├── images/
 │       └── violations/             # evidence JPEGs, runtime-only, gitignored, staff-only
@@ -133,6 +133,11 @@ see [§14](#14-scaling-analysis).
 **Persistence.** SQLite by default via `DATABASE_URL`, in WAL mode. Evidence photos are written to
 `frontend/static/violations/`. OpenVINO models load from `ai_models/` (or `NETRA_MODEL_DIR`) and
 are compiled once per process.
+
+**Time.** Every stored datetime is naive UTC. Exam open/close times are typed and shown in the hall's
+zone (`APP_TIMEZONE`, default `Asia/Kolkata`); `backend/services/time_service.py` converts on save
+(`local_to_utc`) and on display (the `localtime` Jinja filter). Exams saved before this rule held local
+time; start-up converts those once (`convert_exam_times_to_utc` in `app.py`, keyed on `exam.times_utc`).
 
 Redis appears in `docker-compose.yml` but **nothing in the application connects to it.** There is
 no `message_queue` argument on `SocketIO()`, so multi-worker Socket.IO is not currently possible.
@@ -805,7 +810,7 @@ Sample files are in [docs/samples/](samples/).
 | Threat | Control |
 |---|---|
 | Forged session cookies | No hard-coded secret; random per-installation key or `SECRET_KEY` |
-| Cross-site request forgery | Per-session token on every POST/PUT/PATCH/DELETE (`backend/security.py`), added automatically to fetch and forms by `base.html` |
+| Cross-site request forgery | Per-session token on every POST/PUT/PATCH/DELETE (`backend/security.py`), added automatically to fetch and forms by `partials/csrf.html` |
 | Shared lab PCs | No remember-me cookie; session ends with the browser or after `SESSION_IDLE_MINUTES` idle |
 | Remote code execution via debugger | Debug off by default; when on, bound to 127.0.0.1 only |
 | Students acting as staff | `@staff_required` on every faculty route; access helpers reject non-staff |

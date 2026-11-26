@@ -101,8 +101,11 @@ def test_analytics_escapes_student_name(app, seed, as_user):
         se.total_violations = 3
         db.session.commit()
     html = as_user('faca').get(f"/faculty/exam/{seed['exam']}/analytics").data.decode()
+    # The name only appears HTML-escaped, in an attribute read by the page
+    # script with getAttribute; there is no inline handler to break out of.
     assert "'x');alert(1);('" not in html
-    assert 'viewViolations(' in html
+    assert 'data-name="x&#39;);alert(1);(&#39;"' in html
+    assert 'onclick=' not in html
 
 
 def test_proctor_activity_log_is_written(app, seed):

@@ -38,6 +38,9 @@ import numpy as np
 from backend.database import db
 from backend.models import FaceAuditLog, FaceEnrollment, FaceLoginAttempt, User
 from backend.services import liveness_service as LV
+import logging
+
+log = logging.getLogger(__name__)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 DESCRIPTOR_DIM = 128
@@ -65,10 +68,10 @@ ENROLL_CONSISTENCY_MAX = 0.55
 # the frontal-to-frontal enrolment check above.
 SEQUENCE_CONSISTENCY_MAX = 0.75
 
-# Brute-force limiting. In-process, like the rest of this app's runtime state.
+# Brute-force limiting lives in services/throttle.py (database-backed, so a
+# restart does not clear a lockout). These names are kept for the callers.
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 10
-_failed_attempts = {}          # identifier -> [count, first_failure_datetime]
 
 
 # ── Packing ─────────────────────────────────────────────────────────────────
@@ -152,34 +155,18 @@ def check_enroll_consistency(samples: List[List[float]]) -> Tuple[bool, str]:
 
 def is_locked_out(identifier: str) -> Tuple[bool, int]:
     """Return (locked, minutes_remaining)."""
-    entry = _failed_attempts.get(identifier)
-    if not entry:
-        return False, 0
-
-    count, first = entry
-    elapsed = datetime.utcnow() - first
-
-    if elapsed > timedelta(minutes=LOCKOUT_MINUTES):
-        _failed_attempts.pop(identifier, None)
-        return False, 0
-
-    if count >= MAX_FAILED_ATTEMPTS:
-        remaining = LOCKOUT_MINUTES - int(elapsed.total_seconds() // 60)
-        return True, max(1, remaining)
-
-    return False, 0
+    from backend.services import throttle
+    return throttle.is_locked_out(identifier, MAX_FAILED_ATTEMPTS, LOCKOUT_MINUTES)
 
 
 def record_failure(identifier: str):
-    entry = _failed_attempts.get(identifier)
-    if entry and datetime.utcnow() - entry[1] <= timedelta(minutes=LOCKOUT_MINUTES):
-        entry[0] += 1
-    else:
-        _failed_attempts[identifier] = [1, datetime.utcnow()]
+    from backend.services import throttle
+    throttle.record(identifier, LOCKOUT_MINUTES)
 
 
 def clear_failures(identifier: str):
-    _failed_attempts.pop(identifier, None)
+    from backend.services import throttle
+    throttle.clear(identifier)
 
 
 # ── Audit ───────────────────────────────────────────────────────────────────
@@ -199,7 +186,7 @@ def log_attempt(identifier, user_id=None, success=False, distance=None,
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"⚠️ Could not log face login attempt: {e}")
+        log.exception('Could not log face login attempt')
 
 
 # ── Frame decoding ──────────────────────────────────────────────────────────
@@ -381,7 +368,7 @@ def audit(subject_id, action, actor=None, reason=None, sample_count=None,
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"Could not write face audit log: {e}")
+        log.exception('Could not write face audit log')
 
 
 def enrollment_locked(user: User) -> bool:

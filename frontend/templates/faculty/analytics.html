@@ -1,765 +1,237 @@
-{% extends "base.html" %}
-{% block title %}Exam Analytics | {{ exam.title }}{% endblock %}
+{% extends "layouts/app.html" %}
+{% import 'components/ui.html' as ui %}
 
-{% block extra_css %}
-<style>
-    :root {
-        --vx-bg: #0b0f19;
-        --vx-card: rgba(30, 41, 59, 0.7);
-        --vx-border: rgba(255, 255, 255, 0.08);
-        --vx-accent: #6366f1;
-        --vx-success: #10b981;
-        --vx-danger: #ef4444;
-        --vx-warning: #f59e0b;
-        --vx-info: #3b82f6;
-    }
+{% block title %}Analytics · {{ exam.title }}{% endblock %}
+{% block topbar_title %}<b>Analytics</b> · {{ exam.title }}{% endblock %}
 
-    .analytics-dashboard {
-        padding: 2rem;
-        max-width: 1400px;
-        margin: 0 auto;
-        color: #f1f5f9;
-        animation: fadeIn 0.6s ease-out;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Header Styling */
-    .dashboard-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 2.5rem;
-        gap: 1.5rem;
-    }
-
-    .header-content h1 {
-        font-size: 2.2rem;
-        font-weight: 800;
-        margin-bottom: 0.5rem;
-        background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .header-meta {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        color: #94a3b8;
-        font-size: 0.95rem;
-    }
-
-    .header-actions {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-    }
-
-    /* Summary Grid */
-    .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 3rem;
-    }
-
-    .stat-card {
-        background: var(--vx-card);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--vx-border);
-        border-radius: 20px;
-        padding: 1.5rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .stat-card:hover {
-        transform: translateY(-5px);
-        border-color: rgba(99, 102, 241, 0.3);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-    }
-
-    .stat-card::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 100px;
-        height: 100px;
-        background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.1), transparent 70%);
-        pointer-events: none;
-    }
-
-    .stat-icon-box {
-        width: 48px;
-        height: 48px;
-        border-radius: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.4rem;
-        margin-bottom: 1.25rem;
-    }
-
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 800;
-        line-height: 1;
-        margin-bottom: 0.4rem;
-    }
-
-    .stat-label {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: #94a3b8;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .stat-trend {
-        font-size: 0.75rem;
-        margin-top: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    /* Charts Section */
-    .charts-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1.5rem;
-        margin-bottom: 3rem;
-    }
-
-    .chart-card {
-        background: var(--vx-card);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--vx-border);
-        border-radius: 24px;
-        padding: 2rem;
-    }
-
-    .chart-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-    }
-
-    .chart-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    .chart-container {
-        height: 300px;
-        position: relative;
-    }
-
-    /* Table Section */
-    .data-section {
-        background: var(--vx-card);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--vx-border);
-        border-radius: 24px;
-        padding: 2rem;
-        margin-bottom: 3rem;
-    }
-
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-    }
-
-    .search-box {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--vx-border);
-        border-radius: 12px;
-        padding: 8px 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-width: 300px;
-    }
-
-    .search-box input {
-        background: none;
-        border: none;
-        color: white;
-        outline: none;
-        width: 100%;
-        font-size: 0.9rem;
-    }
-
-    .vx-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0 8px;
-    }
-
-    .vx-table th {
-        padding: 12px 20px;
-        text-align: left;
-        color: #94a3b8;
-        font-weight: 600;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .vx-row {
-        background: rgba(255, 255, 255, 0.02);
-        transition: all 0.2s;
-    }
-
-    .vx-row:hover {
-        background: rgba(255, 255, 255, 0.05);
-        transform: scale(1.005);
-    }
-
-    .vx-row td {
-        padding: 16px 20px;
-        vertical-align: middle;
-        border-top: 1px solid var(--vx-border);
-        border-bottom: 1px solid var(--vx-border);
-    }
-
-    .vx-row td:first-child { border-left: 1px solid var(--vx-border); border-radius: 12px 0 0 12px; }
-    .vx-row td:last-child { border-right: 1px solid var(--vx-border); border-radius: 0 12px 12px 0; }
-
-    .score-badge {
-        padding: 6px 12px;
-        border-radius: 10px;
-        font-weight: 700;
-        font-size: 0.9rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .badge-success { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
-    .badge-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
-    .badge-warning { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }
-
-    /* Modal Styling */
-    .vx-modal {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(8px);
-        z-index: 1000;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-    }
-
-    .vx-modal-content {
-        background: #0f172a;
-        border: 1px solid var(--vx-border);
-        border-radius: 24px;
-        width: 100%;
-        max-width: 900px;
-        max-height: 90vh;
-        overflow-y: auto;
-        position: relative;
-    }
-
-    /* Buttons */
-    .btn-vx {
-        padding: 10px 20px;
-        border-radius: 12px;
-        font-weight: 600;
-        font-size: 0.9rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: none;
-        text-decoration: none;
-    }
-
-    .btn-primary { background: var(--vx-accent); color: white; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); }
-    .btn-outline { background: rgba(255, 255, 255, 0.05); color: white; border: 1px solid var(--vx-border); }
-    .btn-outline:hover { background: rgba(255, 255, 255, 0.1); }
-
-    @media (max-width: 992px) {
-        .charts-grid { grid-template-columns: 1fr; }
-        .dashboard-header { flex-direction: column; }
-    }
-</style>
-{% endblock %}
+{% set finished_states = ('submitted', 'completed', 'force_ended') %}
 
 {% block content %}
-<div class="analytics-dashboard">
-    <!-- Header -->
-    <header class="dashboard-header">
-        <div class="header-content">
-            <h1><i class="bi bi-bar-chart-steps"></i> Exam Analytics Dashboard</h1>
-            <div class="header-meta">
-                <span><i class="bi bi-journal-text"></i> {{ exam.title }}</span>
-                <span class="opacity-50">|</span>
-                <span><i class="bi bi-calendar3"></i> {{ exam.created_at.strftime('%d %b %Y') }}</span>
-                <span class="opacity-50">|</span>
-                <span><i class="bi bi-person-badge"></i> {{ exam.creator.full_name }}</span>
-            </div>
+{% call ui.page_header(exam.title,
+      'Analytics · created ' ~ (exam.created_at|localtime('%d %b %Y') if exam.created_at else '—') ~ ((' by ' ~ (exam.creator.full_name or exam.creator.username)) if exam.creator else '')) %}
+  {{ ui.button('Exam page', href=url_for('faculty.view_exam', exam_id=exam.id), icon='arrow-left') }}
+  {% if exam.results_published %}
+  {{ ui.badge('Results published', 'success') }}
+  {% else %}
+  <button type="button" class="nx-btn nx-btn--primary" id="publishResults" data-nx-confirm="Publish results?"
+          data-url="{{ url_for('faculty.faculty_publish_results', exam_id=exam.id) }}">
+    <i class="bi bi-megaphone" aria-hidden="true"></i><span>Publish results</span>
+  </button>
+  {% endif %}
+{% endcall %}
+
+{% if needs_review_ids %}
+<a class="nx-attention__item nx-tone-warning nx-enter" href="#students-title" data-filter-link="review">
+  <span class="nx-attention__icon"><i class="bi bi-flag" aria-hidden="true"></i></span>
+  <span class="nx-attention__text">
+    <span class="nx-attention__title">{{ needs_review_ids|length }} flagged attempt{{ 's' if needs_review_ids|length != 1 }} to review</span>
+    <span class="nx-attention__detail">Check the evidence and accept or invalidate each one{{ ' before publishing' if not exam.results_published }}. Images are deleted {{ evidence_retention_days() }} days after results are published.</span>
+  </span>
+  <span class="nx-attention__go">Review<i class="bi bi-arrow-down" aria-hidden="true"></i></span>
+</a>
+{% endif %}
+
+<section class="nx-grid-stats" aria-label="Summary">
+  {{ ui.stat('Submitted', finished_count ~ ' / ' ~ total_attempts, icon='people', note=(total_attempts - finished_count) ~ ' not finished', i=1) }}
+  {{ ui.stat('Average score', '%.0f'|format(avg_score), unit='%', icon='bar-chart', meter=avg_score if scored_count else None,
+             note=('Pass mark ' ~ exam.passing_score|int ~ '%'), i=2) }}
+  {{ ui.stat('Pass rate', ('%.0f'|format(passed / scored_count * 100)) if scored_count else '—', unit='%' if scored_count else None, icon='check2-circle',
+             meter=(passed / scored_count * 100) if scored_count else None, meter_tone='success',
+             note=passed ~ ' passed · ' ~ failed ~ ' below', i=3) }}
+  {{ ui.stat('Average time', ('%.0f'|format(avg_time)) if avg_time is not none else '—', unit=' min' if avg_time is not none else None, icon='clock',
+             note='Of ' ~ exam.duration_minutes ~ ' min allowed', i=4) }}
+</section>
+
+<div class="nx-grid-main">
+  <div class="nx-stack">
+
+    {# ── Students ──────────────────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 5" aria-labelledby="students-title" id="analytics"
+             data-status-url="{{ url_for('faculty.proctor_status', student_exam_id=0) }}"
+             data-review-url="{{ url_for('faculty.review_exam', student_exam_id=0) }}"
+             data-evidence-url="{{ url_for('faculty.delete_violation_evidence', violation_id=0) }}">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="students-title">Students</h2>
+          <span class="nx-panel__sub">{{ flagged_ids|length }} flagged · {{ needs_review_ids|length }} awaiting review</span>
         </div>
-        <div class="header-actions">
-            {% if exam.results_published %}
-                <div class="score-badge badge-success" style="padding: 10px 20px;">
-                    <i class="bi bi-check-all"></i> Results Published
-                </div>
-            {% else %}
-                <button onclick="publishResults()" class="btn-vx btn-primary" id="publishBtn">
-                    <i class="bi bi-megaphone"></i> Publish Results
+        {% if rows %}
+        <div class="nx-panel__actions">
+          <label class="nx-search">
+            <span class="nx-visually-hidden">Search students</span>
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" id="studentSearch" class="nx-input" placeholder="Name or PRN" autocomplete="off">
+          </label>
+          <div class="nx-segmented" role="group" aria-label="Show">
+            <button type="button" data-row-filter="all" aria-pressed="true">All</button>
+            <button type="button" data-row-filter="flagged" aria-pressed="false">Flagged <span class="nx-count">{{ flagged_ids|length }}</span></button>
+            <button type="button" data-row-filter="review" aria-pressed="false">To review <span class="nx-count">{{ needs_review_ids|length }}</span></button>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% if rows %}
+      <div class="nx-table-wrap">
+        <table class="nx-table nx-table--stack">
+          <thead>
+            <tr>
+              <th scope="col">Student</th>
+              <th scope="col">Score</th>
+              <th scope="col" class="is-num">Tab switches</th>
+              <th scope="col">Proctoring</th>
+              <th scope="col" class="is-actions"><span class="nx-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for se in rows %}
+            {% set st = se.student %}
+            {% set name = (st.full_name or st.username) if st else 'Removed student' %}
+            {% set finished = se.completed or se.status in finished_states %}
+            <tr data-row data-search="{{ (name ~ ' ' ~ ((st.prn_number or '') if st else ''))|lower }}"
+                data-flagged="{{ '1' if se.id in flagged_ids else '0' }}" data-review="{{ '1' if se.id in needs_review_ids else '0' }}">
+              <td>
+                <span class="nx-table__primary">{{ name }}</span>
+                <span class="nx-table__secondary nx-num">{{ (st.prn_number if st else None) or '—' }}</span>
+              </td>
+              <td data-label="Score">
+                {% if se.is_invalidated %}{{ ui.badge('Invalidated', 'danger') }}
+                {% elif not finished %}{{ ui.badge('In progress', 'warning') }}
+                {% else %}
+                <span class="nx-score nx-score--{{ 'pass' if se.passed else 'fail' }}">{{ '%.0f'|format(se.percentage or 0) }}%</span>
+                <span class="nx-table__secondary nx-num">{{ '%g'|format(se.score or 0) }} / {{ '%g'|format(se.total_points or 0) }}{% if se.time_taken_minutes is not none %} · {{ se.time_taken_minutes }} min{% endif %}</span>
+                {% endif %}
+              </td>
+              <td class="is-num" data-label="Tab switches">
+                {%- set t = se.tab_switch_count or 0 -%}
+                {%- if t > (exam.max_tab_switches or 5) %}<span class="nx-text-warning">{{ t }}</span>{% else %}<span class="nx-table__muted">{{ t }}</span>{% endif -%}
+              </td>
+              <td data-label="Proctoring">
+                {% set v = se.total_violations or 0 %}
+                {% if v or se.id in flagged_ids %}
+                <button type="button" class="nx-link-btn" data-review-open="{{ se.id }}" data-name="{{ name }}">
+                  {{ (v ~ ' flag' ~ ('s' if v != 1 else '')) if v else 'Review' }}
                 </button>
-            {% endif %}
-            <a href="{{ url_for('faculty.view_exam', exam_id=exam.id) }}" class="btn-vx btn-outline">
-                <i class="bi bi-arrow-left"></i> Back to Control
-            </a>
-        </div>
-    </header>
+                <span class="nx-table__secondary">
+                  {%- if se.is_invalidated %}Invalidated{% elif se.faculty_review_note %}Accepted{% elif se.id in flagged_ids %}<span class="nx-text-warning">Needs review{% if not v %} · tab switches{% endif %}</span>{% else %}Below threshold{% endif -%}
+                </span>
+                {% else %}<span class="nx-table__muted">No flags</span>{% endif %}
+              </td>
+              <td class="is-actions">
+                <div class="nx-row-actions">
+                  {% if finished %}{{ ui.button('Result for ' ~ name, href=url_for('student.student_exam_result', student_exam_id=se.id), variant='ghost', size='sm', icon='file-earmark-text', icon_only=True) }}{% endif %}
+                  {% if st %}{{ ui.button('Profile of ' ~ name, href=url_for('faculty.faculty_student_profile', student_id=st.id), variant='ghost', size='sm', icon='person', icon_only=True) }}{% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div id="rowNoMatch" hidden>
+        {% call ui.empty_state('Nobody here', 'No students match this filter.', icon='funnel') %}{% endcall %}
+      </div>
+      {% else %}
+      {% call ui.empty_state('No attempts yet', 'Numbers appear here once students start the exam.', icon='hourglass') %}{% endcall %}
+      {% endif %}
+    </section>
 
-    <!-- Summary Stats -->
-    <div class="summary-grid">
-        <div class="stat-card">
-            <div class="stat-icon-box" style="background: rgba(99, 102, 241, 0.1); color: #818cf8;">
-                <i class="bi bi-people"></i>
-            </div>
-            <div class="stat-value">{{ total_attempts }}</div>
-            <div class="stat-label">Total Attempts</div>
-            <div class="stat-trend">
-                <i class="bi bi-activity"></i> Active Sessions
-            </div>
+    {# ── Questions ─────────────────────────────────────────── #}
+    <section class="nx-panel nx-enter" style="--i: 6" aria-labelledby="qstats-title">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="qstats-title">Questions</h2>
+          <span class="nx-panel__sub">Share of submitted attempts that got each question right; skipped counts as wrong</span>
         </div>
+      </div>
+      {% if question_stats %}
+      <ol class="nx-qstats">
+        {% for q in question_stats %}
+        <li class="nx-qstats__row">
+          <span class="nx-review__num nx-num">Q{{ '%02d'|format(q.number) }}</span>
+          <span class="nx-qstats__text nx-prose">{{ q.question.question_text|qtext }}</span>
+          {% if q.accuracy is not none %}
+          <span class="nx-trend__track" role="img" aria-label="{{ '%.0f'|format(q.accuracy) }}% correct">
+            <span class="nx-trend__fill nx-trend__fill--{{ 'pass' if q.accuracy >= 60 else ('warn' if q.accuracy >= 35 else 'fail') }}" style="--w: {{ q.accuracy }}%"></span>
+          </span>
+          <span class="nx-qstats__value nx-num">{{ '%.0f'|format(q.accuracy) }}%</span>
+          <span class="nx-qstats__meta nx-num">{{ q.correct }}/{{ scored_count }}{% if q.skipped %} · {{ q.skipped }} skipped{% endif %}</span>
+          {% else %}
+          <span class="nx-table__muted nx-qstats__value">—</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      {% call ui.empty_state('No questions', 'Upload questions to see how students do on each one.', icon='journal') %}{% endcall %}
+      {% endif %}
+    </section>
+  </div>
 
-        <div class="stat-card">
-            <div class="stat-icon-box" style="background: rgba(16, 185, 129, 0.1); color: #34d399;">
-                <i class="bi bi-check-circle"></i>
-            </div>
-            <div class="stat-value">{{ passed }}</div>
-            <div class="stat-label">Students Passed</div>
-            <div class="stat-trend" style="color: var(--vx-success);">
-                <i class="bi bi-graph-up"></i> {{ "%.1f"|format((passed / total_attempts * 100) if total_attempts > 0 else 0) }}% Rate
-            </div>
+  <div class="nx-stack">
+    <section class="nx-panel nx-enter" style="--i: 7" aria-labelledby="dist-title">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="dist-title">Score distribution</h2>
+          <span class="nx-panel__sub">Submitted attempts, invalidated excluded</span>
         </div>
+      </div>
+      {{ ui.score_chart(score_bands) }}
+    </section>
 
-        <div class="stat-card">
-            <div class="stat-icon-box" style="background: rgba(239, 68, 68, 0.1); color: #f87171;">
-                <i class="bi bi-x-circle"></i>
-            </div>
-            <div class="stat-value">{{ failed }}</div>
-            <div class="stat-label">Students Failed</div>
-            <div class="stat-trend" style="color: var(--vx-danger);">
-                <i class="bi bi-graph-down"></i> {{ "%.1f"|format((failed / total_attempts * 100) if total_attempts > 0 else 0) }}% Rate
-            </div>
+    {% if hardest %}
+    <section class="nx-panel nx-enter" style="--i: 8" aria-labelledby="hard-title">
+      <div class="nx-panel__head">
+        <div>
+          <h2 class="nx-panel__title" id="hard-title">Hardest questions</h2>
+          <span class="nx-panel__sub">Lowest share correct; worth checking the answer key</span>
         </div>
-
-        <div class="stat-card">
-            <div class="stat-icon-box" style="background: rgba(59, 130, 246, 0.1); color: #60a5fa;">
-                <i class="bi bi-trophy"></i>
-            </div>
-            <div class="stat-value">{{ "%.1f"|format(avg_score) }}%</div>
-            <div class="stat-label">Average Score</div>
-            <div class="stat-trend">
-                <i class="bi bi-award"></i> Class Benchmark
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon-box" style="background: rgba(245, 158, 11, 0.1); color: #fbbf24;">
-                <i class="bi bi-shield-exclamation"></i>
-            </div>
-            <div class="stat-value">{{ flagged_exams|length }}</div>
-            <div class="stat-label">Flagged</div>
-            <div class="stat-trend" style="color: var(--vx-warning);">
-                <i class="bi bi-eye"></i> Needs Review
-            </div>
-        </div>
-    </div>
-
-    <!-- Charts Section -->
-    <div class="charts-grid">
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title"><i class="bi bi-bar-chart-fill"></i> Score Distribution</h3>
-                <button class="btn-vx btn-outline btn-sm" onclick="downloadChart('scoreDistChart')"><i class="bi bi-download"></i></button>
-            </div>
-            <div class="chart-container">
-                <canvas id="scoreDistChart"></canvas>
-            </div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3 class="chart-title"><i class="bi bi-pie-chart-fill"></i> Pass / Fail Ratio</h3>
-                <button class="btn-vx btn-outline btn-sm" onclick="downloadChart('passFailChart')"><i class="bi bi-download"></i></button>
-            </div>
-            <div class="chart-container">
-                <canvas id="passFailChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Results Section -->
-    <div class="data-section">
-        <div class="section-header">
-            <h3 class="chart-title"><i class="bi bi-people-fill"></i> Detailed Student Performance</h3>
-            <div class="search-box">
-                <i class="bi bi-search"></i>
-                <input type="text" id="studentSearch" placeholder="Search by name or PRN..." onkeyup="filterTable()">
-            </div>
-        </div>
-
-        <div class="table-responsive">
-            <table class="vx-table" id="resultsTable">
-                <thead>
-                    <tr>
-                        <th>Student</th>
-                        <th>Score</th>
-                        <th>Performance</th>
-                        <th>Status</th>
-                        <th>Tab Switches</th>
-                        <th>Violations</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for se in student_exams %}
-                    <tr class="vx-row">
-                        <td>
-                            <div class="fw-bold">{{ se.student.full_name or se.student.username }}</div>
-                            <div class="small text-muted">{{ se.student.prn_number or 'N/A' }}</div>
-                        </td>
-                        <td>
-                            <div class="fw-bold">{{ se.score or 0 }} / {{ se.total_points or 0 }}</div>
-                        </td>
-                        <td style="min-width: 150px;">
-                            <div class="d-flex align-items:center; gap: 10px;">
-                                <div class="progress" style="height: 6px; flex: 1; background: rgba(255,255,255,0.05); border-radius: 10px; margin-top: 8px;">
-                                    <div class="progress-bar" style="width: {{ se.percentage or 0 }}%; background: {{ 'var(--vx-success)' if se.passed else 'var(--vx-danger)' }}; border-radius: 10px;"></div>
-                                </div>
-                                <span class="small fw-bold">{{ "%.1f"|format(se.percentage or 0) }}%</span>
-                            </div>
-                        </td>
-                        <td>
-                            {% if se.is_invalidated %}
-                                <span class="score-badge badge-danger"><i class="bi bi-slash-circle"></i> Invalidated</span>
-                            {% elif se.passed %}
-                                <span class="score-badge badge-success"><i class="bi bi-check-circle"></i> Passed</span>
-                            {% else %}
-                                <span class="score-badge badge-danger"><i class="bi bi-x-circle"></i> Failed</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="score-badge {{ 'badge-warning' if se.tab_switch_count > (exam.max_tab_switches or 5) else 'badge-success' }}">
-                                <i class="bi bi-window-stack"></i> {{ se.tab_switch_count }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if se.total_violations > 0 %}
-                                <button onclick='viewViolations({{ se.id }}, {{ (se.student.full_name or se.student.username)|tojson }})' class="score-badge {{ 'badge-danger' if se.total_violations >= 5 else 'badge-warning' }}">
-                                    <i class="bi bi-shield-exclamation"></i> {{ se.total_violations }} | View
-                                </button>
-                            {% else %}
-                                <span class="score-badge badge-success"><i class="bi bi-shield-check"></i> Clean</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            <a href="{{ url_for('faculty.faculty_student_profile', student_id=se.student.id) }}" class="btn-vx btn-outline btn-sm" title="View Profile">
-                                <i class="bi bi-person-circle"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Question Performance Section -->
-    {% if question_stats %}
-    <div class="data-section">
-        <div class="section-header">
-            <h3 class="chart-title"><i class="bi bi-patch-question"></i> Question-wise Analysis</h3>
-        </div>
-        <div class="table-responsive">
-            <table class="vx-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50%;">Question</th>
-                        <th>Total</th>
-                        <th>Correct</th>
-                        <th>Accuracy</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for stat in question_stats %}
-                    <tr class="vx-row">
-                        <td class="small">{{ stat.question }}</td>
-                        <td>{{ stat.total_answers }}</td>
-                        <td><span class="text-success">{{ stat.correct_answers }}</span></td>
-                        <td>
-                            <div class="d-flex align-items-center gap-2">
-                                <div class="progress" style="height: 6px; width: 100px; background: rgba(255,255,255,0.05);">
-                                    <div class="progress-bar" style="width: {{ stat.accuracy }}%; background: {{ 'var(--vx-success)' if stat.accuracy >= 70 else 'var(--vx-warning)' if stat.accuracy >= 40 else 'var(--vx-danger)' }};"></div>
-                                </div>
-                                <span class="small fw-bold">{{ "%.1f"|format(stat.accuracy) }}%</span>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+      </div>
+      <ol class="nx-trend">
+        {% for q in hardest %}
+        <li class="nx-trend__row">
+          <span class="nx-trend__label" title="{{ q.question.question_text }}">Q{{ '%02d'|format(q.number) }} · {{ q.question.question_text|replace('\\n', ' ')|replace('`', '')|truncate(48) }}</span>
+          <span class="nx-trend__track"><span class="nx-trend__fill nx-trend__fill--{{ 'pass' if q.accuracy >= 60 else ('warn' if q.accuracy >= 35 else 'fail') }}" style="--w: {{ q.accuracy }}%"></span></span>
+          <span class="nx-trend__value">{{ '%.0f'|format(q.accuracy) }}%</span>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
     {% endif %}
+  </div>
 </div>
 
-<!-- Modal Container -->
-<div id="violations-modal" class="vx-modal">
-    <div class="vx-modal-content">
-        <div style="padding: 2rem;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h3 id="modal-student-name" class="mb-0"><i class="bi bi-camera-video"></i> Proctoring Review</h3>
-                <button onclick="closeViolationsModal()" class="btn-vx btn-outline"><i class="bi bi-x-lg"></i></button>
-            </div>
-            
-            <div id="violations-summary" class="mb-4"></div>
-
-            <!-- Faculty Review Actions -->
-            <div id="faculty-review-actions" style="display:none; background: rgba(255,255,255,0.03); border: 1px solid var(--vx-border); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;">
-                <h6 class="text-muted small uppercase mb-3">Faculty Decision</h6>
-                <div id="review-status-badge" class="mb-3"></div>
-                <div class="d-flex gap-2 mb-3">
-                    <button onclick="reviewExam('accept')" class="btn-vx btn-primary" style="background: var(--vx-success);">
-                        <i class="bi bi-check-circle"></i> Accept Result
-                    </button>
-                    <button onclick="reviewExam('invalidate')" class="btn-vx btn-primary" style="background: var(--vx-danger);">
-                        <i class="bi bi-x-circle"></i> Invalidate Result
-                    </button>
-                </div>
-                <input type="text" id="review-note" class="form-control" placeholder="Add a note (optional)..." style="background: rgba(0,0,0,0.2); border: 1px solid var(--vx-border); color: white; border-radius: 10px;">
-            </div>
-
-            <div id="violations-loading" class="text-center py-5">
-                <div class="spinner-border text-primary" role="status"></div>
-                <p class="mt-3 text-muted">Loading evidence data...</p>
-            </div>
-
-            <div id="violations-content"></div>
-            
-            <div id="violations-empty" class="text-center py-5" style="display:none;">
-                <i class="bi bi-shield-check" style="font-size: 3rem; color: var(--vx-success);"></i>
-                <p class="mt-3">No violations recorded for this student.</p>
-            </div>
-        </div>
+{# ── Proctoring review ─────────────────────────────────────── #}
+<dialog class="nx-dialog nx-dialog--wide" id="reviewDialog" aria-labelledby="reviewTitle">
+  <div class="nx-dialog__head">
+    <div>
+      <h2 class="nx-dialog__title" id="reviewTitle">Proctoring review</h2>
+      <span class="nx-panel__sub" id="reviewSub"></span>
     </div>
-</div>
+    <button type="button" class="nx-btn nx-btn--ghost nx-btn--icon" data-review-close aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+  </div>
+  <div class="nx-dialog__body">
+    <p class="nx-help" id="reviewLoading">Loading…</p>
+    <div id="reviewBody" hidden>
+      <div class="nx-review-summary" id="reviewSummary"></div>
+      <div class="nx-review-decision">
+        <div class="nx-field" id="noteField">
+          <label class="nx-label" for="reviewNote">Note <span class="nx-label__aside">required to invalidate</span></label>
+          <input type="text" class="nx-input" id="reviewNote" maxlength="2000" placeholder="What you saw and why">
+          <p class="nx-help" id="noteHelp"></p>
+        </div>
+        <div class="nx-btn-row">
+          <button type="button" class="nx-btn nx-btn--secondary" data-decision="accept"><i class="bi bi-check2-circle" aria-hidden="true"></i><span>Accept result</span></button>
+          <button type="button" class="nx-btn nx-btn--secondary" data-decision="invalidate" data-nx-confirm="Invalidate this attempt?"><i class="bi bi-x-octagon" aria-hidden="true"></i><span>Invalidate</span></button>
+        </div>
+      </div>
+      <h3 class="nx-eyebrow nx-mt-4">Timeline</h3>
+      <ol class="nx-timeline" id="reviewTimeline"></ol>
+      <p class="nx-help" id="reviewEmpty" hidden>No flagged moments were stored for this attempt.</p>
+    </div>
+  </div>
+</dialog>
+{% endblock %}
 
-<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.js') }}"></script>
-<script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
-<script>
-let _currentStudentExamId = null;
-
-document.addEventListener("DOMContentLoaded", () => {
-    if (window.initAnalytics) {
-        initAnalytics({
-            scores: {{ student_exams|map(attribute='percentage')|list|tojson if student_exams else '[]' }},
-            passed: {{ passed }},
-            failed: {{ failed }},
-            times: {{ student_exams|map(attribute='time_taken_minutes')|list|tojson if student_exams else '[]' }},
-            examDuration: {{ exam.duration_minutes or 60 }},
-            submissions: {{ student_exams|map(attribute='submitted_at')|map('string')|list|tojson if student_exams else '[]' }}
-        });
-    }
-});
-
-function filterTable() {
-    let input = document.getElementById("studentSearch");
-    let filter = input.value.toLowerCase();
-    let table = document.getElementById("resultsTable");
-    let tr = table.getElementsByTagName("tr");
-
-    for (let i = 1; i < tr.length; i++) {
-        let td = tr[i].getElementsByTagName("td")[0];
-        if (td) {
-            let txtValue = td.textContent || td.innerText;
-            if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                tr[i].style.display = "";
-            } else {
-                tr[i].style.display = "none";
-            }
-        }
-    }
-}
-
-/* Everything below is built with innerHTML, and names, notes and messages are
-   user-controlled — escape them so a crafted name cannot run script here. */
-function escHtml(v) {
-    return String(v ?? '').replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-}
-
-async function deleteEvidence(violationId, btn) {
-    if (!confirm('Delete this evidence image permanently?')) return;
-    try {
-        const res = await fetch(`/api/faculty/violation/${violationId}/evidence`, { method: 'DELETE' });
-        const data = await res.json();
-        if (data.success) {
-            const wrap = btn.closest('.position-relative');
-            if (wrap) wrap.remove();
-        } else {
-            alert(data.error || 'Could not delete the image.');
-        }
-    } catch (e) { alert(e.message); }
-}
-
-async function viewViolations(studentExamId, studentName) {
-    _currentStudentExamId = studentExamId;
-    const modal = document.getElementById('violations-modal');
-    const loading = document.getElementById('violations-loading');
-    const content = document.getElementById('violations-content');
-    const empty = document.getElementById('violations-empty');
-    const summary = document.getElementById('violations-summary');
-    const reviewActions = document.getElementById('faculty-review-actions');
-    
-    modal.style.display = 'flex';
-    loading.style.display = 'block';
-    content.style.display = 'none';
-    empty.style.display = 'none';
-    summary.innerHTML = '';
-    reviewActions.style.display = 'none';
-    document.getElementById('modal-student-name').innerHTML = `<i class="bi bi-shield-lock"></i> ${escHtml(studentName)} - Proctoring Review`;
-
-    try {
-        const response = await fetch(`/api/proctor/status/${studentExamId}`);
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Failed to load');
-        
-        loading.style.display = 'none';
-        
-        summary.innerHTML = `
-            <div class="summary-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 0;">
-                <div class="stat-card" style="padding: 1rem;">
-                    <div class="small text-muted mb-1">Total Violations</div>
-                    <div class="h4 fw-bold mb-0">${escHtml(data.total_violations)}</div>
-                </div>
-                <div class="stat-card" style="padding: 1rem;">
-                    <div class="small text-muted mb-1">Current Status</div>
-                    <div class="h4 fw-bold mb-0 text-uppercase">${escHtml(data.proctoring_status)}</div>
-                </div>
-                <div class="stat-card" style="padding: 1rem;">
-                    <div class="small text-muted mb-1">Calibration</div>
-                    <div class="h4 fw-bold mb-0">${data.calibration_completed ? 'Success' : 'Pending'}</div>
-                </div>
-            </div>
-        `;
-
-        reviewActions.style.display = 'block';
-        const reviewBadge = document.getElementById('review-status-badge');
-        if (data.is_invalidated) {
-            reviewBadge.innerHTML = `<span class="score-badge badge-danger"><i class="bi bi-x-circle"></i> INVALIDATED: ${escHtml(data.faculty_review_note || 'Failed Review')}</span>`;
-        } else if (data.faculty_review_note) {
-            reviewBadge.innerHTML = `<span class="score-badge badge-success"><i class="bi bi-check-circle"></i> ACCEPTED: ${escHtml(data.faculty_review_note)}</span>`;
-        } else {
-            reviewBadge.innerHTML = `<span class="score-badge badge-warning"><i class="bi bi-clock-history"></i> Awaiting Review</span>`;
-        }
-
-        if (!data.recent_violations || data.recent_violations.length === 0) {
-            empty.style.display = 'block';
-            return;
-        }
-
-        content.innerHTML = `
-            <div class="mt-4">
-                <h6 class="text-muted small uppercase mb-3"><i class="bi bi-list-task"></i> Violation Timeline</h6>
-                <div class="d-flex flex-column gap-3">
-                    ${data.recent_violations.map(v => `
-                        <div class="vx-row p-3 rounded-4 d-flex gap-3" style="background: rgba(255,255,255,0.03); border: 1px solid var(--vx-border);">
-                            <div class="stat-icon-box" style="flex-shrink:0; background: ${v.severity === 'high' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)'}; color: ${v.severity === 'high' ? '#f87171' : '#fbbf24'};">
-                                <i class="bi bi-${v.severity === 'high' ? 'exclamation-octagon' : 'exclamation-triangle'}"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <div class="d-flex justify-content-between">
-                                    <span class="fw-bold">${escHtml(v.type)}</span>
-                                    <span class="small text-muted">${new Date(v.timestamp).toLocaleTimeString()}</span>
-                                </div>
-                                <div class="small text-muted mb-2">${escHtml(v.message)}</div>
-                                ${v.evidence_url ? `
-                                    <div class="position-relative">
-                                        <img src="${escHtml(v.evidence_url)}" class="rounded-3 img-fluid" style="max-height: 200px; border: 1px solid var(--vx-border);" onclick="window.open(this.src)">
-                                        <div class="position-absolute top-0 end-0 p-2">
-                                            <button onclick="deleteEvidence(${Number(v.id)}, this)" class="btn btn-sm btn-danger opacity-75"><i class="bi bi-trash"></i></button>
-                                        </div>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-        content.style.display = 'block';
-    } catch (e) {
-        console.error(e);
-        loading.style.display = 'none';
-        alert('Failed to load violation data.');
-    }
-}
-
-async function reviewExam(action) {
-    if (!_currentStudentExamId) return;
-    const note = document.getElementById('review-note').value;
-    if (!confirm(`Are you sure you want to ${action} this exam result?`)) return;
-
-    try {
-        const res = await fetch(`/api/faculty/review-exam/${_currentStudentExamId}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ action, note })
-        });
-        const data = await res.json();
-        if (data.success) {
-            location.reload();
-        } else {
-            alert(data.error || 'Operation failed');
-        }
-    } catch (e) { alert(e.message); }
-}
-
-async function publishResults() {
-    if (!confirm('Finalize all results? This will permanently delete proctoring images.')) return;
-    const btn = document.getElementById('publishBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Publishing...';
-    try {
-        const res = await fetch(`/api/faculty/publish-results/{{ exam.id }}`, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) location.reload();
-        else {
-            alert(data.error);
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-megaphone"></i> Publish Results';
-        }
-    } catch (e) { alert(e.message); }
-}
-
-function closeViolationsModal() { document.getElementById('violations-modal').style.display = 'none'; }
-</script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/analytics.js') }}"></script>
 {% endblock %}

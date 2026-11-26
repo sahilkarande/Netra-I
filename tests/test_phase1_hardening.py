@@ -132,7 +132,7 @@ def test_p0_3_idle_session_is_signed_out(app, seed):
 def test_p0_3_logout_clears_session(app, seed):
     client = app.test_client()
     login(client, 'stud1')
-    client.get('/logout')
+    client.post('/logout')
     assert client.get('/student/dashboard').status_code == 302
 
 

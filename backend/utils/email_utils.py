@@ -8,6 +8,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 from dotenv import load_dotenv
+import logging
+
+log = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -236,11 +239,11 @@ def send_otp_email(email, otp, username, role="student"):
             server.login(smtp_username, smtp_password)
             server.send_message(msg)
         
-        print(f"✅ OTP email sent successfully to {email}")
+        log.info(f"OTP email sent successfully to {email}")
         return True
         
     except Exception as e:
-        print(f"❌ Error sending email: {str(e)}")
+        log.warning(f"Error sending email: {str(e)}")
         print(f"\n📧 FALLBACK - Displaying OTP in console:")
         print(f"Email: {email}")
         print(f"Username: {username}")
@@ -268,7 +271,7 @@ def send_result_notification(email, username, exam_title, score, passed):
     smtp_password = os.getenv('SMTP_PASSWORD')
     
     if not smtp_username or not smtp_password:
-        print(f"📧 Result notification (console): {username} - {exam_title}: {score}%")
+        log.info(f"Result notification (console): {username} - {exam_title}: {score}%")
         return False
     
     try:
@@ -312,9 +315,9 @@ def send_result_notification(email, username, exam_title, score, passed):
             server.login(smtp_username, smtp_password)
             server.send_message(msg)
         
-        print(f"✅ Result notification sent to {email}")
+        log.info(f"Result notification sent to {email}")
         return True
         
     except Exception as e:
-        print(f"❌ Error sending result notification: {str(e)}")
+        log.warning(f"Error sending result notification: {str(e)}")
         return False

@@ -1,0 +1,104 @@
+{#
+  Netra-I design system · Jinja macros
+  Import with:  {% import 'components/ui.html' as ui %}
+  Styles: static/css/ds/components.css
+#}
+
+{# Button or link styled as a button.
+   variant: primary | secondary | ghost | danger    size: md | sm
+   Pass href for a link; otherwise a <button> of the given type. #}
+{% macro button(label, href=None, variant='secondary', size='md', icon=None, type='button', id=None, attrs='', icon_only=False) -%}
+{%- set cls = 'nx-btn nx-btn--' ~ variant ~ (' nx-btn--sm' if size == 'sm' else '') ~ (' nx-btn--icon' if icon_only else '') -%}
+{%- if href -%}
+<a href="{{ href }}" class="{{ cls }}"{% if id %} id="{{ id }}"{% endif %}{% if icon_only %} aria-label="{{ label }}" title="{{ label }}"{% endif %} {{ attrs|safe }}>
+  {%- if icon %}<i class="bi bi-{{ icon }}" aria-hidden="true"></i>{% endif %}{% if not icon_only %}<span>{{ label }}</span>{% endif -%}
+</a>
+{%- else -%}
+<button type="{{ type }}" class="{{ cls }}"{% if id %} id="{{ id }}"{% endif %}{% if icon_only %} aria-label="{{ label }}" title="{{ label }}"{% endif %} {{ attrs|safe }}>
+  {%- if icon %}<i class="bi bi-{{ icon }}" aria-hidden="true"></i>{% endif %}{% if not icon_only %}<span>{{ label }}</span>{% endif -%}
+</button>
+{%- endif -%}
+{%- endmacro %}
+
+{# Status badge. tone: neutral | accent | success | warning | danger #}
+{% macro badge(label, tone='neutral', live=False, plain=False) -%}
+<span class="nx-badge nx-badge--{{ tone }}{% if live %} nx-badge--live{% endif %}{% if plain %} nx-badge--plain{% endif %}">{{ label }}</span>
+{%- endmacro %}
+
+{# Number tile. value is shown as given; unit renders smaller after it. #}
+{% macro stat(label, value, icon=None, unit=None, note=None, meter=None, meter_tone='accent', i=0) -%}
+<div class="nx-stat nx-enter" style="--i: {{ i }}">
+  <span class="nx-stat__label">{% if icon %}<i class="bi bi-{{ icon }}" aria-hidden="true"></i>{% endif %}{{ label }}</span>
+  <span class="nx-stat__value">{{ value }}{% if unit %}<small>{{ unit }}</small>{% endif %}</span>
+  {% if meter is not none %}<span class="nx-meter{% if meter_tone == 'success' %} nx-meter--success{% endif %}" role="presentation"><span style="--value: {{ [[meter, 0]|max, 100]|min }}%"></span></span>{% endif %}
+  {% if note %}<span class="nx-stat__note">{{ note }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{# Page heading with optional meta line; actions go in the caller block. #}
+{% macro page_header(title, meta=None) -%}
+<header class="nx-page-header nx-enter">
+  <div>
+    <h1 class="nx-page-header__title">{{ title }}</h1>
+    {% if meta %}<p class="nx-page-header__meta">{{ meta }}</p>{% endif %}
+  </div>
+  {% if caller %}<div class="nx-page-header__actions">{{ caller() }}</div>{% endif %}
+</header>
+{%- endmacro %}
+
+{# Empty state; an optional action button goes in the caller block. #}
+{% macro empty_state(title, body, icon='inbox') -%}
+<div class="nx-empty">
+  <span class="nx-empty__icon"><i class="bi bi-{{ icon }}" aria-hidden="true"></i></span>
+  <p class="nx-empty__title">{{ title }}</p>
+  <p class="nx-empty__body">{{ body }}</p>
+  {% if caller %}{{ caller() }}{% endif %}
+</div>
+{%- endmacro %}
+
+{# Initials for an avatar: "Aditya Singh" -> "AS" #}
+{% macro initials(name) -%}
+{%- set parts = (name or '?').split() -%}
+{{- (parts[0][:1] ~ (parts[-1][:1] if parts|length > 1 else '')) | upper -}}
+{%- endmacro %}
+
+
+{# Submitted attempts per score band, as an SVG bar chart (no chart library).
+   bands: from dashboard_service.score_distribution or band_counts. #}
+{% macro score_chart(bands) -%}
+{% set peak = bands|map(attribute='count')|max %}
+{% if peak %}
+      {% set half = ((peak + 1) // 2) %}
+      <div class="nx-bars">
+        <svg viewBox="0 0 300 140" role="img"
+             aria-label="Attempts per score band: {% for b in bands %}{{ b.label }} percent {{ b.count }}{{ ', ' if not loop.last }}{% endfor %}">
+          <g class="grid">
+            <line x1="30" x2="296" y1="24" y2="24"></line>
+            <line x1="30" x2="296" y1="{{ 110 - (half / peak * 86) }}" y2="{{ 110 - (half / peak * 86) }}"></line>
+            <line x1="30" x2="296" y1="110" y2="110"></line>
+          </g>
+          <g class="axis" text-anchor="end">
+            <text x="24" y="27">{{ peak }}</text>
+            <text x="24" y="{{ 113 - (half / peak * 86) }}">{{ half }}</text>
+            <text x="24" y="113">0</text>
+          </g>
+          {% for b in bands %}
+          {% set h = b.count / peak * 86 %}
+          {% set x = 36 + loop.index0 * 52.4 %}
+          <g class="bar-group">
+            <title>{{ b.label }}%: {{ b.count }} attempt{{ 's' if b.count != 1 }}</title>
+            <rect class="bar{% if loop.last %} bar--top{% endif %}" x="{{ x }}" y="{{ 110 - h }}" width="40" height="{{ [h, 0.5]|max }}" rx="2"></rect>
+            {% if b.count %}<text class="val" x="{{ x + 20 }}" y="{{ 106 - h }}" text-anchor="middle">{{ b.count }}</text>{% endif %}
+            <text class="axis-label" x="{{ x + 20 }}" y="126" text-anchor="middle">{{ b.label }}</text>
+          </g>
+          {% endfor %}
+        </svg>
+        <div class="nx-legend">
+          <span><i style="background: var(--chart-1)"></i>Attempts per score band (%)</span>
+          <span><i style="background: var(--chart-2)"></i>81–100</span>
+        </div>
+      </div>
+      {% else %}
+      {% call empty_state('No scores yet', 'The chart fills in as students submit.', icon='bar-chart') %}{% endcall %}
+      {% endif %}
+{%- endmacro %}

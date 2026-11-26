@@ -145,6 +145,9 @@ class Exam(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     start_time = db.Column(db.DateTime)
     end_time = db.Column(db.DateTime)
+    # start/end are UTC. False only on rows saved before that rule, which held
+    # the hall's local time; app start-up converts them once (app.py).
+    times_utc = db.Column(db.Boolean, default=True)
 
     # NEW ACCESS CONTROL
     allow_all_students = db.Column(db.Boolean, default=True)
@@ -323,6 +326,10 @@ class StudentExam(db.Model):
     calibration_completed = db.Column(db.Boolean, default=False)
     total_violations = db.Column(db.Integer, default=0)
     proctoring_status = db.Column(db.String(20), default='active')  # active, warning, terminated
+
+    # One attempt, one device (services/attempt_device.py)
+    device_token = db.Column(db.String(64))            # held in the claiming browser's session
+    device_switches = db.Column(db.Integer, default=0) # times it moved after the holder went quiet
 
     # Relationships
     answers = db.relationship('StudentAnswer', backref='student_exam', lazy=True, cascade='all, delete-orphan')
@@ -546,6 +553,22 @@ class FaceAuditLog(db.Model):
 
     def __repr__(self):
         return f"<FaceAuditLog {self.action} subject={self.subject_user_id}>"
+
+
+class LoginThrottle(db.Model):
+    """Failure counters for sign-in, face sign-in, exam keys and lookups.
+
+    Kept in the database so a server restart does not wipe a lockout
+    (services/throttle.py).
+    """
+    __tablename__ = 'login_throttle'
+
+    key = db.Column(db.String(200), primary_key=True)    # e.g. "pw:stud1", "hint-ip:10.0.0.7"
+    count = db.Column(db.Integer, nullable=False, default=0)
+    window_start = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    def __repr__(self):
+        return f"<LoginThrottle {self.key} {self.count}>"
 
 
 # ===========================

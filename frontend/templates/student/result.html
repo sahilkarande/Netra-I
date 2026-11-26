@@ -1,218 +1,109 @@
-{% extends "base.html" %}
-{% block title %}Exam Results – {{ exam.title }}{% endblock %}
+{% extends "layouts/app.html" %}
+{% import 'components/ui.html' as ui %}
+
+{% set is_staff = current_user.role in ('faculty', 'admin') %}
+{% set pct = student_exam.percentage or 0 %}
+{% set pass_mark = exam.passing_score if exam.passing_score is not none else 50 %}
+{% set total = review|length %}
+
+{% block title %}Result · {{ exam.title }}{% endblock %}
+{% block topbar_title %}<b>Result</b> · {{ exam.title }}{% endblock %}
 
 {% block content %}
-<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
-  {% set percentage = student_exam.percentage | default(0) %}
+{% set who = (student_exam.student.full_name or student_exam.student.username) if is_staff and student_exam.student else None %}
+{% call ui.page_header(exam.title,
+      ((who ~ ' · ') if who else '') ~ ('Submitted ' ~ (student_exam.submitted_at|localtime('%d %b %Y, %H:%M')) if student_exam.submitted_at else 'Submitted')) %}
+  {% if is_staff %}
+  {{ ui.button('Back to exam', href=url_for('faculty.view_exam', exam_id=exam.id), icon='arrow-left') }}
+  {% else %}
+  {{ ui.button('Dashboard', href=url_for('student.student_dashboard'), icon='arrow-left') }}
+  {% endif %}
+  {{ ui.button('Download PDF', href=url_for('student.download_result_pdf', student_exam_id=student_exam.id), variant='primary', icon='download') }}
+{% endcall %}
 
-  <!-- ═══════════════ HEADER ═══════════════ -->
-  <div class="result-header">
+{# ── Score ─────────────────────────────────────────────────────── #}
+<section class="nx-panel nx-result nx-enter" style="--i: 1" aria-label="Score">
+  <div class="nx-result__score">
+    <span class="nx-result__pct nx-num">{{ '%.0f'|format(pct) }}<small>%</small></span>
+    <span class="nx-result__points nx-num">{{ '%g'|format(student_exam.score or 0) }} of {{ '%g'|format(student_exam.total_points or 0) }} points</span>
+    {% if student_exam.passed %}{{ ui.badge('Passed', 'success') }}{% else %}{{ ui.badge('Below pass mark', 'danger') }}{% endif %}
+  </div>
+  <div class="nx-result__bar">
+    <span class="nx-trend__track nx-result__track" role="img" aria-label="{{ '%.0f'|format(pct) }}%, pass mark {{ pass_mark|int }}%">
+      <span class="nx-trend__fill nx-trend__fill--{{ 'pass' if student_exam.passed else 'fail' }}" style="--w: {{ [[pct, 0]|max, 100]|min }}%"></span>
+      <span class="nx-trend__mark" style="--at: {{ [pass_mark, 100]|min }}%"></span>
+    </span>
+    <span class="nx-result__scale"><span>0</span><span>Pass mark {{ pass_mark|int }}%</span><span>100</span></span>
+  </div>
+  <dl class="nx-result__facts">
+    <div><dt>Correct</dt><dd class="nx-num">{{ counts.correct }}</dd></div>
+    <div><dt>Incorrect</dt><dd class="nx-num">{{ counts.incorrect }}</dd></div>
+    <div><dt>Not answered</dt><dd class="nx-num">{{ counts.skipped }}</dd></div>
+    <div><dt>Time taken</dt><dd class="nx-num">{{ (student_exam.time_taken_minutes ~ ' min') if student_exam.time_taken_minutes is not none else '—' }}<span class="nx-result__of"> of {{ exam.duration_minutes }}</span></dd></div>
+  </dl>
+</section>
 
-    <!-- Score Hero Card -->
-    <div class="result-hero">
-      <h3 style="font-size:1.1rem; font-weight:700; margin:0; opacity:.9;">{{ exam.title }}</h3>
-
-      <div class="result-progress-ring">
-        <svg width="130" height="130">
-          <circle cx="65" cy="65" r="55" stroke="rgba(255,255,255,0.2)" stroke-width="8" fill="none" />
-          <circle cx="65" cy="65" r="55"
-            stroke="{% if percentage<50 %}#f05454{% elif percentage<75 %}#f7b731{% else %}#30d49e{% endif %}"
-            stroke-width="8" fill="none" stroke-dasharray="345" stroke-dashoffset="{{ 345-(345*percentage/100) }}"
-            stroke-linecap="round" />
-        </svg>
-        <div class="result-progress-text">{{ percentage|round(0)|int }}%</div>
-      </div>
-
-      <div style="font-size:1.4rem; font-weight:800; letter-spacing:.5px;">
-        {{ student_exam.score }} / {{ student_exam.total_points }}
-      </div>
-
-      <div class="result-status-badge {% if student_exam.passed %}pass{% else %}fail{% endif %}">
-        <i class="bi {% if student_exam.passed %}bi-check-circle-fill{% else %}bi-x-circle-fill{% endif %}"></i>
-        {% if student_exam.passed %}Passed{% else %}Failed{% endif %}
-      </div>
-
-      <div class="result-motivation" id="motivation"></div>
+{# ── Answer review ─────────────────────────────────────────────── #}
+<section class="nx-panel nx-enter" style="--i: 2" aria-labelledby="review-title" id="answer-review">
+  <div class="nx-panel__head">
+    <div>
+      <h2 class="nx-panel__title" id="review-title">Answer review</h2>
+      <span class="nx-panel__sub">{{ total }} question{{ 's' if total != 1 }}, in the order {{ 'they were' if is_staff else 'you saw them' }}</span>
     </div>
-
-    <!-- Exam Details Card -->
-    <div class="result-info-card">
-      <div class="result-info-title">
-        <i class="bi bi-info-circle" style="color:var(--primary-color);"></i>
-        Exam Details
-      </div>
-
-      <div class="result-info-grid">
-
-        <div class="result-info-item">
-          <div class="result-info-icon"><i class="bi bi-clock"></i></div>
-          <div>
-            <div class="result-info-label">Duration</div>
-            <div class="result-info-value">{{ exam.duration_minutes }} mins</div>
-          </div>
-        </div>
-
-        <div class="result-info-item">
-          <div class="result-info-icon"><i class="bi bi-trophy"></i></div>
-          <div>
-            <div class="result-info-label">Passing Score</div>
-            <div class="result-info-value">{{ exam.passing_score }}%</div>
-          </div>
-        </div>
-
-        <div class="result-info-item">
-          <div class="result-info-icon"><i class="bi bi-calendar-check"></i></div>
-          <div>
-            <div class="result-info-label">Submitted</div>
-            <div class="result-info-value">{{ student_exam.submitted_at }}</div>
-          </div>
-        </div>
-
-        <div class="result-info-item">
-          <div class="result-info-icon"><i class="bi bi-hourglass-split"></i></div>
-          <div>
-            <div class="result-info-label">Time Taken</div>
-            <div class="result-info-value">{{ student_exam.time_taken_minutes }} mins</div>
-          </div>
-        </div>
-
+    {% if review %}
+    <div class="nx-panel__actions">
+      <div class="nx-segmented" role="group" aria-label="Show questions">
+        <button type="button" data-review-filter="all" aria-pressed="true">All <span class="nx-count">{{ total }}</span></button>
+        <button type="button" data-review-filter="correct" aria-pressed="false">Correct <span class="nx-count">{{ counts.correct }}</span></button>
+        <button type="button" data-review-filter="incorrect" aria-pressed="false">Incorrect <span class="nx-count">{{ counts.incorrect }}</span></button>
+        <button type="button" data-review-filter="skipped" aria-pressed="false">Not answered <span class="nx-count">{{ counts.skipped }}</span></button>
       </div>
     </div>
-
-  </div><!-- /result-header -->
-
-  <!-- ═══════════════ STATS ═══════════════ -->
-  <div class="result-stats-grid">
-
-    <div class="result-stat-card">
-      <div class="result-stat-icon"><i class="bi bi-bar-chart-fill"></i></div>
-      <div class="result-stat-value">{{ student_exam.score }}</div>
-      <div class="result-stat-label">Score</div>
-    </div>
-
-    <div class="result-stat-card">
-      <div class="result-stat-icon"><i class="bi bi-percent"></i></div>
-      <div class="result-stat-value">{{ percentage|round(1) }}%</div>
-      <div class="result-stat-label">Percentage</div>
-    </div>
-
-    <div class="result-stat-card">
-      <div class="result-stat-icon">
-        <i
-          class="bi {% if student_exam.passed %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i>
-      </div>
-      <div class="result-stat-value">{{ 'Passed' if student_exam.passed else 'Failed' }}</div>
-      <div class="result-stat-label">Result</div>
-    </div>
-
-    <div class="result-stat-card">
-      <div class="result-stat-icon"><i class="bi bi-question-circle-fill"></i></div>
-      <div class="result-stat-value">{{ answers_with_questions | length }}</div>
-      <div class="result-stat-label">Total Questions</div>
-    </div>
-
+    {% endif %}
   </div>
 
-  <!-- ═══════════════ FILTER ═══════════════ -->
-  <div class="result-filter-bar">
-    <button class="result-filter-btn active" onclick="filterQ(event,'all')">
-      <i class="bi bi-list-ul"></i> All
-    </button>
-    <button class="result-filter-btn" onclick="filterQ(event,'correct')">
-      <i class="bi bi-check2-circle"></i> Correct
-    </button>
-    <button class="result-filter-btn" onclick="filterQ(event,'incorrect')">
-      <i class="bi bi-x-circle"></i> Incorrect
-    </button>
-  </div>
-
-  <!-- ═══════════════ QUESTIONS ═══════════════ -->
-  {% for item in answers_with_questions %}
-  <div class="result-question {% if item.answer.is_correct %}correct-q{% else %}incorrect-q{% endif %}">
-
-    <div class="result-question-header" onclick="toggleQ(this)">
-      <span style="flex:1; line-height:1.5;">
-        <span style="font-size:0.75rem; font-family:monospace; opacity:0.65; margin-right:6px;">Q{{ loop.index }}</span>
-        {{ item.question.question_text }}
-      </span>
-      <i class="bi {% if item.answer.is_correct %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"
-        style="flex-shrink:0; font-size:1.1rem;"></i>
-    </div>
-
-    <div class="result-question-body">
-      <ul>
-        <li
-          class="{% if item.question.correct_answer=='A' %}result-correct-opt{% elif item.answer.selected_answer=='A' %}result-incorrect-opt{% endif %}">
-          <strong>A)</strong> {{ item.question.option_a }}
-        </li>
-        <li
-          class="{% if item.question.correct_answer=='B' %}result-correct-opt{% elif item.answer.selected_answer=='B' %}result-incorrect-opt{% endif %}">
-          <strong>B)</strong> {{ item.question.option_b }}
-        </li>
-        {% if item.question.option_c %}
-        <li
-          class="{% if item.question.correct_answer=='C' %}result-correct-opt{% elif item.answer.selected_answer=='C' %}result-incorrect-opt{% endif %}">
-          <strong>C)</strong> {{ item.question.option_c }}
-        </li>
-        {% endif %}
-        {% if item.question.option_d %}
-        <li
-          class="{% if item.question.correct_answer=='D' %}result-correct-opt{% elif item.answer.selected_answer=='D' %}result-incorrect-opt{% endif %}">
-          <strong>D)</strong> {{ item.question.option_d }}
-        </li>
-        {% endif %}
-      </ul>
-
-      <div
-        style="display:flex; gap:1.5rem; flex-wrap:wrap; font-size:0.88rem; padding-top:0.5rem; border-top:1px solid var(--border);">
-        <span>
-          <i class="bi bi-cursor-fill" style="color:var(--primary-color);"></i>
-          <strong>Your Answer:</strong>
-          <span
-            style="color:{% if item.answer.is_correct %}#10b981{% else %}var(--danger-color){% endif %}; font-weight:600; margin-left:4px;">
-            {{ item.answer.selected_answer or 'Not answered' }}
+  {% if review %}
+  <ol class="nx-review">
+    {% for item in review %}
+    {% set q = item.question %}
+    <li class="nx-review__item nx-review__item--{{ item.status }}" data-status="{{ item.status }}">
+      <div class="nx-review__head">
+        <span class="nx-review__num nx-num">Q{{ '%02d'|format(loop.index) }}</span>
+        <div class="nx-review__text nx-prose">{{ q.question_text|qtext }}</div>
+        {% if item.status == 'correct' %}{{ ui.badge('Correct', 'success') }}
+        {% elif item.status == 'incorrect' %}{{ ui.badge('Incorrect', 'danger') }}
+        {% else %}{{ ui.badge('Not answered', 'neutral') }}{% endif %}
+      </div>
+      <ul class="nx-review__options">
+        {% for letter, text in item.options %}
+        {% set is_correct = letter == item.correct %}
+        {% set is_chosen = letter == item.chosen %}
+        <li class="nx-review__opt{% if is_correct %} is-correct{% endif %}{% if is_chosen and not is_correct %} is-wrong{% endif %}{% if is_chosen %} is-chosen{% endif %}">
+          <span class="nx-review__letter">{{ letter }}</span>
+          <span class="nx-review__opt-text nx-prose">{{ text|qtext }}</span>
+          {% if is_chosen or is_correct %}
+          <span class="nx-review__tag">
+            {%- if is_chosen and is_correct -%}<i class="bi bi-check2" aria-hidden="true"></i>{{ 'Their' if is_staff else 'Your' }} answer
+            {%- elif is_chosen -%}<i class="bi bi-x" aria-hidden="true"></i>{{ 'Their' if is_staff else 'Your' }} answer
+            {%- else -%}<i class="bi bi-check2" aria-hidden="true"></i>Correct answer{%- endif -%}
           </span>
-        </span>
-        {% if not item.answer.is_correct %}
-        <span>
-          <i class="bi bi-check2" style="color:#10b981;"></i>
-          <strong>Correct Answer:</strong>
-          <span style="color:#10b981; font-weight:600; margin-left:4px;">{{ item.question.correct_answer }}</span>
-        </span>
-        {% endif %}
-      </div>
-    </div>
-
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% if (q.points or 1) != 1 %}<p class="nx-review__points">{{ q.points }} points</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  <div id="reviewNoMatch" hidden>
+    {% call ui.empty_state('Nothing here', 'No questions in this group.', icon='funnel') %}{% endcall %}
   </div>
-  {% endfor %}
+  {% else %}
+  {% call ui.empty_state('No questions', 'This exam has no questions to review.', icon='journal') %}{% endcall %}
+  {% endif %}
+</section>
+{% endblock %}
 
-</div><!-- /container -->
-
-<script>
-  const passed = {{ 'true' if student_exam.passed else 'false' }};
-  const passMsg = ["Great performance!", "Strong result!", "Well done!", "Excellent work!"];
-  const failMsg = ["Keep practicing.", "You will improve.", "Try again soon.", "Don't give up!"];
-  document.getElementById('motivation').textContent =
-    passed ? passMsg[Math.floor(Math.random() * passMsg.length)]
-      : failMsg[Math.floor(Math.random() * failMsg.length)];
-
-  function toggleQ(el) {
-    const body = el.nextElementSibling;
-    const isOpen = body.style.display === 'block';
-    body.style.display = isOpen ? 'none' : 'block';
-    const icon = el.querySelector('.bi-chevron-down, .bi-chevron-up');
-    if (icon) icon.className = icon.className.replace(isOpen ? 'bi-chevron-up' : 'bi-chevron-down', isOpen ? 'bi-chevron-down' : 'bi-chevron-up');
-  }
-
-  function filterQ(e, type) {
-    document.querySelectorAll('.result-filter-btn').forEach(b => b.classList.remove('active'));
-    e.currentTarget.classList.add('active');
-    document.querySelectorAll('.result-question').forEach(q => {
-      if (type === 'all') q.style.display = 'block';
-      else if (type === 'correct') q.style.display = q.classList.contains('correct-q') ? 'block' : 'none';
-      else q.style.display = q.classList.contains('incorrect-q') ? 'block' : 'none';
-    });
-  }
-</script>
-
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/result.js') }}"></script>
 {% endblock %}

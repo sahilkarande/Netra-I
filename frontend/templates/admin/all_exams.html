@@ -1,264 +1,95 @@
-{% extends "base.html" %}
-{% block title %}All Exams - Admin Panel{% endblock %}
+{% extends "layouts/app.html" %}
+{% import 'components/ui.html' as ui %}
 
-{% block extra_css %}
-<style>
-    .admin-wrap {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 1.5rem 1rem;
-    }
+{% block title %}All exams{% endblock %}
+{% block topbar_title %}<b>Administration</b> · all exams{% endblock %}
 
-    .admin-nav {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-        padding: 0.75rem;
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-    }
-
-    .admin-nav a {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.55rem 1rem;
-        border-radius: 8px;
-        color: var(--text-secondary);
-        text-decoration: none;
-        font-size: 0.85rem;
-        font-weight: 500;
-        transition: all 0.2s;
-        border: 1px solid transparent;
-    }
-
-    .admin-nav a:hover {
-        background: var(--bg-secondary);
-        color: var(--text-primary);
-    }
-
-    .admin-nav a.active {
-        background: var(--primary-color);
-        color: #fff;
-    }
-
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .page-header h1 {
-        font-size: 1.5rem;
-        font-weight: 700;
-        margin: 0;
-        color: var(--text-primary);
-    }
-
-    .total-badge {
-        background: var(--primary-color);
-        color: #fff;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-
-    .section-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        overflow: hidden;
-    }
-
-    .admin-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .admin-table th {
-        background: var(--bg-secondary);
-        padding: 0.65rem 1rem;
-        text-align: left;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: var(--text-secondary);
-    }
-
-    .admin-table td {
-        padding: 0.7rem 1rem;
-        border-bottom: 1px solid var(--border-color);
-        font-size: 0.88rem;
-        color: var(--text-primary);
-    }
-
-    .admin-table tr:last-child td {
-        border-bottom: none;
-    }
-
-    .admin-table tr:hover {
-        background: var(--bg-secondary);
-    }
-
-    .name-cell {
-        font-weight: 600;
-    }
-
-    .sub-text {
-        font-size: 0.78rem;
-        color: var(--text-secondary);
-    }
-
-    .badge-sm {
-        display: inline-block;
-        padding: 0.15rem 0.55rem;
-        border-radius: 10px;
-        font-size: 0.72rem;
-        font-weight: 600;
-    }
-
-    .badge-green {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .badge-red {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .badge-orange {
-        background: #fef3c7;
-        color: #92400e;
-    }
-
-    .badge-blue {
-        background: #dbeafe;
-        color: #1e40af;
-    }
-
-    .empty-row {
-        text-align: center;
-        padding: 2.5rem;
-        color: var(--text-secondary);
-    }
-
-    .btn-view {
-        color: var(--primary-color);
-        text-decoration: none;
-        font-size: 0.85rem;
-        font-weight: 500;
-    }
-
-    .btn-end {
-        background: #ef4444;
-        color: #fff;
-        border: none;
-        padding: 0.3rem 0.65rem;
-        border-radius: 6px;
-        font-size: 0.78rem;
-        cursor: pointer;
-        font-weight: 500;
-    }
-
-    .btn-end:hover {
-        background: #dc2626;
-    }
-</style>
-{% endblock %}
+{% set tone = {'live': 'danger', 'open': 'success', 'scheduled': 'accent', 'closed': 'neutral', 'inactive': 'neutral'} %}
 
 {% block content %}
-<div class="admin-wrap">
+{% call ui.page_header('All exams', exam_data|length ~ ' exam' ~ ('s' if exam_data|length != 1 else '') ~ ' across every department') %}{% endcall %}
 
-    <div class="admin-nav">
-        <a href="{{ url_for('admin.admin_dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
-        <a href="{{ url_for('admin.manage_faculty') }}"><i class="bi bi-person-badge"></i> Manage Faculty</a>
-        <a href="{{ url_for('admin.admin_students') }}"><i class="bi bi-people"></i> All Students</a>
-        <a href="{{ url_for('admin.admin_all_exams') }}" class="active"><i class="bi bi-journal-text"></i> All Exams</a>
-        <a href="{{ url_for('student.global_leaderboard') }}"><i class="bi bi-trophy"></i> Leaderboard</a>
-        <a href="{{ url_for('admin.admin_sql_console') }}"><i class="bi bi-terminal"></i> SQL Console</a>
+<section class="nx-panel nx-enter" style="--i: 1" aria-labelledby="exams-title" id="allExams">
+  <div class="nx-panel__head">
+    <h2 class="nx-panel__title nx-visually-hidden" id="exams-title">Exams</h2>
+    <div class="nx-filterbar">
+      <label class="nx-search"><span class="nx-visually-hidden">Search exams</span><i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" class="nx-input" id="examSearch" placeholder="Exam, owner or department" autocomplete="off"></label>
+      <div class="nx-segmented" role="group" aria-label="Status">
+        <button type="button" data-status-filter="" aria-pressed="true">All</button>
+        <button type="button" data-status-filter="live" aria-pressed="false">Live</button>
+        <button type="button" data-status-filter="open" aria-pressed="false">Open</button>
+        <button type="button" data-status-filter="scheduled" aria-pressed="false">Scheduled</button>
+        <button type="button" data-status-filter="closed inactive" aria-pressed="false">Closed</button>
+      </div>
     </div>
+  </div>
+  {% if exam_data %}
+  <div class="nx-table-wrap">
+    <table class="nx-table nx-table--stack">
+      <thead><tr><th scope="col">Exam</th><th scope="col">Owner</th><th scope="col">Status</th><th scope="col" class="is-num">Questions</th><th scope="col" class="is-num">Attempts</th><th scope="col" class="is-num">Average</th><th scope="col" class="is-actions"><span class="nx-visually-hidden">Actions</span></th></tr></thead>
+      <tbody>
+        {% for item in exam_data %}
+        {% set e = item.exam %}
+        {% set owner = (item.creator.full_name or item.creator.username) if item.creator else 'Removed' %}
+        <tr data-exam-row data-status="{{ item.status }}" data-search="{{ (e.title ~ ' ' ~ owner ~ ' ' ~ ((item.creator.department or '') if item.creator else ''))|lower }}">
+          <td><a class="nx-table__primary" href="{{ url_for('faculty.view_exam', exam_id=e.id) }}">{{ e.title }}</a><span class="nx-table__secondary">{{ e.duration_minutes }} min · {{ e.created_at|localtime('%d %b %Y') if e.created_at else '' }}</span></td>
+          <td data-label="Owner">{{ owner }}<span class="nx-table__secondary">{{ item.creator.department if item.creator and item.creator.department else '' }}</span></td>
+          <td data-label="Status">{{ ui.badge(item.status_label, tone[item.status], live=(item.status == 'live')) }}{% if item.live %}<span class="nx-table__secondary">{{ item.live }} writing</span>{% endif %}</td>
+          <td class="is-num nx-num" data-label="Questions">{% if item.question_count %}{{ item.question_count }}{% else %}<span class="nx-text-warning">0</span>{% endif %}</td>
+          <td class="is-num nx-num" data-label="Attempts">{{ item.attempt_count }}</td>
+          <td class="is-num nx-num" data-label="Average">{{ (item.avg_score ~ '%') if item.avg_score else '—' }}</td>
+          <td class="is-actions"><div class="nx-row-actions">
+            {{ ui.button('Analytics for ' ~ e.title, href=url_for('faculty.exam_analytics', exam_id=e.id), variant='ghost', size='sm', icon='graph-up', icon_only=True) }}
+            {% if item.status in ('live', 'open') %}
+            <form method="POST" action="{{ url_for('faculty.faculty_force_end_exam', exam_id=e.id) }}" class="nx-inline-form">
+              <button type="submit" class="nx-btn nx-btn--ghost nx-btn--sm" data-nx-confirm="End for everyone?"><i class="bi bi-stop-circle" aria-hidden="true"></i><span>End</span></button>
+            </form>
+            {% endif %}
+          </div></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div id="examNone" hidden>{% call ui.empty_state('No exams match', 'Try another search or status.', icon='search') %}{% endcall %}</div>
+  {% else %}
+  {% call ui.empty_state('No exams yet', 'Exams appear here once faculty create them.', icon='journal') %}{% endcall %}
+  {% endif %}
+</section>
 
-    <div class="page-header">
-        <h1><i class="bi bi-journal-text"></i> All Exams</h1>
-        <span class="total-badge">{{ exam_data | length }} exams</span>
+{% if deleted_exams %}
+<section class="nx-panel nx-enter" style="--i: 2" aria-labelledby="deleted-title" id="deletedExams">
+  <div class="nx-panel__head">
+    <div>
+      <h2 class="nx-panel__title" id="deleted-title">Recently deleted</h2>
+      <span class="nx-panel__sub">Restorable for {{ archive_days }} days, with questions, attempts, answers and flags</span>
     </div>
+  </div>
+  <div class="nx-table-wrap">
+    <table class="nx-table nx-table--stack">
+      <thead><tr><th scope="col">Exam</th><th scope="col">Deleted</th><th scope="col" class="is-num">Questions</th><th scope="col" class="is-num">Attempts</th><th scope="col" class="is-actions"><span class="nx-visually-hidden">Actions</span></th></tr></thead>
+      <tbody>
+        {% for d in deleted_exams %}
+        <tr>
+          <td><span class="nx-table__primary">{{ d.title }}</span><span class="nx-table__secondary">Gone for good on {{ d.expires_at|localtime('%d %b %Y') }}</span></td>
+          <td data-label="Deleted">{{ d.deleted_at|localtime('%d %b %Y, %H:%M') }}<span class="nx-table__secondary">{{ ('by ' ~ d.deleted_by_name) if d.deleted_by_name else '' }}</span></td>
+          <td class="is-num nx-num" data-label="Questions">{{ d.questions }}</td>
+          <td class="is-num nx-num" data-label="Attempts">{{ d.attempts }}</td>
+          <td class="is-actions"><div class="nx-row-actions">
+            <form method="POST" action="{{ url_for('admin.restore_deleted_exam', name=d.name) }}" class="nx-inline-form">
+              <button type="submit" class="nx-btn nx-btn--secondary nx-btn--sm" data-nx-confirm="Restore it?"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span>Restore</span></button>
+            </form>
+          </div></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
 
-    <div class="section-card">
-        {% if exam_data %}
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th>Exam</th>
-                    <th>Created By</th>
-                    <th>Questions</th>
-                    <th>Duration</th>
-                    <th>Attempts</th>
-                    <th>Avg Score</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in exam_data %}
-                <tr>
-                    <td>
-                        <div class="name-cell">{{ item.exam.title }}</div>
-                        <div class="sub-text">{{ item.exam.created_at.strftime('%d %b %Y') if item.exam.created_at else
-                            '' }}</div>
-                    </td>
-                    <td>
-                        <div>{{ item.creator.full_name if item.creator else 'Unknown' }}</div>
-                        <div class="sub-text">{{ item.creator.department if item.creator else '' }}</div>
-                    </td>
-                    <td>{{ item.question_count }}</td>
-                    <td>{{ item.exam.duration_minutes }} min</td>
-                    <td>{{ item.attempt_count }}</td>
-                    <td>
-                        {% if item.avg_score > 0 %}
-                        <span
-                            class="badge-sm {% if item.avg_score >= 60 %}badge-green{% elif item.avg_score >= 40 %}badge-orange{% else %}badge-red{% endif %}">
-                            {{ item.avg_score }}%
-                        </span>
-                        {% else %}
-                        <span class="sub-text">N/A</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if item.exam.is_active %}
-                        <span class="badge-sm badge-green">Active</span>
-                        {% else %}
-                        <span class="badge-sm badge-orange">Inactive</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <a href="{{ url_for('faculty.view_exam', exam_id=item.exam.id) }}" class="btn-view">View →</a>
-                        {% if item.exam.is_active %}
-                        <form method="POST" action="{{ url_for('faculty.faculty_force_end_exam', exam_id=item.exam.id) }}"
-                            style="display: inline; margin-left: 0.5rem;"
-                            onsubmit="return confirm('Force-end this exam for ALL students?')">
-                            <button type="submit" class="btn-end">End</button>
-                        </form>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty-row">
-            <i class="bi bi-journal-text"
-                style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>
-            No exams created yet
-        </div>
-        {% endif %}
-    </div>
-</div>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/all_exams.js') }}"></script>
 {% endblock %}

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import text
 import traceback
@@ -82,19 +82,27 @@ def admin_dashboard():
             'avg_score': avg_score
         })
 
-    # Recent exams data
-    recent_exams = Exam.query.order_by(Exam.id.desc()).limit(5).all()
+    # Recent exams, with where each stands right now
+    from backend.services.dashboard_service import exam_status, STATUS_LABELS
+    in_progress = dict(db.session.query(StudentExam.exam_id, db.func.count(StudentExam.id))
+                       .filter(StudentExam.status == 'started').group_by(StudentExam.exam_id))
     recent_exams_data = []
-    for e in recent_exams:
-        creator = User.query.get(e.creator_id)
-        attempt_count = StudentExam.query.filter_by(exam_id=e.id).count()
+    for e in Exam.query.order_by(Exam.id.desc()).limit(8).all():
+        status = exam_status(e, in_progress.get(e.id, 0))
         recent_exams_data.append({
             'exam': e,
-            'creator': creator,
-            'attempt_count': attempt_count
+            'creator': e.creator,
+            'attempt_count': StudentExam.query.filter_by(exam_id=e.id).count(),
+            'live': in_progress.get(e.id, 0),
+            'status': status,
+            'status_label': STATUS_LABELS[status],
         })
-    
-    return render_template('admin/dashboard.html', 
+    live_exams = sum(1 for n in in_progress.values() if n)
+    students_writing = sum(in_progress.values())
+    no_department = User.query.filter(User.role == 'faculty',
+                                      db.or_(User.department == None, User.department == '')).count()  # noqa: E711
+
+    return render_template('admin/dashboard.html',
                           total_faculty=total_faculty,
                           total_students=total_students,
                           total_exams=total_exams,
@@ -103,7 +111,10 @@ def admin_dashboard():
                           submitted_attempts=submitted_attempts,
                           faculty_stats=faculty_stats,
                           course_stats=course_stats,
-                          recent_exams_data=recent_exams_data)
+                          recent_exams_data=recent_exams_data,
+                          live_exams=live_exams,
+                          students_writing=students_writing,
+                          no_department=no_department)
 
 @admin_bp.route('/admin/manage-faculty')
 @login_required
@@ -120,7 +131,9 @@ def manage_faculty():
             'exam_count': exam_count
         })
         
-    return render_template('admin/manage_faculty.html', faculty_data=faculty_data)
+    departments = sorted({f.department for f in faculties if f.department})
+    return render_template('admin/manage_faculty.html', faculty_data=faculty_data,
+                           departments=departments)
 
 @admin_bp.route('/admin/create-faculty', methods=['POST'])
 @login_required
@@ -153,11 +166,25 @@ def create_faculty():
         phone = request.form.get('phone')
         department = request.form.get('department')
     
-    if not username or not email or not password:
+    username = (username or '').strip()
+    email = (email or '').strip().lower()
+    password = password or ''
+    if not username or not email:
         if is_json:
-            return jsonify({"success": False, "error": "Username, email, and password are required fields"}), 400
-        flash('Username, email, and password are required fields', 'error')
+            return jsonify({"success": False, "error": "Username and email are required."}), 400
+        flash('Username and email are required.', 'error')
         return redirect(url_for('admin.manage_faculty'))
+    if password and len(password) < 8:
+        if is_json:
+            return jsonify({"success": False, "error": "A password needs at least 8 characters, or leave it blank for a temporary one."}), 400
+        flash('A password needs at least 8 characters, or leave it blank for a temporary one.', 'error')
+        return redirect(url_for('admin.manage_faculty'))
+    # Blank password: a random temporary one, shown once to the admin. Either
+    # way the new faculty member chooses their own at first sign-in.
+    from backend.services import account_service
+    temporary = None
+    if not password:
+        temporary = password = account_service.generate_temp_password()
         
     if User.query.filter_by(username=username).first():
         if is_json:
@@ -190,16 +217,42 @@ def create_faculty():
         employee_id=emp_id,
         phone=phone.strip() if phone else None,
         department=department.strip() if department else None,
-        is_verified=True
+        is_verified=True,
+        password_changed=False,
     )
-    
+
     db.session.add(new_faculty)
     db.session.commit()
-    
+    current_app.logger.info('admin %s created faculty %s', current_user.id, new_faculty.id)
+
     if is_json:
-        return jsonify({"success": True, "message": "Faculty created successfully!"})
-    flash('Faculty created successfully!', 'success')
+        return jsonify({"success": True, "id": new_faculty.id,
+                        "message": f"{new_faculty.full_name or username} can now sign in.",
+                        "temporary_password": temporary})
+    flash(f"{new_faculty.full_name or username} can now sign in"
+          + (f" with the temporary password {temporary}." if temporary else '.'), 'success')
     return redirect(url_for('admin.manage_faculty'))
+
+
+@admin_bp.route('/admin/faculty/<int:faculty_id>/reset-password', methods=['POST'])
+@login_required
+def reset_faculty_password(faculty_id):
+    """New temporary password for a faculty member, shown once to the admin."""
+    if not is_admin_user():
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    faculty = User.query.get_or_404(faculty_id)
+    if faculty.role != 'faculty':
+        return jsonify({"success": False, "error": "Only faculty passwords can be reset here."}), 400
+    from werkzeug.security import generate_password_hash
+    from backend.services import account_service
+    temporary = account_service.generate_temp_password()
+    faculty.password_hash = generate_password_hash(temporary, method='pbkdf2:sha256')
+    faculty.password_changed = False
+    faculty.password_changed_at = None
+    faculty.password_hint = None
+    db.session.commit()
+    current_app.logger.info('admin %s reset password of faculty %s', current_user.id, faculty.id)
+    return jsonify({"success": True, "temporary_password": temporary})
 
 @admin_bp.route('/admin/delete-faculty/<int:faculty_id>', methods=['POST'])
 @login_required
@@ -286,17 +339,50 @@ def admin_all_exams():
             db.func.avg(db.case((StudentExam.status == 'submitted', StudentExam.percentage))),
         ).group_by(StudentExam.exam_id)
     )
+    from backend.services.dashboard_service import exam_status, STATUS_LABELS
+    in_progress = dict(db.session.query(StudentExam.exam_id, db.func.count(StudentExam.id))
+                       .filter(StudentExam.status == 'started').group_by(StudentExam.exam_id))
     exam_data = []
     for e in exams:
         count, avg = attempt_stats.get(e.id, (0, None))
+        status = exam_status(e, in_progress.get(e.id, 0))
         exam_data.append({
+            'status': status,
+            'status_label': STATUS_LABELS[status],
+            'live': in_progress.get(e.id, 0),
             'exam': e,
             'creator': e.creator,
             'question_count': question_counts.get(e.id, 0),
             'attempt_count': count,
             'avg_score': round(avg or 0, 1),
         })
-    return render_template('admin/all_exams.html', exam_data=exam_data)
+    from backend.services import retention
+    return render_template('admin/all_exams.html', exam_data=exam_data,
+                           deleted_exams=retention.list_archives(),
+                           archive_days=retention.archive_days())
+
+
+@admin_bp.route('/admin/deleted-exams/<name>/restore', methods=['POST'])
+@login_required
+def restore_deleted_exam(name):
+    """Bring back an exam a faculty member deleted (audit P2-10)."""
+    if not is_admin_user():
+        return "Access Denied", 403
+    from backend.services import retention
+    try:
+        exam, skipped = retention.restore_archive(name, current_user)
+    except FileNotFoundError:
+        flash('That deleted exam is no longer available.', 'error')
+        return redirect(url_for('admin.admin_all_exams'))
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Restoring %s failed', name)
+        flash('The exam could not be restored. The backup copy has been kept.', 'error')
+        return redirect(url_for('admin.admin_all_exams'))
+    note = (f' {skipped} attempt(s) were left out because those students no longer exist.'
+            if skipped else '')
+    flash(f'"{exam.title}" restored with its results.{note}', 'success')
+    return redirect(url_for('admin.admin_all_exams'))
 
 @admin_bp.route('/admin/sql_console', methods=['GET'])
 @login_required
@@ -320,10 +406,17 @@ def admin_sql_run():
         return jsonify({"success": False, "error": "No SQL provided"}), 400
 
     first_word = sql.split(None, 1)[0].lower()
+    read_only = first_word in ("select", "pragma", "with", "explain")
+
+    # Writes need an explicit opt-in for this one run: a stray UPDATE or
+    # DELETE typed into a query box should not change exam data.
+    if not read_only and not payload.get('allow_write'):
+        return jsonify({"success": False, "needs_write": True,
+                        "error": "This statement changes data. Turn on Allow changes to run it."}), 400
 
     try:
         engine = db.engine
-        if first_word in ("select", "pragma", "with"):
+        if read_only:
             with engine.connect() as conn:
                 result = conn.execute(text(sql))
                 columns = list(result.keys())
@@ -340,11 +433,13 @@ def admin_sql_run():
             with engine.begin() as conn:
                 result = conn.execute(text(sql))
                 affected = result.rowcount or 0
+            current_app.logger.warning('admin %s ran SQL write (%s rows): %s',
+                                       current_user.id, affected, sql[:500])
             return jsonify({
                 "success": True,
                 "type": "update",
-                "message": f"✅ Query executed. Rows affected: {affected}"
+                "message": f"Done. Rows affected: {affected}"
             })
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.info('admin SQL error: %s', e)
+        return jsonify({"success": False, "error": str(e).split('\n')[0]}), 400

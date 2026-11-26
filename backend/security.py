@@ -4,7 +4,8 @@ CSRF protection for every state-changing request.
 A per-session random token is rendered into each page (<meta name="csrf-token">)
 and must come back on every POST/PUT/PATCH/DELETE, either as the
 ``X-CSRFToken`` header (fetch) or a ``csrf_token`` form field (HTML forms).
-``base.html`` adds both automatically, so individual pages need no changes.
+``partials/csrf.html`` (included by every layout) adds both automatically, so
+individual pages need no changes.
 
 A cross-site page can make a logged-in browser *send* a request, but it cannot
 read this token, so the forged request is refused. Socket.IO is exempt: its

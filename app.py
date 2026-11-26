@@ -8,8 +8,9 @@ import eventlet
 eventlet.monkey_patch()
 
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, g
 from flask_login import login_required, current_user, logout_user
+import errno
 import os
 import sys
 import socket
@@ -41,6 +42,13 @@ def get_lan_ip():
 # TABLES but never adds columns to a table that already exists, so anything
 # introduced later has to be ALTERed in here.
 LATE_COLUMNS = {
+    'exam': {
+        'times_utc': 'BOOLEAN DEFAULT 0',
+    },
+    'student_exam': {
+        'device_token': 'VARCHAR(64)',
+        'device_switches': 'INTEGER DEFAULT 0',
+    },
     'users': {
         'password_changed': 'BOOLEAN DEFAULT 0',
         'password_changed_at': 'DATETIME',
@@ -135,6 +143,23 @@ def ensure_schema_indexes():
             print(f"⚠️  Could not create {name} on {table}: {e}")
 
 
+def convert_exam_times_to_utc():
+    """One-off data fix: exam windows used to be stored in the hall's local
+    time and compared with UTC, so exams opened and closed hours late. Rows
+    saved before the fix carry times_utc = 0; convert them once."""
+    from backend.models import Exam
+    from backend.services.time_service import local_to_utc
+
+    pending = Exam.query.filter(db.or_(Exam.times_utc == False, Exam.times_utc.is_(None))).all()  # noqa: E712
+    for exam in pending:
+        exam.start_time = local_to_utc(exam.start_time)
+        exam.end_time = local_to_utc(exam.end_time)
+        exam.times_utc = True
+    if pending:
+        db.session.commit()
+        print(f"✅ Converted the open/close times of {len(pending)} exam(s) to UTC")
+
+
 # Kept as an alias so older call sites keep working.
 ensure_user_columns = ensure_schema_columns
 
@@ -174,25 +199,20 @@ def load_secret_key(instance_path):
 STAFF_ROLES = ('faculty', 'admin')
 
 
-def _configure_logging():
-    """INFO-level logs to stderr unless the host already configured logging."""
-    import logging
-    if not logging.getLogger().handlers:
-        logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s %(levelname)s %(name)s: %(message)s')
-
-
 def create_app():
     """Application factory"""
-    _configure_logging()
     app = Flask(
         __name__,
         template_folder='frontend/templates',
         static_folder='frontend/static'
     )
+    # First, so every later before_request runs with a request reference set
+    from backend import logging_setup
+    logging_setup.configure(app)
     
     # Configuration
     app.config['SECRET_KEY'] = load_secret_key(app.instance_path)
+
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///exam_platform.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
@@ -220,6 +240,13 @@ def create_app():
     # ──────────────────────────────────────────────────────────────
     # INITIALIZE EXTENSIONS
     # ──────────────────────────────────────────────────────────────
+    # Behind a reverse proxy (nginx etc.) the client address arrives in
+    # X-Forwarded-For. Trust that header only when told to: on a LAN with no
+    # proxy any browser could set it and pose as another machine.
+    if os.getenv('TRUST_PROXY', '').lower() in ('1', 'true', 'yes'):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
@@ -296,12 +323,15 @@ def create_app():
     def internal_error(err):
         db.session.rollback()
         app.logger.exception('Unhandled error on %s %s', request.method, request.path)
+        ref = g.get('request_id') or '-'
         if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
-            return jsonify({'success': False, 'error': 'Something went wrong. Please try again.'}), 500
+            return jsonify({'success': False, 'ref': ref,
+                            'error': f'Something went wrong (reference {ref}). Please try again.'}), 500
         return ('<!doctype html><title>Something went wrong</title>'
                 '<div style="font-family:sans-serif;max-width:480px;margin:15vh auto;text-align:center">'
                 '<h2>Something went wrong</h2><p>The error has been logged. '
-                '<a href="/">Return to your dashboard</a>.</p></div>'), 500
+                f'If it keeps happening, give your administrator this reference: <b>{ref}</b>.</p>'
+                '<p><a href="/">Return to your dashboard</a>.</p></div>'), 500
 
     # ──────────────────────────────────────────────────────────────
     # LOGIN MANAGER HELPERS
@@ -318,12 +348,24 @@ def create_app():
     # ──────────────────────────────────────────────────────────────
     # ROUTE REGISTRATION
     # ──────────────────────────────────────────────────────────────
+    # Template filters: times in the exam hall's zone, safe question text.
+    # Registered after the config above: touching app.jinja_env earlier would
+    # create it before TEMPLATES_AUTO_RELOAD is set.
+    from backend.services import time_service, text_format, retention
+    time_service.init_app(app)
+    text_format.init_app(app)
+    app.jinja_env.globals.update(evidence_retention_days=retention.evidence_days,
+                                 evidence_delete_after=retention.evidence_delete_after)
+
     with app.app_context():
         from backend.routes import register_blueprints
         register_blueprints(app)
         db.create_all()
         ensure_schema_columns()
         ensure_schema_indexes()
+        convert_exam_times_to_utc()
+        from backend.services import throttle
+        throttle.purge_expired()        # sign-in counters whose window ended a day ago
         print("✅ Database initialized!")
 
     # ──────────────────────────────────────────────────────────────
@@ -421,6 +463,32 @@ def create_app():
     return app
 
 
+def configure_listener(env=os.environ):
+    """Make the eventlet listening socket safe for an exam hall.
+
+    Flask-SocketIO opens it with eventlet's defaults, which are wrong here:
+
+    - SO_REUSEPORT is on, so a second copy of the server (started twice by
+      mistake, or a restart while the old process is still exiting) binds the
+      same port without error and the kernel splits students between the two.
+      A Socket.IO session made on one is then unknown to the other, and the
+      student's proctoring connection fails with "Invalid session".
+    - The accept backlog is 50, too small when a whole hall connects at once.
+
+    Returns the backlog in use. Takes effect for sockets opened afterwards.
+    """
+    import eventlet
+    original = getattr(eventlet.listen, '__wrapped__', eventlet.listen)
+    backlog = int(env.get('LISTEN_BACKLOG', '1024'))
+
+    def listen(addr, family=socket.AF_INET, backlog=backlog, reuse_addr=True, reuse_port=False):
+        return original(addr, family, backlog=backlog, reuse_addr=reuse_addr, reuse_port=reuse_port)
+
+    listen.__wrapped__ = original
+    eventlet.listen = listen
+    return backlog
+
+
 def resolve_run_options(argv, env):
     """How `python app.py` should serve.
 
@@ -503,16 +571,29 @@ if __name__ == '__main__':
     from backend.socket_io import socketio
     from backend.services.exam_service import start_attempt_sweeper
     start_attempt_sweeper(app, socketio)
+    from backend.services.retention import start_sweeper as start_retention_sweeper
+    start_retention_sweeper(app, socketio)
 
     run_kwargs = {
         "debug": debug,
         "host": opts['host'],
         "port": port,
         "use_reloader": opts['use_reloader'],
+        # Each connected student holds a connection open; eventlet's default
+        # cap of 1024 would make a large hall queue behind itself.
+        "max_size": int(os.getenv('MAX_CONNECTIONS', '4000')),
     }
-    
+
     if use_ssl and ssl_context:
         run_kwargs["certfile"] = cert_file
         run_kwargs["keyfile"] = key_file
-        
-    socketio.run(app, **run_kwargs)
+
+    configure_listener()
+    try:
+        socketio.run(app, **run_kwargs)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            print(f"\n❌ Port {port} is already in use. Is Netra-I already running?")
+            print("   Stop the other copy first (two servers on one port split the students).")
+            sys.exit(1)
+        raise

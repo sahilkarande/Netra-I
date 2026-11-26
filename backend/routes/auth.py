@@ -10,7 +10,11 @@ from backend.database import db
 from backend.models import User
 from backend.services import face_service
 from backend.services import liveness_service
+from backend.services import throttle
 from backend.utils.email_utils import send_otp_email
+import logging
+
+log = logging.getLogger(__name__)
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -37,7 +41,11 @@ def add_cache_control(response):
     return response
 
 def _find_user_by_identifier(login_input: str):
-    """Resolve a login box entry against username, email, PRN or roll ID."""
+    """Resolve a login box entry against username, email or PRN.
+
+    Roll numbers are deliberately not accepted: they repeat across batches, so
+    "12" could match several students and sign in the wrong one (audit P2-13).
+    """
     if not login_input:
         return None
     return User.query.filter(
@@ -45,7 +53,6 @@ def _find_user_by_identifier(login_input: str):
             User.username == login_input,
             User.email == login_input.lower(),
             User.prn_number == login_input,
-            User.roll_id == login_input,
         )
     ).first()
 
@@ -82,6 +89,8 @@ def register():
         full_name = (request.form.get('full_name') or '').strip() or None
         prn_number = (request.form.get('prn_number') or '').strip() or None
         roll_id = (request.form.get('roll_id') or '').strip() or None
+        batch = (request.form.get('batch') or '').strip()[:20] or None
+        phone = (request.form.get('phone') or '').strip()[:20] or None
 
         # Self-registration only ever creates students. Faculty accounts are
         # made by an admin; trusting a posted 'role' would let anyone register
@@ -121,6 +130,8 @@ def register():
             full_name=full_name,
             prn_number=prn_number,
             roll_id=roll_id,
+            batch=batch,
+            phone=phone,
             is_verified=False,
             # They chose this password themselves, so no forced change.
             password_changed=True,
@@ -238,9 +249,12 @@ def login():
             
     return render_template('login.html')
 
-@auth_bp.route('/logout')
-@login_required
+@auth_bp.route('/logout', methods=['GET', 'POST'])
 def logout():
+    # POST only (with the CSRF token), so another site cannot sign a student
+    # out mid-exam with a link or an <img> (audit P2-6). A GET just goes home.
+    if request.method != 'POST':
+        return redirect(url_for('auth.index'))
     logout_user()
     session.clear()
     return redirect(url_for('auth.login'))
@@ -248,8 +262,22 @@ def logout():
 @auth_bp.route('/change-password', methods=['GET', 'POST'])
 @login_required
 def change_password():
-    """Change password page - forced for first-time students, optional for everyone else"""
+    """Change password page - forced for first-time students, optional for everyone else.
+
+    For students it doubles as first-login onboarding: step 1 sets a password
+    and hint, step 2 registers their face, which camera-proctored exams need
+    before the paper opens.
+    """
     is_forced = current_user.must_change_password
+
+    def page(hint_value):
+        return render_template(
+            'change_password.html',
+            is_forced=is_forced,
+            hint_value=hint_value,
+            step=request.args.get('step'),
+            face_registered=face_service.enrollment_locked(current_user),
+        )
 
     if request.method == 'POST':
         old_password = request.form.get('old_password') or ''
@@ -282,11 +310,7 @@ def change_password():
         if errors:
             for message in errors:
                 flash(message, 'error')
-            return render_template(
-                'change_password.html',
-                is_forced=is_forced,
-                hint_value=password_hint
-            )
+            return page(password_hint)
 
         try:
             current_user.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
@@ -295,6 +319,11 @@ def change_password():
             current_user.password_hint = password_hint or None
             db.session.commit()
 
+            # A student who has not registered their face yet goes straight to
+            # step 2 — otherwise they find out at the exam door.
+            if current_user.role == 'student' and not face_service.enrollment_locked(current_user):
+                flash('Password saved. One more step: register your face for camera-proctored exams.', 'success')
+                return redirect(url_for('auth.change_password', step='face'))
             flash('Password changed successfully!', 'success')
             return redirect(url_for('auth.index'))
 
@@ -302,26 +331,35 @@ def change_password():
             db.session.rollback()
             current_app.logger.exception('change_password failed')
             flash('Could not change your password. Please try again.', 'error')
-            return render_template(
-                'change_password.html',
-                is_forced=is_forced,
-                hint_value=password_hint
-            )
+            return page(password_hint)
 
-    return render_template(
-        'change_password.html',
-        is_forced=is_forced,
-        hint_value=current_user.password_hint or ''
-    )
+    return page(current_user.password_hint or '')
 
 
 @auth_bp.route('/password-hint', methods=['POST'])
 def password_hint():
-    """Return the hint a user saved for themselves (login helper)."""
+    """Return the hint a user saved for themselves (login helper).
+
+    Anyone who knows a PRN can ask, so lookups are rate-limited per account and
+    per machine (audit P2-8): enough for a student who forgot, too few to
+    harvest the hints of a whole batch.
+    """
     login_input = ((request.get_json(silent=True) or request.form).get('username') or '').strip()
 
     if not login_input:
         return jsonify({'success': False, 'message': 'Enter your username, email or PRN first.'}), 400
+
+    account_key = f'hint:{login_input.lower()}'
+    ip_key = f'hint-ip:{_client_ip()}'
+    for key, limit in ((account_key, HINT_PER_ACCOUNT), (ip_key, HINT_PER_IP)):
+        locked, minutes = throttle.is_locked_out(key, limit, LOOKUP_WINDOW_MINUTES)
+        if locked:
+            return jsonify({'success': False,
+                            'message': f'Too many hint requests. Try again in {minutes} minute(s), '
+                                       'or ask your faculty to reset your password.'}), 429
+    throttle.record(account_key, LOOKUP_WINDOW_MINUTES)
+    throttle.record(ip_key, LOOKUP_WINDOW_MINUTES)
+    current_app.logger.info('Password hint requested for %r from %s', login_input, _client_ip())
 
     user = _find_user_by_identifier(login_input)
 
@@ -335,9 +373,17 @@ def password_hint():
     }), 404
 
 
+# Lookup limits (per LOOKUP_WINDOW_MINUTES)
+LOOKUP_WINDOW_MINUTES = 10
+HINT_PER_ACCOUNT = 3
+HINT_PER_IP = 20
+FACE_AVAILABLE_PER_IP = 60
+
+
 def _client_ip():
-    return (request.headers.get('X-Forwarded-For', request.remote_addr or '')
-            .split(',')[0].strip())
+    # remote_addr only: X-Forwarded-For is whatever the client chooses to send.
+    # Behind a reverse proxy, set TRUST_PROXY=1 and ProxyFix fills remote_addr.
+    return request.remote_addr or ''
 
 
 def _log_face(identifier, stage, user_id=None, success=False, distance=None,
@@ -363,7 +409,7 @@ def _log_face(identifier, stage, user_id=None, success=False, distance=None,
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"Could not log face attempt: {e}")
+        log.exception('Could not log face attempt')
 
 
 def _match_sequence(user, detail):
@@ -537,6 +583,13 @@ def face_available():
     login_input = ((request.get_json(silent=True) or request.form).get('username') or '').strip()
     if not login_input:
         return jsonify({'success': False, 'available': False}), 400
+
+    # Rate-limited per machine so it can't be used to sweep a PRN range for
+    # which accounts exist (audit P2-8). The login page asks once per edit.
+    ip_key = f'face-avail-ip:{_client_ip()}'
+    if throttle.is_locked_out(ip_key, FACE_AVAILABLE_PER_IP, LOOKUP_WINDOW_MINUTES)[0]:
+        return jsonify({'success': False, 'available': False}), 429
+    throttle.record(ip_key, LOOKUP_WINDOW_MINUTES)
 
     user = _find_user_by_identifier(login_input)
     available = bool(
@@ -712,7 +765,7 @@ def _flag_exam_identity(student_exam_id, violation_type, message):
         log_proctor_event(attempt.id, violation_type, 'high', message)
     except Exception as e:
         db.session.rollback()
-        print(f'Could not flag exam identity issue: {e}')
+        log.exception('Could not flag exam identity issue')
 
 
 @auth_bp.route('/face/exam-check', methods=['POST'])

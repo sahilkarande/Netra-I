@@ -27,6 +27,7 @@ def _esc(value) -> str:
     """
     return _xml_escape('' if value is None else str(value))
 from datetime import datetime
+from backend.services.time_service import utc_to_local
 
 
 # Professional Color Palette
@@ -88,7 +89,7 @@ class NumberedCanvas(canvas.Canvas):
         )
         self.drawRightString(
             page_width - 50, 25,
-            f"Generated: {datetime.now().strftime('%d %b %Y')}"
+            f"Generated: {utc_to_local(datetime.utcnow()).strftime('%d %b %Y')}"
         )
 
 
@@ -250,7 +251,7 @@ def create_info_cards(student, exam, student_exam, styles):
         ['Total Questions:', str(len(exam.questions))],
         ['Total Marks:', f"{student_exam.total_points:.1f}"],
         ['Passing Criteria:', f"{exam.passing_score}%"],
-        ['Date & Time:', student_exam.submitted_at.strftime('%d %B %Y at %I:%M %p') if student_exam.submitted_at else 'N/A'],
+        ['Date & Time:', utc_to_local(student_exam.submitted_at).strftime('%d %B %Y at %I:%M %p') if student_exam.submitted_at else 'N/A'],
         ['Time Taken:', f"{student_exam.time_taken_minutes} minutes" if student_exam.time_taken_minutes else 'N/A'],
     ]
     
@@ -590,7 +591,7 @@ def create_footer_section(styles):
     <para alignment='center' fontSize='9' textColor='#64748b'>
         <b>CONFIDENTIAL DOCUMENT</b><br/>
         This is a computer-generated result report and does not require a physical signature.<br/>
-        Generated on {datetime.now().strftime('%d %B %Y at %I:%M %p')}<br/><br/>
+        Generated on {utc_to_local(datetime.utcnow()).strftime('%d %B %Y at %I:%M %p')}<br/><br/>
         <i>© 2024-2025 Proctored Exam Platform. All rights reserved.</i><br/>
         For queries or concerns, please contact your examination administrator.
     </para>
@@ -749,7 +750,7 @@ def generate_batch_report_pdf(batch_name, exam_titles, report_data, summary_data
     <para alignment='center' fontSize='9' textColor='#64748b'>
         <b>CONFIDENTIAL DOCUMENT</b><br/>
         Batch Performance Report generated automatically.<br/>
-        Generated on {datetime.now().strftime('%d %B %Y at %I:%M %p')}<br/><br/>
+        Generated on {utc_to_local(datetime.utcnow()).strftime('%d %B %Y at %I:%M %p')}<br/><br/>
         <i>© 2024-2025 Proctored Exam Platform. All rights reserved.</i>
     </para>
     """

@@ -18,6 +18,9 @@ from backend.services.proctor_vision.openvino_vision import (
     ProctorState,
     OpenVINOProctor
 )
+import logging
+
+log = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════
 # SHARED RESOURCES FOR SCALABILITY
@@ -41,10 +44,10 @@ _FACE_CASCADE = None
 try:
     _FACE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
     if _FACE_CASCADE.empty():
-        print("⚠️ WARNING: Face cascade classifier failed to load")
+        log.warning("Face cascade classifier failed to load")
         _FACE_CASCADE = None
 except Exception as e:
-    print(f"⚠️ WARNING: Could not load face cascade: {e}")
+    log.warning(f"Could not load face cascade: {e}")
     _FACE_CASCADE = None
 
 
@@ -62,7 +65,7 @@ def detect_faces(frame):
         )
         return faces
     except Exception as e:
-        print(f"Face detection error: {e}")
+        log.warning(f"Face detection error: {e}")
         return []
 
 
@@ -78,7 +81,7 @@ def decode_base64_image(data_url: str):
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         return img
     except Exception as e:
-        print(f"Error decoding image: {e}")
+        log.warning(f"Error decoding image: {e}")
         return None
 
 
@@ -194,7 +197,7 @@ def log_proctor_event(student_exam_id: int, event_type: str, severity: str,
 
         db.session.commit()
     except Exception as e:
-        print(f"⚠️ Event logging error: {e}")
+        log.exception('Proctor event logging failed')
         try:
             db.session.rollback()
         except Exception:

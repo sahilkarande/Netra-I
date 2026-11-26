@@ -192,7 +192,7 @@ def test_review_exam_scoped_to_exam_access(seed, as_user):
 @pytest.fixture
 def evidence(app, seed):
     import os
-    from backend.routes.faculty import _EVIDENCE_ROOT, _PROJECT_ROOT
+    from backend.services.retention import EVIDENCE_ROOT as _EVIDENCE_ROOT, PROJECT_ROOT as _PROJECT_ROOT
     folder = os.path.join(_EVIDENCE_ROOT, '_pytest')
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, 'frame.jpg')

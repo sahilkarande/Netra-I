@@ -1,0 +1,27 @@
+{% import 'components/ui.html' as ui %}
+{# Right side of the top bar: theme and account menus. The bar itself and its
+   title slot live in layouts/app.html so pages can fill the title block. #}
+  <div class="nx-topbar__end">
+    {% include 'partials/theme_menu.html' %}
+
+    {% if current_user.is_authenticated %}
+    <div class="nx-menu-wrap">
+      <button type="button" class="nx-user-btn" data-nx-menu-toggle="nx-user-menu" aria-label="Account">
+        <span class="nx-avatar">{{ ui.initials(current_user.full_name or current_user.username) }}</span>
+        <span class="nx-user-btn__name">{{ current_user.full_name or current_user.username }}</span>
+        <i class="bi bi-chevron-down" aria-hidden="true"></i>
+      </button>
+      <div class="nx-menu" id="nx-user-menu" role="menu" aria-label="Account">
+        <div class="nx-menu__header">
+          <b>{{ current_user.full_name or current_user.username }}</b>
+          <span>{{ current_user.email }} · {{ current_user.role|capitalize }}</span>
+        </div>
+        <a class="nx-menu__item" role="menuitem" href="{{ url_for('auth.change_password') }}"><i class="bi bi-shield-lock" aria-hidden="true"></i>Change password</a>
+        <div class="nx-menu__sep" role="separator"></div>
+        <form method="post" action="{{ url_for('auth.logout') }}" class="nx-menu__form">
+          <button type="submit" class="nx-menu__item nx-menu__item--danger" role="menuitem"><i class="bi bi-box-arrow-right" aria-hidden="true"></i>Sign out</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>

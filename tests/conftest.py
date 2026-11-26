@@ -1,6 +1,7 @@
 """Shared fixtures: an app on a throwaway SQLite file and seeded users."""
 
 import os
+import shutil
 import sys
 import tempfile
 
@@ -13,11 +14,13 @@ sys.path.insert(0, ROOT)
 _DB_DIR = tempfile.mkdtemp(prefix='netra_test_')
 os.environ['DATABASE_URL'] = 'sqlite:///' + os.path.join(_DB_DIR, 'test.db')
 os.environ['SECRET_KEY'] = 'test-secret-key'
+os.environ['LOG_DIR'] = os.path.join(_DB_DIR, 'logs')
 
 from app import create_app  # noqa: E402
 from backend.database import db  # noqa: E402
 from backend.models import User, Exam, Question, StudentExam  # noqa: E402
 from backend.services import face_service  # noqa: E402
+from backend.services import attempt_device  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
 
 PASSWORD = 'Passw0rd!'
@@ -40,7 +43,8 @@ def clean_db(app):
     with app.app_context():
         db.drop_all()
         db.create_all()
-    face_service._failed_attempts.clear()
+    attempt_device._last_seen.clear()
+    shutil.rmtree(os.path.join(app.instance_path, 'deleted_exams'), ignore_errors=True)
     yield
     with app.app_context():
         db.session.remove()

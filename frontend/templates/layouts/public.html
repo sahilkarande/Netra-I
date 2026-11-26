@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+{#
+  Netra-I public shell (design system): brand bar with the theme menu and a
+  Sign in link, then the page. Used by the landing page.
+  Blocks: title, content, extra_js
+#}
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Netra-I{% endblock %}</title>
+  <meta name="description" content="Netra-I: proctored exams that run on your campus network, by C-DAC.">
+  <link rel="icon" href="{{ url_for('static', filename='images/applogo.png') }}" type="image/png">
+  {% include 'partials/theme_init.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/fonts.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ds/public.css') }}">
+</head>
+<body>
+  <a class="nx-skip" href="#main">Skip to content</a>
+  <header class="nx-public-bar">
+    <a class="nx-brand" href="{{ url_for('auth.index') }}" aria-label="Netra-I home">
+      <img class="nx-brand__cdac nx-brand__cdac--on-light" src="{{ url_for('static', filename='images/brand/cdac-mark-on-light.png') }}" alt="C-DAC" width="37" height="26">
+      <img class="nx-brand__cdac nx-brand__cdac--on-dark" src="{{ url_for('static', filename='images/brand/cdac-mark-on-dark.png') }}" alt="" width="37" height="26">
+      <span class="nx-brand__rule" aria-hidden="true"></span>
+      <span><span class="nx-brand__name">Netra-I</span><span class="nx-brand__org">Exam platform</span></span>
+    </a>
+    <div class="nx-public-bar__end">
+      {% include 'partials/theme_menu.html' %}
+      <a class="nx-btn nx-btn--primary" href="{{ url_for('auth.login') }}"><span>Sign in</span><i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+    </div>
+  </header>
+  <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
+  <footer class="nx-public-foot">
+    <span>C-DAC · Centre for Development of Advanced Computing</span>
+    <span>Netra-I runs on your institution's own server</span>
+  </footer>
+  {% include 'partials/toasts.html' %}
+  <script src="{{ url_for('static', filename='js/ds/app.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>
