@@ -10,6 +10,7 @@ eventlet.monkey_patch()
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, g
 from flask_login import login_required, current_user, logout_user
+import errno
 import os
 import sys
 import socket
@@ -462,6 +463,32 @@ def create_app():
     return app
 
 
+def configure_listener(env=os.environ):
+    """Make the eventlet listening socket safe for an exam hall.
+
+    Flask-SocketIO opens it with eventlet's defaults, which are wrong here:
+
+    - SO_REUSEPORT is on, so a second copy of the server (started twice by
+      mistake, or a restart while the old process is still exiting) binds the
+      same port without error and the kernel splits students between the two.
+      A Socket.IO session made on one is then unknown to the other, and the
+      student's proctoring connection fails with "Invalid session".
+    - The accept backlog is 50, too small when a whole hall connects at once.
+
+    Returns the backlog in use. Takes effect for sockets opened afterwards.
+    """
+    import eventlet
+    original = getattr(eventlet.listen, '__wrapped__', eventlet.listen)
+    backlog = int(env.get('LISTEN_BACKLOG', '1024'))
+
+    def listen(addr, family=socket.AF_INET, backlog=backlog, reuse_addr=True, reuse_port=False):
+        return original(addr, family, backlog=backlog, reuse_addr=reuse_addr, reuse_port=reuse_port)
+
+    listen.__wrapped__ = original
+    eventlet.listen = listen
+    return backlog
+
+
 def resolve_run_options(argv, env):
     """How `python app.py` should serve.
 
@@ -552,10 +579,21 @@ if __name__ == '__main__':
         "host": opts['host'],
         "port": port,
         "use_reloader": opts['use_reloader'],
+        # Each connected student holds a connection open; eventlet's default
+        # cap of 1024 would make a large hall queue behind itself.
+        "max_size": int(os.getenv('MAX_CONNECTIONS', '4000')),
     }
-    
+
     if use_ssl and ssl_context:
         run_kwargs["certfile"] = cert_file
         run_kwargs["keyfile"] = key_file
-        
-    socketio.run(app, **run_kwargs)
+
+    configure_listener()
+    try:
+        socketio.run(app, **run_kwargs)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            print(f"\n❌ Port {port} is already in use. Is Netra-I already running?")
+            print("   Stop the other copy first (two servers on one port split the students).")
+            sys.exit(1)
+        raise

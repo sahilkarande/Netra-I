@@ -1,4 +1,6 @@
-# Netra-I — What This Project Is
+# Netra-I — A Secured Proctored Examination Platform 
+
+What This Project Is
 
 **A secure online exam system with an AI invigilator built in.**
 

@@ -410,3 +410,45 @@ def test_p2_10_faculty_copy_no_longer_says_publishing_deletes(app, seed, as_user
         html = client.get(url).get_data(as_text=True)
         assert 'delete evidence' not in html.lower()
         assert 'Publishing deletes' not in html
+
+
+# ── P2-14: the listening socket is safe for an exam hall ────────────────────
+
+def test_p2_14_listener_refuses_a_second_server_on_the_same_port():
+    import socket as pysocket
+    import eventlet
+    import app as app_module
+    original = eventlet.listen
+    try:
+        assert app_module.configure_listener({'LISTEN_BACKLOG': '512'}) == 512
+        first = eventlet.listen(('127.0.0.1', 0))
+        port = first.getsockname()[1]
+        if hasattr(pysocket, 'SO_REUSEPORT'):
+            assert first.getsockopt(pysocket.SOL_SOCKET, pysocket.SO_REUSEPORT) == 0
+        with pytest.raises(OSError):
+            eventlet.listen(('127.0.0.1', port))      # a second copy fails loudly
+        first.close()
+        app_module.configure_listener({})              # idempotent: wraps the original once
+        assert eventlet.listen.__wrapped__ is original
+    finally:
+        eventlet.listen = original
+
+
+def test_p2_14_load_test_script_is_importable_and_documented():
+    import importlib.util, pathlib
+    path = pathlib.Path(__file__).resolve().parent.parent / 'scripts' / 'load_test.py'
+    spec = importlib.util.spec_from_file_location('load_test', path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod._pct([1, 2, 3, 4], 50) == 2 and mod._pct([], 95) is None
+    assert 'seed' in mod.__doc__ and 'cleanup' in mod.__doc__
+
+
+def test_p2_14_openvino_telemetry_is_disabled():
+    """OpenVINO's telemetry forks a child that steals the server's connections
+    for a few seconds after start-up (and reports usage to Google)."""
+    import sys
+    import backend  # noqa: F401  (installs the block)
+    assert sys.modules.get('openvino_telemetry') is None
+    from openvino.tools.ovc import telemetry_utils
+    assert telemetry_utils.tm.__name__.endswith('telemetry_stub')
